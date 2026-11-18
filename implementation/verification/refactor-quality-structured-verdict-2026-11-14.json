@@ -1,0 +1,30 @@
+{
+  "source": "cc932e8a228598f623eaace9cb0569d50b097586",
+  "pr": "https://github.com/alfapars-exe/discordd/pull/306",
+  "before": {
+    "tests": 17,
+    "passed": 8,
+    "failed": 9,
+    "log": "hichat-quality-verdict-before.log"
+  },
+  "after": {
+    "tests": 50,
+    "passed": 50,
+    "failed": 0,
+    "skipped": 0,
+    "log": "hichat-quality-verdict-after.log"
+  },
+  "actual_combined_vitest_compatibility": {
+    "passed": 4824,
+    "failed": 0,
+    "skipped": 1
+  },
+  "scope": "structured client/server results only; process exit, optional check semantics and report fields preserved",
+  "ci": "pending current source",
+  "integration": {
+    "state": "guarded port after candidate8ec terminal",
+    "tooling_tests_passed": 50,
+    "tooling_tests_failed": 0,
+    "current_source_ci": "pending next combined candidate"
+  }
+}

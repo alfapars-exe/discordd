@@ -77,6 +77,7 @@ import {
   processDistribution,
   encryptGroupMessage,
   decryptGroupMessage,
+  decryptGroupHistory,
   needsSenderKeyRotation,
   needsRotationCheck,
   normalizeReplayWindow,
@@ -284,6 +285,32 @@ describe("senderKeyProtocol — group encryption round-trip and guards", () => {
     await expect(
       decryptGroupMessage(CH, USER, DEV, forged)
     ).rejects.toThrow();
+  });
+
+  it.each(["valid", "evicted", "signature", "aad", "distribution", "iteration", "anchor", "session"] as const)("historical verification preserves live replay state: %s", async kind => {
+    h.active = h.sender;
+    const dist = await createDistribution(CH, USER, DEV);
+    const message = await encryptGroupMessage(CH, USER, DEV, "archived");
+    h.active = h.receiver;
+    await processDistribution(CH, USER, DEV, dist);
+    await decryptGroupMessage(CH, USER, DEV, message);
+    if (kind === "anchor") h.receiver.keys.get(senderKeyId(CH, USER, DEV))!.initialChainKey = undefined;
+    if (kind === "evicted") h.receiver.keys.get(senderKeyId(CH, USER, DEV))!.replayFloor = message.iteration + 1;
+    const before = JSON.stringify([...h.receiver.keys]);
+    vi.mocked(keyStorage.saveSenderKey).mockClear();
+    const candidate = kind === "signature" ? flipCiphertextByte(message, 70)
+      : kind === "aad" ? { ...message, iteration: message.iteration + 1 }
+      : kind === "distribution" ? { ...message, distributionId: "wrong" }
+      : kind === "iteration" ? { ...message, iteration: Number.MAX_SAFE_INTEGER }
+      : message;
+    const pending = decryptGroupHistory(CH, USER, DEV, candidate);
+    if (kind === "session") publishAuthGenerationChange(getAuthSessionSnapshot().generation + 1);
+    if (kind === "valid" || kind === "evicted") {
+      await expect(pending).resolves.toBe("archived");
+      await expect(decryptGroupMessage(CH, USER, DEV, message)).rejects.toThrow(/Replay detected/);
+    } else await expect(pending).rejects.toThrow();
+    expect(JSON.stringify([...h.receiver.keys])).toBe(before);
+    expect(keyStorage.saveSenderKey).not.toHaveBeenCalled();
   });
 
   it("rejects a replayed iteration (same message decrypted twice)", async () => {

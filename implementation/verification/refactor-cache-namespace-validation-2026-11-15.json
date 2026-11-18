@@ -1,0 +1,26 @@
+{
+  "sourceRevision": "ca5ff3e0",
+  "baselineRevision": "7666100f",
+  "scope": "RF13/RF26 account cache namespace validation extraction",
+  "sonarBefore": {
+    "key": "AaHggMHYGiVmDmX-KOBu",
+    "rule": "typescript:S3776",
+    "function": "cacheable",
+    "complexity": 17,
+    "threshold": 15,
+    "after": "PR305 issues API CLOSED/FIXED after fe263e69 delivery. Source API matches all161 local code lines; one additional empty EOF line. No exact after complexity score claimed."
+  },
+  "behavior": "Move namespace field selection and peer-map sanitization into cachedNamespace. Preserve namespace iteration order, accessibility codec, empty namespace omission and final sanitize. Public exports and accepted cache fields unchanged.",
+  "validation": {
+    "targetedBefore": "106 tests across4files PASS4.78s",
+    "targetedAfter": "Same106 tests across4files PASS4.54s",
+    "additional": "132tests across4files PASS3.55s: preferenceDestinationScope, preferenceNotificationFailure, accessibilityStore, voiceStore",
+    "fullClient": "503files5435passed1skipped120.48s; TEMP/hichat-cache-namespace-coverage.log",
+    "coverage": { "lines": 69.09, "branches": 64.96, "statements": 68.01, "functions": 62.25 },
+    "build": "PASS tsc -b and Vite3.31s; TEMP/hichat-cache-namespace-build.log",
+    "lint": "PASS eslint src/stores/preferencesCodec.ts",
+    "immutableScan": "PASS immutable ca5ff3e0 exit0:51 exact reviewed-source records,0blockingpatterns; TEMP/hichat-cache-namespace-scan.log. Pattern scan does not prove absence of vulnerabilities."
+  },
+  "ci": { "revision": "fe263e69f97b5d2908c2121a7ca4c973538ed03e", "result": "36/36 terminalSUCCESS", "serverRun": 43758089210, "serverConclusion": "success", "rawChecks": "refactor-fe26-terminal-ci-2026-11-15.json" },
+  "remaining": ["Whole-project runtime, platform and physical acceptance"]
+}

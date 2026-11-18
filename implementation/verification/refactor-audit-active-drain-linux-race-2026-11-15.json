@@ -1,0 +1,18 @@
+{
+  "source": "d3d886510d5702198cb4278a90b03d9e8fc3989d",
+  "method": "Immutable git archive mounted read-only; Linux amd64 Go1.27.4 CGO1, 2 CPUs/6GiB, image 4fa7c968ba93",
+  "command": "go test -race ./services -run ^TestAudit -count=10 -timeout=5m",
+  "result": "PASS exit 0, 3.870s, no race report",
+  "scope": [
+    "Stop-before-Start drain",
+    "Terminal write rejection",
+    "Concurrent/repeated Start/Stop single writer",
+    "Stop joins blocked active persistence and queued drain"
+  ],
+  "cleanup": "Owned --rm audit container completed and removed; immutable source/caches retained.",
+  "limits": [
+    "Targeted controlled repository acceptance; bounded PostgreSQL shutdown and whole-project race acceptance separate.",
+    "Same-source fixture parallel isolation race session 63804 live; current remote CI separate.",
+    "Overall refactor acceptance incomplete."
+  ]
+}

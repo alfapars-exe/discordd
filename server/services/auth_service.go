@@ -61,28 +61,12 @@ type AuthService interface {
 	// attachment access on revocation. Pre-issued LiveKit JWTs are independently
 	// valid until voiceTokenTTL if presented directly to the SFU.
 	LogoutAllDevices(ctx context.Context, userID string) error
+}
 
-	SetAppLogger(logger AuthAppLogger)
-
-	// SetUserCacheInvalidator wires AuthMiddleware's user-cache invalidator
-	// so a credential-lifecycle event (password change/reset, logout-all)
-	// drops the cached user row immediately instead of waiting out
-	// userCacheTTL. Mirrors AdminUserService.SetUserCacheInvalidator; see
-	// its doc comment for why this is a post-construction setter rather
-	// than a constructor argument.
-	SetUserCacheInvalidator(inv UserCacheInvalidator)
-
-	// SetVoiceDisconnecter wires the voice/screen-share kick used by
-	// revokeAllSessions — the same VoiceDisconnecter dependency
-	// AdminUserService takes as a constructor argument for its own ban/
-	// delete paths (services/admin_user_service.go). VoiceService already
-	// exists by the time AuthService is constructed in init_services.go, so
-	// nothing forces this to be a setter; it is one anyway, mirroring
-	// SetUserCacheInvalidator immediately above, so every optional
-	// post-construction AuthService dependency is wired the same way and a
-	// caller/test can opt in to only the one(s) it needs. Nil-safe: absent
-	// wiring, revokeAllSessions simply skips the voice disconnect.
-	SetVoiceDisconnecter(vd VoiceDisconnecter)
+// AuthRuntime retains maintenance ownership at the composition boundary.
+type AuthRuntime interface {
+	AuthService
+	StartAuthMaintenance(context.Context) func()
 }
 
 type AuthTokens struct {
@@ -104,6 +88,7 @@ type AuthTokens struct {
 }
 
 type authService struct {
+	sessionDisconnecter      AuthSessionDisconnecter
 	authSessions             repository.AuthSessionRepository
 	accountLifecycle         repository.AccountLifecycleRepository
 	accountAnonymization     repository.AccountAnonymizationRepository
@@ -125,13 +110,13 @@ type authService struct {
 	// userInvalidator drops the HTTP auth user-cache on a credential-
 	// lifecycle event. Optional (nil-safe): absent wiring, the change
 	// still lands within userCacheTTL — this just makes it immediate.
-	// Wired post-construction by main.go (see SetUserCacheInvalidator),
+	// Selected during construction with WithAuthUserCacheInvalidator,
 	// same pattern as adminUserService.userInvalidator.
 	userInvalidator UserCacheInvalidator
 
 	// voiceKit disconnects a user's live voice/screen-share session as part
-	// of revokeAllSessions. Optional (nil-safe), wired post-construction —
-	// see SetVoiceDisconnecter. Same VoiceDisconnecter ISP interface
+	// of revokeAllSessions. Constructor-owned; nil explicitly means no media
+	// integration for isolated callers. Same VoiceDisconnecter ISP interface
 	// adminUserService.voiceKit uses (member_service.go).
 	voiceKit VoiceDisconnecter
 
@@ -156,35 +141,26 @@ type usedRefreshEntry struct {
 	expiresAt time.Time
 }
 
-func (s *authService) SetAppLogger(logger AuthAppLogger) {
-	s.appLogger = logger
+// WithAuthAppLogger selects optional persistent logging during construction.
+// Nil keeps logging disabled without a later mutable binding.
+func WithAuthAppLogger(logger AuthAppLogger) AuthOption {
+	return func(s *authService) { s.appLogger = logger }
 }
 
-// SetUserCacheInvalidator wires the auth middleware's user-cache
-// invalidator. Called post-construction in main.go because the middleware
-// is built after the service layer (it depends on AuthService itself) —
-// identical reasoning to adminUserService.SetUserCacheInvalidator.
-func (s *authService) SetUserCacheInvalidator(inv UserCacheInvalidator) {
-	s.userInvalidator = inv
+// WithAuthUserCacheInvalidator binds the independently owned identity cache.
+// Nil explicitly selects an isolated service without cached HTTP identities.
+func WithAuthUserCacheInvalidator(inv UserCacheInvalidator) AuthOption {
+	return func(s *authService) { s.userInvalidator = inv }
 }
 
-// invalidateUserCache is nil-safe — a no-op until SetUserCacheInvalidator
-// has been called.
+// invalidateUserCache is nil-safe for explicitly standalone services.
 func (s *authService) invalidateUserCache(userID string) {
 	if s.userInvalidator != nil {
 		s.userInvalidator.InvalidateUser(userID)
 	}
 }
 
-// SetVoiceDisconnecter wires the voice/screen-share kick used by
-// revokeAllSessions. See the AuthService interface doc for why this is a
-// post-construction setter rather than a constructor argument.
-func (s *authService) SetVoiceDisconnecter(vd VoiceDisconnecter) {
-	s.voiceKit = vd
-}
-
-// disconnectVoice is nil-safe — a no-op until SetVoiceDisconnecter has been
-// called (main.go wires it once VoiceService exists).
+// disconnectVoice skips media cleanup for explicitly media-free callers.
 func (s *authService) disconnectVoice(userID string) {
 	if s.voiceKit != nil {
 		s.voiceKit.DisconnectUser(userID)
@@ -302,17 +278,19 @@ func NewAuthService(
 	resetRepo repository.PasswordResetRepository,
 	hub ws.EventPublisher,
 	emailSender email.EmailSender,
+	voiceKit VoiceDisconnecter,
 	jwtSecret string,
 	accessExpMinutes int,
 	refreshExpDays int,
 	options ...AuthOption,
-) AuthService {
+) AuthRuntime {
 	s := &authService{
 		userRepo:    userRepo,
 		sessionRepo: sessionRepo,
 		resetRepo:   resetRepo,
 		hub:         hub,
 		emailSender: emailSender,
+		voiceKit:    voiceKit,
 		jwtSecret:   []byte(jwtSecret),
 		accessExp:   time.Duration(accessExpMinutes) * time.Minute,
 		refreshExp:  time.Duration(refreshExpDays) * 24 * time.Hour,
@@ -327,9 +305,12 @@ func NewAuthService(
 // StartAuthMaintenance owns the legacy refresh-cache worker independently of
 // request handling. Durable sessions do not use this cache and need no worker.
 // Constructors and short-lived test services never start background work.
-func StartAuthMaintenance(ctx context.Context, service AuthService) func() {
-	s, ok := service.(*authService)
-	if !ok || s.authSessions != nil {
+func StartAuthMaintenance(ctx context.Context, service interface{ StartAuthMaintenance(context.Context) func() }) func() {
+	return service.StartAuthMaintenance(ctx)
+}
+
+func (s *authService) StartAuthMaintenance(ctx context.Context) func() {
+	if s.authSessions != nil {
 		return func() {}
 	}
 	return s.startRefreshSweep(ctx)

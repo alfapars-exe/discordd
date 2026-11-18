@@ -54,9 +54,8 @@ func newRoleSvcWithInvalidator(t *testing.T) (
 	roleRepo := &testutil.MockRoleRepo{}
 	serverRepo := &testutil.MockServerRepo{IsMemberFn: func(context.Context, string, string) (bool, error) { return true, nil }}
 	tx := roleTestTransaction{&repository.ServerMembershipTxRepos{Server: serverRepo, Role: roleRepo}}
-	svc := NewRoleService(roleRepo, tx, &testutil.MockBroadcaster{}, nil) // auditLogger — not under test here
 	inv := &countingInvalidator{}
-	svc.SetPermInvalidator(inv)
+	svc := NewRoleService(roleRepo, tx, &testutil.MockBroadcaster{}, nil, inv) // audit logger disabled
 
 	// Actor has top role → hierarchy checks pass; PermAll → escalation
 	// checks also pass so tests can freely set any permissions.

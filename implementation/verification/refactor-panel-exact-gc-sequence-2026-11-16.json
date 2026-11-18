@@ -1,0 +1,129 @@
+{
+  "sourceCommit": "55ae00d1",
+  "scope": "One Windows Chromium156 production React/native IndexedDB sequence with controlled providers: channel GC/batches/release/verify/unmount/GC, then DM same page, as the failing CI order.",
+  "records": [
+    {
+      "growth": [
+        {
+          "events": 1000,
+          "retainedGrowthBytes": 19856
+        },
+        {
+          "events": 5000,
+          "retainedGrowthBytes": 26356
+        },
+        {
+          "events": 10000,
+          "retainedGrowthBytes": 28136
+        },
+        {
+          "events": 50000,
+          "retainedGrowthBytes": 61536
+        }
+      ],
+      "result": {
+        "kind": "channel",
+        "rows": [
+          "Été 00999",
+          "Été 00996",
+          "Été 00993",
+          "Été 00987",
+          "Été 00984",
+          "Été 00981",
+          "Été 00978",
+          "Été 00972",
+          "Été 00969",
+          "Été 00966",
+          "Été 00963",
+          "Été 00957",
+          "Été 00954",
+          "Été 00951",
+          "Été 00948",
+          "Été 00942",
+          "Été 00939",
+          "Été 00936",
+          "Été 00933",
+          "Été 00927",
+          "Été 00924",
+          "Été 00921",
+          "Été 00918",
+          "Été 00912",
+          "Été 00909"
+        ],
+        "count": "267",
+        "failures": [],
+        "releaseToObservedMs": 10230.90000000596,
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
+      },
+      "settledBytes": 28311616,
+      "disposedBytes": 28264028
+    },
+    {
+      "growth": [
+        {
+          "events": 1000,
+          "retainedGrowthBytes": 24760
+        },
+        {
+          "events": 5000,
+          "retainedGrowthBytes": 27824
+        },
+        {
+          "events": 10000,
+          "retainedGrowthBytes": 28676
+        },
+        {
+          "events": 50000,
+          "retainedGrowthBytes": 68956
+        }
+      ],
+      "result": {
+        "kind": "dm",
+        "rows": [
+          "Été 00999",
+          "Été 00996",
+          "Été 00993",
+          "Été 00987",
+          "Été 00984",
+          "Été 00981",
+          "Été 00978",
+          "Été 00972",
+          "Été 00969",
+          "Été 00966",
+          "Été 00963",
+          "Été 00957",
+          "Été 00954",
+          "Été 00951",
+          "Été 00948",
+          "Été 00942",
+          "Été 00939",
+          "Été 00936",
+          "Été 00933",
+          "Été 00927",
+          "Été 00924",
+          "Été 00921",
+          "Été 00918",
+          "Été 00912",
+          "Été 00909"
+        ],
+        "count": "267",
+        "failures": [],
+        "releaseToObservedMs": 9817.299999982119,
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
+      },
+      "settledBytes": 28632348,
+      "disposedBytes": 28528420
+    }
+  ],
+  "assertions": {
+    "correct25RowsAnd267Matches": true,
+    "activeAndSettledGrowthWithin512KiB": true,
+    "noOperationFailures": true
+  },
+  "cleanup": {
+    "ownedSyntheticOriginIndexedDBCleared": true,
+    "space31Closed": true,
+    "ownedServer147392Stopped": true
+  },
+  "limits": "Local diagnostic only; CI root cause remains OPEN."
+}

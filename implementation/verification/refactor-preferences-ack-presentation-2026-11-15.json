@@ -1,0 +1,49 @@
+{
+  "scope": "Preference PATCH acknowledgment versus local presenter failure. HTTP fields,cache keys,codec and store actions unchanged.",
+  "red": {
+    "log": "hichat-preferences-ack-presentation-red.log",
+    "failed": 3,
+    "passed": 59,
+    "behavior": "Successful PATCH followed by rejected local presenter requeued the acknowledged patch and reported server-save failure;UI could not distinguish local apply error."
+  },
+  "targeted": {
+    "passed": 64,
+    "files": 2,
+    "seconds": 3.54,
+    "log": "hichat-preferences-ack-presentation-targeted.log"
+  },
+  "invariants": [
+    "After successful account-validated PATCH,never requeue that acknowledged patch because presentation failed.",
+    "Persisted acknowledged snapshot retains committed values;pending cache contains only newer unsent edits.",
+    "Retry local presentation before flushing newer edits;repeated local failure does not resend committed settings.",
+    "Late presentation retry after account switch cannot apply old values or clear new account pending state.",
+    "Localized applyError distinguishes device application failure from failed server synchronization."
+  ],
+  "sha256": {
+    "client/src/stores/preferencesStore.ts": "81f5bc03b5de9850b59d1996fa7a7c98f58e563f9fd85ab74c3b95e9dc6c417f",
+    "client/src/stores/preferencesStore.test.ts": "1fb5d3be2f54a9511d6621beb521d1cbe7e009826641cf3c32564aba6fdf65b0",
+    "client/src/components/settings/PreferencesSyncStatus.tsx": "8dbb4459924c9d7b8e4f4517616109e72ce9fe4441ec1c34dcb322a81d823d3f",
+    "client/src/components/settings/PreferencesSyncStatus.test.tsx": "ea492caf6c6ec8bed40fbc9854cc14679fbef5bc4fbfd2e38ff8044e4a30a4ca",
+    "client/src/i18n/locales/en/settings.json": "300fbdfec9120a4875da198a9f33f53048e8144cf2a45bb359a6748ce218d6b8",
+    "client/src/i18n/locales/tr/settings.json": "15efe2d6854dfc273e5dd0681e3e44639489e21f023c5a9b51d7bd84af00e7d3"
+  },
+  "limits": [
+    "Mounted store with real preference orchestration/presenter and mocked API/store endpoints;not real provider/offline/native/physical acceptance.",
+    "Initial bootstrap/load presentation failure remains a separate path;this change targets failures after acknowledged writes.",
+    "Whole RF13 and project acceptance remain open."
+  ],
+  "sourceRevision": "45e5b78d51d6c96fe2e2c9412c862d8dcdbda5be",
+  "fullClientCoverage": {
+    "files": 485,
+    "passed": 5069,
+    "skipped": 1,
+    "seconds": 113.55,
+    "statementPercent": 67.34,
+    "branchPercent": 64.55,
+    "functionPercent": 61.54,
+    "linePercent": 68.41,
+    "log": "hichat-preferences-ack-presentation-coverage.log"
+  },
+  "build": "actual tsc-b/VitePASS3.15s; existing chunk warning",
+  "lint": "changed preference store/tests/status component/tests lintPASS"
+}

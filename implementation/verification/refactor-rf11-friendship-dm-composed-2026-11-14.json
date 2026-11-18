@@ -1,0 +1,27 @@
+{
+  "source_parent": "355703cd",
+  "scope": "RF11 actual composed friendship/DM wiring acceptance",
+  "test": "TestFriendshipDMProductionWiringAutoAcceptsAndReadsCommittedFriendship",
+  "cases": [
+    "explicit friendship acceptance",
+    "mutual friend request auto-accept"
+  ],
+  "profile": "File-backed SQLite with embedded migrations; actual initRepositories retry wrappers and initServices bundle; no service/repository doubles",
+  "assertions": [
+    "DM pending before friendship acceptance",
+    "DM accepted after friendship commit in each path",
+    "first DM message persists with expected author/content",
+    "DM remains accepted after first send, proving reader observes committed accepted friendship"
+  ],
+  "validation": {
+    "command": "go test . -run '^TestFriendshipDMProductionWiringAutoAcceptsAndReadsCommittedFriendship$' -count=1 -timeout=3m",
+    "exit": 0,
+    "package_seconds": 1.251,
+    "vet": "go vet . exit0"
+  },
+  "cleanup": "Owned cache workers, rate limiters, metrics, voice fanout, online notifier and link preview stopped before fixture DB closes",
+  "limits": [
+    "No HTTP/WebSocket delivery, native PostgreSQL, physical-media or real provider email claim",
+    "Remote CI on fdcd tests earlier constructor graph; current friendship-cycle change needs fresh CI"
+  ]
+}

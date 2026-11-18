@@ -1,0 +1,30 @@
+{
+  "source_before": "eca7d4fc9a2553bff865ab901003d3f832f7bc49",
+  "ci_run": 43570586532,
+  "ci_conclusion": "failure",
+  "failure": "Playwright: resetting the preceding warm-thread fixture returned HTTP 500, channels_starter_message_id_fkey; offline retry initially retained draft, passed on retry",
+  "change": "Clear only target-server starter links in the existing cascade transaction before descendant deletion. Wait for composer readOnly=false after offline failure toast. Keep all outcome assertions.",
+  "verification": [
+    {
+      "command": "go test ./repository -run ^TestDeleteServerCascade_ -count=1 -timeout=3m",
+      "profile": "owned loopback PostgreSQL 18.6 sslmode=disable; Windows Go 1.27.4",
+      "exit_code": 0,
+      "package_seconds": 9.908
+    },
+    {
+      "command": "same cascade suite",
+      "profile": "SQLite Windows",
+      "exit_code": 0,
+      "package_seconds": 4.663
+    },
+    {
+      "command": "npm --prefix e2e run test:isolation",
+      "exit_code": 0,
+      "note": "Windows file symlink guard case explicitly skipped"
+    }
+  ],
+  "limits": [
+    "New thread cycle fixture passed before the fix, including 15 PostgreSQL repetitions. It is coverage of graph deletion and unrelated-server preservation, not an independent reproduction of the CI failure.",
+    "Actual production-browser regression requires fresh CI. No blanket RF28 completion."
+  ]
+}

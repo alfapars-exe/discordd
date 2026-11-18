@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -21,7 +22,15 @@ func TestMFALoginErrorsDoNotIssueCookiesOrTokens(t *testing.T) {
 			h := NewAuthHandler(&stubAuthService{loginFn: func(context.Context, *models.LoginRequest) (*services.AuthTokens, error) { return nil, tc.err }}, nil, nil, nil, nil, nil, nil)
 			w := httptest.NewRecorder()
 			h.Login(w, httptest.NewRequest("POST", "/api/auth/login", strings.NewReader(`{"username":"fixture","password":"password","mfa_code":"123456"}`)))
-			if w.Code != tc.status || !strings.Contains(w.Body.String(), tc.code) || len(w.Header().Values("Set-Cookie")) > 0 || strings.Contains(w.Body.String(), "access_token") {
+			var body struct {
+				Success *bool           `json:"success"`
+				Code    string          `json:"code"`
+				Data    json.RawMessage `json:"data"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			if w.Code != tc.status || body.Success == nil || *body.Success || body.Code != tc.code || body.Data != nil || len(w.Header().Values("Set-Cookie")) > 0 {
 				t.Fatalf("status=%d headers=%v body=%s", w.Code, w.Header(), w.Body.String())
 			}
 			if tc.status == 429 && w.Header().Get("Retry-After") != "300" {

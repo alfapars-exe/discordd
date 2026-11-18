@@ -1,0 +1,61 @@
+{
+  "source": "95bed50e",
+  "pending_before_start": {
+    "applied": 0,
+    "go_version": "go1.26.11",
+    "pending": 1,
+    "used": 0
+  },
+  "same_database_restart_cycles": [
+    {
+      "cycle": 1,
+      "healthy": true,
+      "contender_rejected": true,
+      "exit_code": 0,
+      "shutdown_seconds": 0.313,
+      "graceful_log": true,
+      "usage": {
+        "applied": 1,
+        "go_version": "go1.26.11",
+        "pending": 0,
+        "used": 60
+      }
+    },
+    {
+      "cycle": 2,
+      "healthy": true,
+      "contender_rejected": true,
+      "exit_code": 0,
+      "shutdown_seconds": 0.297,
+      "graceful_log": true,
+      "usage": {
+        "applied": 1,
+        "go_version": "go1.26.11",
+        "pending": 0,
+        "used": 60
+      }
+    },
+    {
+      "cycle": 3,
+      "healthy": true,
+      "contender_rejected": true,
+      "exit_code": 0,
+      "shutdown_seconds": 0.406,
+      "graceful_log": true,
+      "usage": {
+        "applied": 1,
+        "go_version": "go1.26.11",
+        "pending": 0,
+        "used": 60
+      }
+    }
+  ],
+  "scope": "Linux real processes; durable pending usage recovery, owner exclusion and idle SIGTERM; no active media",
+  "fixture_cleanup": "Orchestrator exited0 after dropping the unique owned database and removing owned container.",
+  "provenance": "Linux server and read-only status probe built from integrated source95bed50e using Go1.26.11; probe does not apply credits after seed. Recovery is performed by real server worker.",
+  "limitations": [
+    "Pending record seeded by fixture before process start; this is not a crash-before-enqueue test.",
+    "SIGTERM exercises idle process plus previously recovered usage, not active physical media or in-flight HTTP drain.",
+    "No Windows/macOS/mobile runtime acceptance claim."
+  ]
+}

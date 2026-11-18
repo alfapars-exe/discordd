@@ -12,10 +12,13 @@ import (
 // ServerMembershipTxRepos binds membership and role writes to one transaction.
 // Role mutations also use User and Timeout to read the resulting member view.
 type ServerMembershipTxRepos struct {
-	Server  ServerRepository
-	Role    RoleRepository
-	User    UserRepository
-	Timeout MemberTimeoutRepository
+	// Nil explicitly selects legacy standalone behavior; production binds both.
+	GameActivityCounter GameActivityMembershipCounter
+	GameActivityWriter  GameActivityMembershipWriter
+	Server              ServerRepository
+	Role                RoleRepository
+	User                UserRepository
+	Timeout             MemberTimeoutRepository
 }
 
 // ServerMembershipTxRunner runs fn with Server/Role repositories bound to a
@@ -72,8 +75,10 @@ func (r *ServerMembershipTransactions) WithServerRoles(ctx context.Context, serv
 }
 
 func serverMembershipRepos(tx *sql.Tx, roles RoleRepository) *ServerMembershipTxRepos {
+	server := NewSQLiteServerRepo(tx)
 	return &ServerMembershipTxRepos{
-		Server: NewSQLiteServerRepo(tx), Role: roles,
+		Server: server, Role: roles,
+		GameActivityCounter: server, GameActivityWriter: server,
 		User: NewSQLiteUserRepo(tx), Timeout: NewSQLiteMemberTimeoutRepo(tx),
 	}
 }

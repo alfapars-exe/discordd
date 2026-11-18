@@ -1,0 +1,23 @@
+{
+  "scope": "RF26 test-only extraction: server deletion committed-event regression",
+  "validation": {
+    "before": "go test ./services -run ^TestServerDeleteEventFollowsCommit$ -count=1 PASS1.322s",
+    "after": "same test-count20 PASS13.847s;owner andadmin subtests retained",
+    "vet": "go vet ./services PASS",
+    "review": "Ignore-whitespace diff inspected: all guard SQL,event count/postcommit database assertions,failed-delete activity assertion and successful-owner invalidation assertion retained. New helpers call t.Helper. No product source changed.",
+    "fullServices": "ok  \tgithub.com/argeinfina/hichat/services\t94.840s",
+    "fullServicesLog": "TEMP/hichat-delete-layout-services.log"
+  },
+  "pending": "New-source CI/Sonar pending;not project acceptance.",
+  "sonarConfirmation": {
+    "revision": "197959671b555404b07a50c1fcaa76d528b56b70",
+    "issue": {
+      "key": "AaHYWqr8d7dyvm3wYSoo",
+      "component": "alfapars-exe_discordd:server/services/server_delete_event_test.go",
+      "message": "Refactor this method to reduce its Cognitive Complexity from 28 to the 15 allowed.",
+      "status": "CLOSED",
+      "resolution": "FIXED"
+    },
+    "scope": "Original issue resolved;not whole-project acceptance or an exact after complexity score."
+  }
+}

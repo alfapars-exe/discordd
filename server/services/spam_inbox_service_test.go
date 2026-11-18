@@ -6,6 +6,7 @@ import (
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/testutil"
+	"github.com/argeinfina/hichat/ws"
 	"testing"
 )
 
@@ -56,7 +57,7 @@ func TestSpamInboxDMSourceAuthorization(t *testing.T) {
 					return &models.DMChannel{ID: "private", User1ID: "sender", User2ID: "recipient"}, nil
 				},
 			}
-			svc := NewSpamInboxService(store, nil, nil, dms, nil, nil)
+			svc := NewSpamInboxService(store, nil, nil, dms, nil, nil, nil)
 			entry := &models.SpamInboxEntry{UserID: "forged-owner", SourceKind: "dm", ChannelID: tc.channel, MessageID: "message", Revision: tc.revision, Reasons: []string{"credential-link"}}
 			err := svc.Record(context.Background(), tc.user, entry)
 			if !errors.Is(err, tc.want) {
@@ -69,5 +70,30 @@ func TestSpamInboxDMSourceAuthorization(t *testing.T) {
 				t.Fatal("authenticated owner not enforced")
 			}
 		})
+	}
+}
+
+func TestSpamInboxConstructorBroadcasterKeepsOwnerScope(t *testing.T) {
+	store := &spamStoreStub{}
+	calls := 0
+	hub := &testutil.MockBroadcaster{
+		BroadcastToAllFn:    func(ws.Event) { t.Fatal("public broadcast") },
+		BroadcastToServerFn: func(string, ws.Event) { t.Fatal("server broadcast") },
+		BroadcastToUsersFn:  func([]string, ws.Event) { t.Fatal("multiple-owner broadcast") },
+		BroadcastToUserFn: func(owner string, event ws.Event) {
+			calls++
+			if owner != "recipient" || store.owner != owner || event.Op != "spam_decision" {
+				t.Fatal("decision event before persistence or wrong owner")
+			}
+			data, ok := event.Data.(map[string]string)
+			if !ok || data["user_id"] != owner || data["status"] != "dismissed" || data["message_id"] != "message" {
+				t.Fatal("decision event contract changed")
+			}
+		},
+	}
+	service := NewSpamInboxService(store, nil, nil, nil, nil, nil, hub)
+	entry := &models.SpamInboxEntry{UserID: "forged-owner", SourceKind: "dm", ChannelID: "private", MessageID: "message", Revision: "original"}
+	if err := service.Decide(context.Background(), "recipient", entry, "dismissed"); err != nil || calls != 1 {
+		t.Fatalf("decision calls=%d err=%v", calls, err)
 	}
 }

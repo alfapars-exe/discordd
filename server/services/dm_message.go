@@ -108,11 +108,7 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 			return nil, err
 		}
 		requestHash = fmt.Sprintf("%x", sha256.Sum256(encoded))
-		receipts, ok := s.dmRepo.(repository.DMSendReceipts)
-		if !ok {
-			return nil, fmt.Errorf("%w: dm_send_receipts_unavailable", pkg.ErrBadRequest)
-		}
-		previous, err := receipts.FindDMSend(ctx, channelID, userID, req.ClientMessageID, requestHash)
+		previous, err := s.dmRepo.FindDMSend(ctx, channelID, userID, req.ClientMessageID, requestHash)
 		if err != nil || previous != nil {
 			return previous, err
 		}
@@ -180,7 +176,12 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 			if recipient == nil {
 				return nil, fmt.Errorf("%w: DM recipient not found", pkg.ErrNotFound)
 			}
-			if recipient != nil && recipient.DMPrivacy == "message_request" {
+			// AcceptPendingUnblocked retains the member initiator as the receipt
+			// of explicit acceptance. An accepted request does not require the
+			// recipient to send a reply before the initiator can continue.
+			requestWasAccepted := channel.InitiatedBy != nil &&
+				(*channel.InitiatedBy == channel.User1ID || *channel.InitiatedBy == channel.User2ID)
+			if recipient != nil && recipient.DMPrivacy == "message_request" && !requestWasAccepted {
 				friends, err := s.friendChecker.AreFriends(ctx, userID, otherUserID)
 				if err != nil {
 					return nil, fmt.Errorf("failed to check friendship: %w", err)
@@ -264,11 +265,10 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 			}
 		}
 		if req.ClientMessageID != "" {
-			receipts, ok := r.DM.(repository.DMSendReceipts)
-			if !ok || r.LockChannel == nil {
+			if r.LockChannel == nil {
 				return fmt.Errorf("%w: dm_send_receipts_unavailable", pkg.ErrBadRequest)
 			}
-			previous, err := receipts.FindDMSend(ctx, channelID, userID, req.ClientMessageID, requestHash)
+			previous, err := r.DM.FindDMSend(ctx, channelID, userID, req.ClientMessageID, requestHash)
 			if err != nil {
 				return err
 			}
@@ -293,7 +293,7 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 		// Production policies must read preferences and history through this
 		// transaction. The preferences row lock matches the PostgreSQL updater;
 		// SQLite's channel write already holds the database writer lock.
-		if _, ok := s.serverDMPolicy.(*RepositoryServerDMPolicy); ok && serverDMNonFriend && r.Preferences != nil && r.Servers != nil {
+		if s.serverDMPolicy != nil && serverDMNonFriend && r.Preferences != nil && r.Servers != nil {
 			hasHistory, err := r.DM.HasMessages(ctx, channelID)
 			if err != nil {
 				return err
@@ -304,7 +304,7 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 						return err
 					}
 				}
-				allowed, err := NewServerDMPolicy(r.Preferences, r.Servers).CanCreate(ctx, userID, otherUserID)
+				allowed, err := s.serverDMPolicy.CanCreateWithReaders(ctx, r.Preferences, r.Servers, userID, otherUserID)
 				if err != nil {
 					return fmt.Errorf("failed to check server DM policy: %w", err)
 				}
@@ -344,7 +344,7 @@ func (s *dmService) SendMessage(ctx context.Context, userID, channelID string, r
 			}
 		}
 		if req.ClientMessageID != "" {
-			if err := r.DM.(repository.DMSendReceipts).RecordDMSend(ctx, channelID, userID, req.ClientMessageID, requestHash, msg.ID); err != nil {
+			if err := r.DM.RecordDMSend(ctx, channelID, userID, req.ClientMessageID, requestHash, msg.ID); err != nil {
 				return err
 			}
 		}
@@ -623,6 +623,7 @@ func (s *dmService) MarkUnreadFrom(ctx context.Context, userID, channelID, messa
 	if _, err := s.verifyChannelMembership(ctx, userID, channelID); err != nil {
 		return 0, err
 	}
+	var actualCursor *string
 	var count int
 	if err := s.txRunner.InTx(ctx, func(r *repository.DMTxRepos) error {
 		// Match sends and MarkRead: lock the channel before dm_reads. Its
@@ -634,13 +635,16 @@ func (s *dmService) MarkUnreadFrom(ctx context.Context, userID, channelID, messa
 		}
 		var err error
 		count, err = r.DMRead.MarkUnreadFrom(ctx, userID, channelID, messageID)
+		if err == nil && r.ReadState != nil {
+			actualCursor, count, err = r.ReadState(ctx, userID, channelID)
+		}
 		return err
 	}); err != nil {
 		return 0, err
 	}
 	s.hub.BroadcastToUser(userID, ws.Event{Op: ws.OpDMRead, Data: map[string]any{
 		"dm_channel_id": channelID, "user_id": userID,
-		"last_read_message_id": messageID, "unread_count": count,
+		"last_read_message_id": actualCursor, "unread_count": count,
 	}})
 	return count, nil
 }

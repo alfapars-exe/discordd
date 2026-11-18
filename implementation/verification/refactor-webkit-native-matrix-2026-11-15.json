@@ -1,0 +1,157 @@
+{
+  "sourceRevision": "a1a2191a",
+  "scope": "Same native contract fixtures and30second deadline selectable by explicit browser;Chromium default preserved. Additional Ubuntu CI WebKit gate required.",
+  "chromium": {
+    "result": "7modesPASS",
+    "log": "TEMP/hichat-browser-matrix-chromium.log"
+  },
+  "windowsWebKit": {
+    "version": "27.2",
+    "result": "FAIL30second bounded-drain deadline;do not call platform accepted",
+    "trace": "TEMP/hichat-search-webkit-native-trace.log",
+    "observations": "Initial1000writes~15.4s,subsequent128-ID batches~2.0s;progress768or896 before deadline. Fixture count/deadline not reduced or increased."
+  },
+  "independentNativeControl": {
+    "scope": "No HiChat modules/wrappers;single100-request transaction per operation with same reference-store indexes",
+    "results": [
+      {
+        "runtime": "v26.13.1",
+        "platform": "win32",
+        "engine": "webkit",
+        "version": "27.2",
+        "requestsPerTransaction": 100,
+        "putMs": 1536,
+        "deleteMs": 1531,
+        "scope": "Single raw native request-throughput control with derived-index schema;not application latency or a physical memory/quota acceptance."
+      },
+      {
+        "runtime": "v26.13.1",
+        "platform": "win32",
+        "engine": "chromium",
+        "version": "156.0.8078.4",
+        "requestsPerTransaction": 100,
+        "putMs": 3,
+        "deleteMs": 2.9000000059604645,
+        "scope": "Single raw native request-throughput control with derived-index schema;not application latency or a physical memory/quota acceptance."
+      }
+    ],
+    "interpretation": "Local Windows/WebKit per-request cost is also present without HiChat;this supports a throughput explanation but does not certify other OS/engine versions."
+  },
+  "selfScan": {
+    "source": "a1a2191a",
+    "exitCode": 0,
+    "blockingMatches": 0,
+    "reviewedSourceRecords": 51,
+    "reviewLines": 478,
+    "log": "TEMP/hichat-webkit-matrix-scan.log"
+  },
+  "remaining": [
+    "Windows/WebKit measured30s throughput limitation",
+    "Physical Safari/iOS and whole resource budgets",
+    "RF17/RF29/full project acceptance"
+  ],
+  "ubuntuCI": {
+    "sourceRevision": "42de5382a49fa7bab2998364ced99fb8de4b4048",
+    "run": 43740933763,
+    "job": 132893717467,
+    "runtime": "Node22.23.4/linux/WebKit27.2",
+    "result": "7modesPASS,same fixtures and deadlines",
+    "results": [
+      {
+        "mode": "native-deletion-spool",
+        "uniqueIds": 1001,
+        "maxBatch": 128,
+        "cancelledWithoutLoss": true,
+        "settledEmptyReads": 0,
+        "settledAbortRejected": true,
+        "emptyReadRaceReconciled": true,
+        "consumerRetry": true,
+        "quotaNotified": true,
+        "transactionAbortNotified": true,
+        "resetFenced": true,
+        "boundedQueuedWriters": 16,
+        "backpressureNotified": true,
+        "resetMetadataCleared": true,
+        "staleConsumerRejected": true,
+        "successorPreserved": true,
+        "retiredGenerationRejected": true,
+        "retiredOwnerRejected": true
+      },
+      {
+        "mode": "accepted-deletion-drain",
+        "results": [
+          {
+            "kind": "channel",
+            "heldBeforeCleanup": true,
+            "ids": [
+              "channel-3",
+              "channel-1"
+            ],
+            "total": 2
+          },
+          {
+            "kind": "dm",
+            "heldBeforeCleanup": true,
+            "ids": [
+              "dm-3",
+              "dm-1"
+            ],
+            "total": 2
+          }
+        ],
+        "cancelled": true,
+        "retiredOwnerRejected": true,
+        "failedEvictionHiddenAfterReopen": true,
+        "retryCommitted": true,
+        "journalWriteDuringCoherentRead": true,
+        "queuedEvictionReleased": true
+      },
+      {
+        "mode": "channel",
+        "records": 1201,
+        "exactPages": 15,
+        "failureWrites": 0,
+        "atomicRemovalAndCancellation": true,
+        "indexDisposed": true
+      },
+      {
+        "mode": "dm",
+        "records": 1201,
+        "exactPages": 15,
+        "failureWrites": 0,
+        "atomicRemovalAndCancellation": true,
+        "indexDisposed": true
+      },
+      {
+        "mode": "mixed",
+        "records": 1201,
+        "exactPages": 15,
+        "failureWrites": 0,
+        "atomicRemovalAndCancellation": true,
+        "indexDisposed": true
+      },
+      {
+        "mode": "quota",
+        "records": 1201,
+        "exactPages": 15,
+        "failureName": "QuotaExceededError",
+        "failureWrites": 300,
+        "writerReleased": true,
+        "atomicRemovalAndCancellation": true,
+        "indexDisposed": true
+      },
+      {
+        "mode": "cancel",
+        "records": 1201,
+        "exactPages": 15,
+        "failureName": "AbortError",
+        "failureWrites": 301,
+        "writerReleased": true,
+        "atomicRemovalAndCancellation": true,
+        "indexDisposed": true
+      }
+    ],
+    "log": "TEMP/hichat-42de-e2e-job.log",
+    "scope": "CI uses distinct OS/Node environment;not a direct latency comparison with Windows control or physical Safari/iOS acceptance"
+  }
+}

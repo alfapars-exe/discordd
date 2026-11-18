@@ -1,0 +1,46 @@
+{
+  "sourceCommit": "4c4789155ab61781a2678795165bb793008aaa1d",
+  "scope": "Real member service and real user/role/server/timeout repositories through a counting TxQuerier, full migrated schemas; counter observes QueryContext and QueryRowContext calls, not internal server executor operations",
+  "cases": [
+    {
+      "members": 0,
+      "sqlQueries": 3,
+      "scopeAndOrder": "PASS"
+    },
+    {
+      "members": 1,
+      "sqlQueries": 4,
+      "scopeAndOrder": "PASS"
+    },
+    {
+      "members": 1001,
+      "sqlQueries": 4,
+      "scopeAndOrder": "PASS"
+    }
+  ],
+  "SQLite": {
+    "repetitions": 1,
+    "log": "G:\\hichat-refactor-20261116-anoknpqz\\member-physical-sql-sqlite.log",
+    "sha256": "ee8fb814af1e0632be621b2556c86ccd1558db61e7131bf6d8ce65bbcd4a7caf"
+  },
+  "PostgreSQL": {
+    "repetitions": 3,
+    "log": "G:\\hichat-refactor-20261116-anoknpqz\\portable-fixture-checks\\local-fanout-5e304728c4814e9296e8a502fa0e0210\\member-projection-sql-postgres.log",
+    "sha256": "d7236c0eb91755d0546253dbf64c0290502c6aa4cd871f9917bb6ef5b7c054bb",
+    "transport": "fresh fixture verify-full client certificates; no separate live TLS sample for this run"
+  },
+  "sourceSha256LF": "2e9dfea8aadda2349fb1ce6813ef2291c37c8e23644cdf06a368f9f838d767ab",
+  "cleanup": {
+    "imageID": "sha256:001f619237477f44118b8fbc5bbcc7bf231f4767c66bea49b3e0655f5a7d0584",
+    "failures": [],
+    "containerID": "2bc16e42e29418e0cf9db268044ccf16f5270c6514c043a4ec7a32eeb8b675da",
+    "finishedAt": "2026-11-16T13:55:57.2011734Z"
+  },
+  "fullContainerAndImageIDsAbsent": true,
+  "exportedCredentialsAbsent": true,
+  "limits": [
+    "No HTTP latency, concurrent pool budget or whole-project acceptance",
+    "No nonempty role/nickname/timeout result parity in this new test; existing enrichment tests remain separate",
+    "New source CI/race pending"
+  ]
+}

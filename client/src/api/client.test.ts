@@ -583,6 +583,31 @@ describe("bounded request and shared-refresh lifetimes", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("does not refresh or discard an existing session when public signup is rejected", async () => {
+    const { setTokens, getAccessToken } = await loadClient();
+    const { register } = await import("./auth");
+    setTokens("expired-token", "", "existing");
+    fetchMock.mockImplementation(async () => jsonResponse({ success: false, error: "signup rejected" }, 401));
+    const response = await register({ username: "fixture", password: "fixture-only" });
+    expect(response.success).toBe(false);
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual([API_BASE_URL + "/auth/register"]);
+    expect(getAccessToken()).toBe("expired-token");
+  });
+
+  it("handles public recovery requests without refreshing an unrelated session", async () => {
+    const { setTokens, getAccessToken } = await loadClient();
+    const { forgotPassword, resetPassword } = await import("./auth");
+    setTokens("expired-token", "", "other-account");
+    fetchMock.mockImplementation(async () => jsonResponse({ success: false, error: "request rejected" }, 401));
+    await forgotPassword("fixture");
+    await resetPassword("single-use-fixture", "replacement");
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual([
+      API_BASE_URL + "/auth/forgot-password",
+      API_BASE_URL + "/auth/reset-password",
+    ]);
+    expect(getAccessToken()).toBe("expired-token");
+  });
+
   it("binds refresh to the displayed account and rejects a different returned owner", async () => {
     const { ensureFreshToken, setTokens, getAccessToken } = await loadClient();
     setTokens("expired-token", "", "a");
@@ -604,6 +629,25 @@ describe("bounded request and shared-refresh lifetimes", () => {
     expect(await ensureFreshToken()).toBeNull();
     expect(JSON.parse(initOf(fetchMock.mock.calls[1])!.body as string)).toEqual({ expected_user_id: "restored" });
     expect(getAccessToken()).toBe("expired-token");
+  });
+
+  it.each([401, 403])("preserves the replacement account preview on late refresh rejection %s", async (status) => {
+    const { ensureFreshToken, setTokens, getAccessToken } = await loadClient();
+    const { rememberStartupUser, readStartupCache, clearStartupCache } = await import("../utils/startupCache");
+    setTokens("expired-token", "", "old");
+    const pending = deferred<Response>();
+    fetchMock.mockReturnValueOnce(pending.promise);
+    const refresh = ensureFreshToken();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledOnce();
+
+    setTokens("new-token", "", "new");
+    rememberStartupUser({ id: "new", username: "replacement", display_name: "Replacement" });
+    pending.resolve(jsonResponse({ success: false }, status));
+    expect(await refresh).toBeNull();
+    expect(getAccessToken()).toBe("new-token");
+    expect(readStartupCache()?.user.id).toBe("new");
+    clearStartupCache();
   });
 
   it.each(["logout", "replacement"] as const)("does not apply stale credentials if %s happens during refresh JSON decoding", async (change) => {
@@ -663,8 +707,73 @@ describe("cold session restore", () => {
     const { apiClient } = await loadClient(); fetchMock.mockResolvedValueOnce(jsonResponse({ success: false }, status));
     expect((await apiClient("/users/me", { refreshIfMissing: true })).error).toBe("unauthorized"); expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+  it.each([
+    ["REFRESH_SUPERSEDED", "service_unavailable:"],
+    ["ACCOUNT_MISMATCH", "unauthorized"],
+    ["SESSION_MISMATCH", "unauthorized"],
+  ])("handles refresh conflict %s during startup", async (code, expected) => {
+    const { apiClient } = await loadClient();
+    fetchMock.mockResolvedValueOnce(jsonResponse({ success: false, code }, 409));
+    const result = await apiClient("/users/me", { refreshIfMissing: true });
+    expect(result.error).toContain(expected);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
   it("preserves the session on a transient refresh failure", async () => {
     const { apiClient } = await loadClient(); fetchMock.mockRejectedValueOnce(new Error("offline"));
     expect((await apiClient("/users/me", { refreshIfMissing: true })).error).toContain("service_unavailable:"); expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+});
+
+it("keeps invitation codes and search terms out of transport diagnostics", async () => {
+  const { apiClient } = await loadClient();
+  const endpoint = "/invites/private-invite/preview?q=private-search";
+  const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch " + endpoint));
+    const result = await apiClient(endpoint);
+    expect(result.isNetworkError).toBe(true);
+    expect(errorLog).toHaveBeenCalled();
+    expect(JSON.stringify(errorLog.mock.calls)).not.toMatch(/private-invite|private-search/);
+  } finally {
+    errorLog.mockRestore();
+  }
+});
+
+it("honors refresh Retry-After before contacting the server again", async () => {
+  const { apiClient } = await loadClient();
+  const clock = vi.spyOn(Date, "now").mockReturnValue(100000);
+  try {
+    fetchMock.mockResolvedValueOnce(new Response("{}", { status: 429, headers: { "Retry-After": "30" } }));
+    await apiClient("/users/me", { refreshIfMissing: true });
+    await apiClient("/users/me", { refreshIfMissing: true });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    clock.mockReturnValue(130001);
+    fetchMock.mockResolvedValueOnce(new Response("{}", { status: 503 }));
+    await apiClient("/users/me", { refreshIfMissing: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  } finally {
+    clock.mockRestore();
+  }
+});
+
+it.each([
+  ["Thu, 01 Jan 1970 00:02:10 GMT", 130001],
+  ["invalid", 100001],
+])("handles refresh Retry-After %s", async (header, nextTime) => {
+  const { apiClient } = await loadClient();
+  const clock = vi.spyOn(Date, "now").mockReturnValue(100000);
+  try {
+    fetchMock.mockResolvedValueOnce(new Response("{}", { status: 429, headers: { "Retry-After": header } }));
+    await apiClient("/users/me", { refreshIfMissing: true });
+    if (header !== "invalid") {
+      await apiClient("/users/me", { refreshIfMissing: true });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    }
+    clock.mockReturnValue(nextTime);
+    fetchMock.mockResolvedValueOnce(new Response("{}", { status: 503 }));
+    await apiClient("/users/me", { refreshIfMissing: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  } finally {
+    clock.mockRestore();
+  }
 });

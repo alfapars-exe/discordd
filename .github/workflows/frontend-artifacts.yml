@@ -18,6 +18,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           lfs: true
+      - name: Select a fresh npm cache for this matrix job
+        shell: bash
+        env:
+          HICHAT_NPM_CACHE: ${{ runner.temp }}/hichat-frontend-npm-${{ github.run_id }}-${{ github.run_attempt }}-${{ strategy.job-index }}
+        run: printf 'NPM_CONFIG_CACHE=%s\n' "$HICHAT_NPM_CACHE" >> "$GITHUB_ENV"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '22'
@@ -32,8 +37,16 @@ jobs:
         shell: cmd
         run: |
           cl.exe /EHsc /O2 native\audio-capture.cpp /Fe:native\audio-capture.exe ole32.lib mmdevapi.lib
-          cl.exe /std:c++17 /EHsc /O2 /DUNICODE /D_UNICODE native\game-window.cpp /Fe:native\game-window.exe user32.lib
+          if errorlevel 1 exit /b 1
+          call native\build-game-window.bat
+      - name: Test Windows capture formats and device failure handling
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: cl.exe /nologo /EHsc /W3 /WX /UNDEBUG native\audio-capture-contract.test.cpp /Fe:audio-capture-contract-test.exe ole32.lib mmdevapi.lib && audio-capture-contract-test.exe
       - run: node node_modules/electron-builder/cli.js --dir --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - run: node scripts/check-packaged-maps.cjs
+      - name: Exercise packaged Windows helpers
+        if: runner.os == 'Windows'
+        run: python scripts/test-game-window-helper.py

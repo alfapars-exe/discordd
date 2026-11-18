@@ -30,7 +30,8 @@ func (f ownershipTransition) Transfer(ctx context.Context, actor, sid, hash, mfa
 func TestOwnershipTransferProofCommitAndRuntime(t *testing.T) {
 	for _, scenario := range []string{"success", "audit failure", "factor race", "password race", "revoked session"} {
 		t.Run(scenario, func(t *testing.T) {
-			h, s, hub := boundAuthHarness(t)
+			inv := &stubInvalidator{}
+			h, s, hub := boundAuthHarness(t, WithAuthOwnershipInvalidator(inv))
 			ctx := context.Background()
 			login := sessionLogin(t, s, h.user.Username)
 			target := &models.User{Username: "handoff_target", PasswordHash: "unused", Status: models.UserStatusOffline}
@@ -58,8 +59,6 @@ func TestOwnershipTransferProofCommitAndRuntime(t *testing.T) {
 			if _, err := h.db.Conn.Exec(`INSERT INTO user_roles(user_id,role_id,server_id) VALUES(?,'handoff-owner','handoff')`, h.user.ID); err != nil {
 				t.Fatal(err)
 			}
-			inv := &stubInvalidator{}
-			s.SetOwnershipInvalidator(inv)
 			events := 0
 			hub.BroadcastToServerFn = func(id string, event ws.Event) {
 				events++

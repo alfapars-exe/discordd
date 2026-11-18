@@ -1,0 +1,13 @@
+{
+  "source": "22647bc45b894c78044a6e6fff0970f54d62a677",
+  "runtime": "Go 1.27.4 linux/amd64, CGO_ENABLED=1",
+  "image": "sha256:4fa7c968ba93f1635670522dbb01a2c78150443e1385746924566079f36570ea",
+  "method": "Immutable git archive of server at source, read-only Docker mount, existing QA module/build volumes",
+  "command": "go test -race ./services -run \"TestSendMessage|TestDMAccept|TestDMDecline\" -count=1 -timeout=3m",
+  "result": {
+    "exitCode": 0,
+    "packageSeconds": 10.513
+  },
+  "scope": "Targeted DM send, accept and decline regression suite; not full-service race coverage",
+  "cleanup": "Owned --rm race container completed and absent"
+}

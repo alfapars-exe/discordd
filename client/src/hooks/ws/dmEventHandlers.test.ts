@@ -16,6 +16,7 @@ import type { DMMessage, WSMessage } from "../../types";
 const dmStoreState = {
   selectedDMId: null as string | null,
   channels: [] as { id: string; is_muted: boolean }[],
+  hasMoreAfterByChannel: {} as Record<string, boolean>,
   dmUnreadCounts: {} as Record<string, number>,
   messagesByChannel: {} as Record<string, DMMessage[]>,
   incrementDMUnread: vi.fn(),
@@ -107,6 +108,7 @@ function createMsg(overrides: Partial<DMMessage> = {}): WSMessage {
 const flashFrame = vi.fn(async () => {});
 
 beforeEach(() => {
+  dmStoreState.hasMoreAfterByChannel = {};
   vi.clearAllMocks();
   useComposerDraftStore.getState().reset();
   usePreferencesStore.setState({ data: {} });
@@ -248,6 +250,15 @@ describe("handleDMEvent — dm_message_create cue gating", () => {
     expect(showNotification).not.toHaveBeenCalled();
   });
 
+  it("counts an incoming DM as unread when the open conversation shows older history", async () => {
+    dmStoreState.selectedDMId = "dm-1";
+    dmStoreState.hasMoreAfterByChannel = { "dm-1": true };
+    await handleDMEvent(createMsg({ id: "outside-window" }));
+
+    expect(markDMRead).not.toHaveBeenCalled();
+    expect(dmStoreState.incrementDMUnread).toHaveBeenCalledWith("dm-1");
+    expect(showNotification).not.toHaveBeenCalled();
+  });
   it("DM currently open: advances the server read cursor, no unread bump, no cues", async () => {
     dmStoreState.selectedDMId = "dm-1";
 
@@ -334,6 +345,13 @@ describe("handleDMEvent — dm_message_create own E2EE echo (sent-plaintext FIFO
 });
 
 describe("handleDMEvent — dm_read", () => {
+  it.each([["other", true], ["me", false]] as const)("ignores a read event for user %s with current connection %s", async (user_id, current) => {
+    await handleDMEvent({
+      op: "dm_read",
+      d: { dm_channel_id: "dm-1", user_id, last_read_message_id: null, unread_count: 2 },
+    }, () => current);
+    expect(dmStoreState.handleDMReadSync).not.toHaveBeenCalled();
+  });
   it("clears locally via handleDMReadSync and never calls the API (no echo loop)", async () => {
     const handled = await handleDMEvent({
       op: "dm_read",

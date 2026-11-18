@@ -1,0 +1,53 @@
+import { DEFAULT_ACCESSIBILITY } from "../utils/accessibilityPreferenceDefaults";
+import { DEFAULT_NOTIFICATION_PREFERENCES } from "../utils/notificationPreferenceDefaults";
+import { describe, expect, it } from "vitest";
+import { APPEARANCE_DEFAULTS, APPEARANCE_RANGES } from "./appearancePreferences";
+import { cacheable, decodeLegacyAppearance, sanitize } from "./preferencesCodec";
+
+describe("account appearance cache", () => {
+  it("round-trips all default fields through legacy storage and the account cache", () => {
+    const appearance = Object.fromEntries(Object.entries(APPEARANCE_DEFAULTS).map(([key, value]) => {
+      const stored = typeof value === "boolean" ? String(Number(value)) : String(value);
+      return [key, decodeLegacyAppearance(key, stored)];
+    }));
+    expect(cacheable({ appearance: { ...appearance, unknownField: true } })).toEqual({ appearance: APPEARANCE_DEFAULTS });
+  });
+
+  it.each(Object.entries(APPEARANCE_RANGES))("preserves both boundaries for %s", (field, [min, max]) => {
+    for (const value of [min, max]) {
+      expect(cacheable({ appearance: { [field]: value } })).toEqual({ appearance: { [field]: value } });
+    }
+    for (const value of [min - 1, max + 1]) {
+      expect(cacheable({ appearance: { [field]: value } })).toEqual({});
+    }
+  });
+});
+
+describe("notification account cache", () => {
+  it.each(["true", 1, null, {}, []])("rejects malformed channel notification choice %j", value => {
+    expect(cacheable({ notifications: { channelMessageNotifications: value } })).toEqual({});
+  });
+  it.each([true, false])("preserves channel message notification opt-in %s", value => {
+    expect(cacheable({ notifications: { channelMessageNotifications: value } })).toEqual({ notifications: { channelMessageNotifications: value } });
+  });
+});
+
+it("round-trips every notification default and its boolean opposite from the pure contract", () => {
+  for (const values of [DEFAULT_NOTIFICATION_PREFERENCES, Object.fromEntries(
+    Object.entries(DEFAULT_NOTIFICATION_PREFERENCES).map(([key, value]) => [key, typeof value === "boolean" ? !value : value]),
+  )]) {
+    expect(cacheable({ notifications: { ...values, unknownField: true, token: "private" } })).toEqual({ notifications: values });
+  }
+});
+
+it.each(["voiceOverlayCompatibility", "voiceOverlayVideo", "voiceOverlayStreams", "voiceOverlayWelcome", "voiceOverlayGoLive"])("keeps device-only overlay flag %s out of account preferences", key => {
+  expect(sanitize({ voice_settings: { [key]: true, masterVolume: 65 } })).toEqual({ voice_settings: { masterVolume: 65 } });
+});
+
+it("round-trips every accessibility default and boolean opposite from the pure contract", () => {
+  for (const values of [DEFAULT_ACCESSIBILITY, Object.fromEntries(
+    Object.entries(DEFAULT_ACCESSIBILITY).map(([key, value]) => [key, typeof value === "boolean" ? !value : value]),
+  )]) {
+    expect(cacheable({ accessibility: { ...values, unknownField: true } })).toEqual({ accessibility: values });
+  }
+});

@@ -14,16 +14,46 @@ import (
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/repository"
 )
 
 type batchAppLogRepo struct {
 	fakeAppLogRepo
-	batchCalls int
-	block      bool
+	batchCalls    int
+	block         bool
+	blocked       chan struct{}
+	signalBlocked sync.Once
+}
+
+type partialAppLogRepo struct {
+	fakeAppLogRepo
+	calls, failAt int
+}
+
+func (r *partialAppLogRepo) Insert(ctx context.Context, row *models.AppLog) error {
+	r.calls++
+	if r.calls == r.failAt {
+		return errors.New("storage unavailable")
+	}
+	return r.fakeAppLogRepo.Insert(ctx, row)
+}
+
+func TestAppLogPartialFallbackCountsOnlyUnwrittenOccurrences(t *testing.T) {
+	for _, tc := range []struct {
+		failAt int
+		lost   uint64
+	}{{1, 6}, {2, 3}, {3, 1}, {4, 0}} {
+		t.Run(fmt.Sprintf("fail-at-%d", tc.failAt), func(t *testing.T) {
+			checkAppLogPartialFallbackCase(t, tc.failAt, tc.lost)
+		})
+	}
 }
 
 func (r *batchAppLogRepo) InsertBatch(ctx context.Context, rows []models.AppLog) (int64, error) {
 	if r.block {
+		if r.blocked != nil {
+			r.signalBlocked.Do(func() { close(r.blocked) })
+		}
 		<-ctx.Done()
 		return 0, ctx.Err()
 	}
@@ -36,7 +66,7 @@ func (r *batchAppLogRepo) InsertBatch(ctx context.Context, rows []models.AppLog)
 
 func TestAppLogPipelinePriorityGroupingAndOccurrenceTime(t *testing.T) {
 	repo := &batchAppLogRepo{}
-	svc := NewAppLogService(repo).(*appLogService)
+	svc := NewAppLogService(repo, repo).(*appLogService)
 	for i := 0; i < cap(svc.ch); i++ {
 		svc.Log(context.Background(), models.LogLevelInfo, models.LogCategoryClient, nil, nil, "telemetry", nil)
 	}
@@ -81,7 +111,7 @@ func TestAppLogPipelinePriorityGroupingAndOccurrenceTime(t *testing.T) {
 }
 
 func TestAppLogQueuesRemainBoundedAndErrorHasReservedCapacity(t *testing.T) {
-	s := NewAppLogService(&fakeAppLogRepo{}).(*appLogService)
+	s := NewAppLogService(&fakeAppLogRepo{}, nil).(*appLogService)
 	for i := 0; i < cap(s.ch)+10; i++ {
 		s.Log(context.Background(), models.LogLevelInfo, models.LogCategoryClient, nil, nil, "info", nil)
 	}
@@ -99,7 +129,7 @@ func TestAppLogQueuesRemainBoundedAndErrorHasReservedCapacity(t *testing.T) {
 
 func TestAppLogFailedStorageDoesNotBlockEnqueueOrShutdown(t *testing.T) {
 	r := &batchAppLogRepo{block: true}
-	s := NewAppLogService(r).(*appLogService)
+	s := NewAppLogService(r, r).(*appLogService)
 	start := time.Now()
 	for i := 0; i < 64; i++ {
 		s.Log(context.Background(), models.LogLevelError, models.LogCategoryGeneral, nil, nil, fmt.Sprint(i), nil)
@@ -120,7 +150,7 @@ func TestAppLogFailedStorageDoesNotBlockEnqueueOrShutdown(t *testing.T) {
 
 func TestAppLogConcurrentStopAndSizeLimit(t *testing.T) {
 	r := &batchAppLogRepo{}
-	s := NewAppLogService(r).(*appLogService)
+	s := NewAppLogService(r, r).(*appLogService)
 	s.Start()
 	var wg sync.WaitGroup
 	for i := 0; i < 8; i++ {
@@ -145,7 +175,7 @@ func TestAppLogConcurrentStopAndSizeLimit(t *testing.T) {
 
 func TestAppLogNoRetryOfFailedBatch(t *testing.T) {
 	r := &batchAppLogRepo{block: true}
-	s := NewAppLogService(r).(*appLogService)
+	s := NewAppLogService(r, r).(*appLogService)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	s.flush(ctx, []pendingAppLog{{entry: models.AppLog{Message: "fail", Level: models.LogLevelError, OccurrenceCount: 1}, metadata: map[string]string{}}})
@@ -155,7 +185,7 @@ func TestAppLogNoRetryOfFailedBatch(t *testing.T) {
 }
 
 func BenchmarkAppLogEnqueue(b *testing.B) {
-	s := NewAppLogService(&fakeAppLogRepo{}).(*appLogService)
+	s := NewAppLogService(&fakeAppLogRepo{}, nil).(*appLogService)
 	ctx := pkg.WithRequestID(context.Background(), "benchmark-request")
 	meta := map[string]string{"component": "http", "event_code": "HTTP_INTERNAL", "err": "connection unavailable"}
 	b.ReportAllocs()
@@ -169,10 +199,23 @@ func TestAppLogRequestLatencyUnderStorageFailure(t *testing.T) {
 	for _, mode := range []string{"disabled", "healthy", "unavailable"} {
 		t.Run(mode, func(t *testing.T) {
 			repo := &batchAppLogRepo{block: mode == "unavailable"}
-			svc := NewAppLogService(repo).(*appLogService)
+			svc := NewAppLogService(repo, repo).(*appLogService)
+			if repo.block {
+				repo.blocked = make(chan struct{})
+			}
 			if mode != "disabled" {
 				svc.Start()
 				defer svc.Stop()
+			}
+			if repo.block {
+				for range appLogBatchSize {
+					svc.Log(context.Background(), models.LogLevelError, models.LogCategoryGeneral, nil, nil, "prime writer", nil)
+				}
+				select {
+				case <-repo.blocked:
+				case <-time.After(5 * time.Second):
+					t.Fatal("writer never reached blocked repository")
+				}
 			}
 			ctx := pkg.WithRequestID(context.Background(), "load-request")
 			req := httptest.NewRequest("POST", "/diagnostic", nil).WithContext(ctx)
@@ -200,5 +243,207 @@ func TestAppLogRequestLatencyUnderStorageFailure(t *testing.T) {
 				t.Fatalf("DB outage affected request latency: %s", p95)
 			}
 		})
+	}
+}
+
+func TestAppLogExplicitSingleWriterDoesNotDiscoverBatchCapability(t *testing.T) {
+	repo := &batchAppLogRepo{}
+	service := NewAppLogService(repo, nil).(*appLogService)
+	service.flush(context.Background(), []pendingAppLog{{entry: models.AppLog{Level: models.LogLevelError, Message: "single", OccurrenceCount: 1}, metadata: map[string]string{}}})
+	if repo.batchCalls != 0 || len(repo.inserts) != 1 {
+		t.Fatal("single writer rediscovered batch capability or lost row")
+	}
+}
+
+type panicAppLogRepo struct {
+	fakeAppLogRepo
+	stage  string
+	failed bool
+	saved  chan struct{}
+}
+
+func (r *panicAppLogRepo) DeleteBefore(context.Context, string) (int64, error) {
+	if r.stage == "purge" && !r.failed {
+		r.failed = true
+		panic("synthetic purge failure")
+	}
+	return 0, nil
+}
+func (r *panicAppLogRepo) Insert(ctx context.Context, row *models.AppLog) error {
+	if r.stage == "fallback" && !r.failed {
+		r.failed = true
+		panic("synthetic insert failure")
+	}
+	err := r.fakeAppLogRepo.Insert(ctx, row)
+	r.saved <- struct{}{}
+	return err
+}
+func (r *panicAppLogRepo) InsertBatch(ctx context.Context, rows []models.AppLog) (int64, error) {
+	if !r.failed {
+		r.failed = true
+		panic("synthetic batch failure")
+	}
+	for i := range rows {
+		if err := r.Insert(ctx, &rows[i]); err != nil {
+			return 0, err
+		}
+	}
+	return int64(len(rows)), nil
+}
+func TestAppLogDependencyPanicDoesNotStrandWriterOrHideFailedEvents(t *testing.T) {
+	for _, stage := range []string{"purge", "batch", "fallback"} {
+		t.Run(stage, func(t *testing.T) {
+			checkAppLogDependencyPanicStage(t, stage)
+		})
+	}
+}
+
+type panicPartialAppLogRepo struct {
+	fakeAppLogRepo
+	calls, failAt int
+}
+
+func (r *panicPartialAppLogRepo) Insert(ctx context.Context, row *models.AppLog) error {
+	r.calls++
+	if r.calls == r.failAt {
+		panic("synthetic partial write panic")
+	}
+	return r.fakeAppLogRepo.Insert(ctx, row)
+}
+func TestAppLogPartialPanicCountsOnlyUnconfirmedOccurrences(t *testing.T) {
+	for _, tc := range []struct {
+		failAt int
+		failed uint64
+	}{{1, 6}, {2, 3}, {3, 1}, {4, 0}} {
+		t.Run(fmt.Sprint(tc.failAt), func(t *testing.T) {
+			checkAppLogPartialPanicCase(t, tc.failAt, tc.failed)
+		})
+	}
+}
+
+func awaitSavedAppLogs(t *testing.T, saved <-chan struct{}, done <-chan struct{}, count int) {
+	t.Helper()
+	timer := time.NewTimer(2 * time.Second)
+	defer timer.Stop()
+	for range count {
+		select {
+		case <-saved:
+		case <-done:
+			t.Fatal("dependency panic terminated app-log writer")
+		case <-timer.C:
+			t.Fatal("healthy app-log work stranded after dependency panic")
+		}
+	}
+}
+
+func checkAppLogPanicHealth(t *testing.T, stage string, h models.AppLogHealth) {
+	t.Helper()
+	if stage == "purge" {
+		if h.WriteFailures != 0 || h.FailedEvents != 0 {
+			t.Fatalf("purge mislabeled as failed write: %+v", h)
+		}
+	} else if h.WriteFailures != 1 || h.FailedEvents != 64 {
+		t.Fatalf("failed batch accounting: %+v", h)
+	}
+}
+
+func repeatedAppLogOccurrences() []pendingAppLog {
+	var pending []pendingAppLog
+	for i, count := range []int{3, 2, 1} {
+		for range count {
+			pending = append(pending, pendingAppLog{entry: models.AppLog{Message: fmt.Sprint(i), Level: models.LogLevelError, OccurrenceCount: 1}, metadata: map[string]string{}})
+		}
+	}
+	return pending
+}
+
+func confirmedAppLogOccurrences(rows []models.AppLog) uint64 {
+	var saved uint64
+	for _, row := range rows {
+		saved += uint64(row.OccurrenceCount)
+	}
+	return saved
+}
+
+func checkAppLogPartialFallbackCase(t *testing.T, failureIndex int, expectedLost uint64) {
+	t.Helper()
+	repo := &partialAppLogRepo{failAt: failureIndex}
+	service := NewAppLogService(repo, nil).(*appLogService)
+	var pending []pendingAppLog
+	for i, count := range []int{3, 2, 1} {
+		for range count {
+			pending = append(pending, pendingAppLog{entry: models.AppLog{Message: fmt.Sprintf("group-%d", i), Level: models.LogLevelError, OccurrenceCount: 1}, metadata: map[string]string{}})
+		}
+	}
+	service.flush(context.Background(), pending)
+	if got := service.Health().FailedEvents; got != expectedLost {
+		t.Fatalf("failed events=%d, want only unwritten occurrences=%d", got, expectedLost)
+	}
+	saved := confirmedAppLogOccurrences(repo.inserts)
+	if saved+expectedLost != uint64(len(pending)) {
+		t.Fatalf("saved=%d lost=%d total=%d", saved, expectedLost, len(pending))
+	}
+	wantFailures := uint64(1)
+	if expectedLost == 0 {
+		wantFailures = 0
+	}
+	if got := service.Health().WriteFailures; got != wantFailures {
+		t.Fatalf("write failures=%d, want=%d", got, wantFailures)
+	}
+}
+
+func checkAppLogDependencyPanicStage(t *testing.T, stage string) {
+	t.Helper()
+	repo := &panicAppLogRepo{stage: stage, saved: make(chan struct{}, 256)}
+	var writer repository.AppLogBatchWriter
+	if stage == "batch" {
+		writer = repo
+	}
+	s := NewAppLogService(repo, writer).(*appLogService)
+	t.Cleanup(s.Stop)
+	for i := range 128 {
+		s.Log(context.Background(), models.LogLevelInfo, models.LogCategoryGeneral, nil, nil, fmt.Sprintf("queued-%d", i), nil)
+	}
+	s.Start()
+
+	want := 64
+	if stage == "purge" {
+		want = 128
+	}
+	awaitSavedAppLogs(t, repo.saved, s.done, want)
+	for i := range 64 {
+		s.Log(context.Background(), models.LogLevelInfo, models.LogCategoryGeneral, nil, nil, fmt.Sprintf("future-%d", i), nil)
+	}
+	awaitSavedAppLogs(t, repo.saved, s.done, 64)
+	s.Stop()
+	if repo.count() != want+64 {
+		t.Fatalf("persisted=%d want=%d", repo.count(), want+64)
+	}
+	checkAppLogPanicHealth(t, stage, s.Health())
+}
+
+func checkAppLogPartialPanicCase(t *testing.T, failureIndex int, expectedFailed uint64) {
+	t.Helper()
+	repo := &panicPartialAppLogRepo{failAt: failureIndex}
+	s := NewAppLogService(repo, nil).(*appLogService)
+	pending := repeatedAppLogOccurrences()
+	s.flush(context.Background(), pending)
+	h := s.Health()
+	if h.FailedEvents != expectedFailed {
+		t.Fatalf("failed=%d want=%d", h.FailedEvents, expectedFailed)
+	}
+	var saved uint64
+	for _, row := range repo.inserts {
+		saved += uint64(row.OccurrenceCount)
+	}
+	if saved+h.FailedEvents != 6 {
+		t.Fatalf("saved=%d failed=%d total should equal6", saved, h.FailedEvents)
+	}
+	wantFailures := uint64(1)
+	if expectedFailed == 0 {
+		wantFailures = 0
+	}
+	if h.WriteFailures != wantFailures {
+		t.Fatalf("write failures=%d want=%d", h.WriteFailures, wantFailures)
 	}
 }

@@ -1,0 +1,74 @@
+{
+  "head": "7277e3561efff06299ab2ebbed9d05bf6543ab1b",
+  "database": "PostgreSQL 18.6 dedicated loopback container",
+  "tests": [
+    {
+      "name": "TestAcceptPendingDMChecksCurrentBlockAndStatus",
+      "seconds": 1.16
+    },
+    {
+      "name": "TestDMChannelConcurrentBlockAfterPrecheckPreventsInsertAndEvent",
+      "seconds": 0.41
+    },
+    {
+      "name": "TestPostgresPendingDMAwaitsBlockCommit",
+      "seconds": 0.73
+    },
+    {
+      "name": "TestDMOutboxCommitRecoveryReplayAndAuthorization",
+      "seconds": 0.73
+    },
+    {
+      "name": "TestDeclinePendingDeletesAtomicallyAndReturnsPostCommitData",
+      "seconds": 0.45
+    },
+    {
+      "name": "TestDeclinePendingRollsBackAllRowsOnDeleteFailure",
+      "seconds": 0.4
+    },
+    {
+      "name": "TestDMOutboxRetryOrderingDeletionAndRetention",
+      "seconds": 0.77
+    },
+    {
+      "name": "TestAcceptAndDeclinePendingDMSerialize",
+      "seconds": 0.68
+    },
+    {
+      "name": "TestDMOutboxTransactionRollbackAndChannelCascade",
+      "seconds": 0.82
+    },
+    {
+      "name": "TestDeclinePendingRemovesDependentsOnConfiguredBackend",
+      "seconds": 0.76
+    },
+    {
+      "name": "TestDMOutboxRetainsInitialEnvelopeBeforeQueuedEditAndErasesDeletedSnapshots",
+      "seconds": 0.77
+    },
+    {
+      "name": "TestDMOutboxCompletionFailureRetriesWithoutAnotherMessage",
+      "seconds": 0.68
+    },
+    {
+      "name": "TestDMOutboxStartupRecoveryFailsClosed",
+      "seconds": 0.51
+    },
+    {
+      "name": "TestDMDeclineAfterConcurrentAcceptPreservesChannelAndEmitsNoDecline",
+      "seconds": 0.38
+    }
+  ],
+  "packages": [
+    {
+      "package": "github.com/argeinfina/hichat/repository",
+      "seconds": 4.41
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "seconds": 5.648
+    }
+  ],
+  "skipped": 0,
+  "limits": "sslmode=disable, Windows non-race; no deployment, physical-client or full-server acceptance claim."
+}

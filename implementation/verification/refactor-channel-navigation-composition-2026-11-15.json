@@ -1,0 +1,32 @@
+{
+  "scope": "RF11 channel navigation and reading composition extraction",
+  "owners": [
+    "Channel",
+    "Thread",
+    "Category",
+    "Pin",
+    "Search",
+    "ReadState"
+  ],
+  "preserved": [
+    "Explicit separate FreshChannelPermResolver for channel/thread publication",
+    "Combined channel visibility, ordinary resolver and effective read map capabilities; same production provider",
+    "Search receives both channel enumeration and permission mapping",
+    "Voice deletion hook and audit writer retained",
+    "Channel upload path configuration retained inside group"
+  ],
+  "ordering": "Pin/search/read-state constructors moved earlier with channel group; inspected constructors only retain fields and start no workers. No new lifecycle owner.",
+  "checks": {
+    "root": "PASS ServiceInitialization explicitly plus route/callback/permission/auth-cache/real friendship-DM, 2.842s",
+    "services": "PASS channel/thread/pin/search/read-state tests, 2.798s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_sql_manifest": "PASS 50 exact records"
+  },
+  "remaining": [
+    "New group required integration/repository matrix",
+    "Other domain composition and full lifecycle acceptance",
+    "RF01-RF30 completion remains unproven"
+  ],
+  "remote_ci": "43655342717 source 0eb3744f live without observed failures; local extraction excluded."
+}

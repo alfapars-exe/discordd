@@ -1,0 +1,43 @@
+{
+  "scope": "Extract channel-deletion viewer pruning under the existing voice mutex. Preserve screen-share closeout, force-move grant cleanup, delete epoch, revision and room-key cleanup order.",
+  "characterizationCommit": "bbe66ce1",
+  "toolchain": "go1.26.11 linux/amd64, CGO enabled, race detector",
+  "environment": "Owned network-isolated read-only Docker source/module/cache mounts; warm build cache copied into tmpfs. Functional/race validation only, not storage or application performance acceptance.",
+  "baseline": {
+    "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-voice-viewer-cleanup-ram-baseline.jsonl",
+    "sha256": "5006be9a49f64fef021f2fe44919df5e6d0a084ee21ab86db0dfc5613fefd58b",
+    "passedIncludingSubtests": 19,
+    "failed": 0,
+    "skipped": 0,
+    "packageElapsedSeconds": 3.117
+  },
+  "characterizationBeforeRefactor": {
+    "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-voice-viewer-characterization.jsonl",
+    "sha256": "60de8750738a805c47f447d63e9518940ff89a39b85ed1c43906d59bc164c845",
+    "passedIncludingSubtests": 20,
+    "failed": 0,
+    "skipped": 0,
+    "packageElapsedSeconds": 3.102
+  },
+  "candidate": {
+    "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-voice-viewer-cleanup-ram-candidate.jsonl",
+    "sha256": "e4f2c2e73c467a287b971fae081a7116a4ad488d8b135f26b666ef1050022acb",
+    "passedIncludingSubtests": 400,
+    "failed": 0,
+    "skipped": 0,
+    "packageElapsedSeconds": 4.414
+  },
+  "parity": {
+    "method": "Expand extracted helper at its sole call and restore local flag name; exact whole-file comparison after LF normalization",
+    "wholeFileParity": true,
+    "characterizationCommit": "bbe66ce1",
+    "helperCallSites": 1
+  },
+  "limitations": [
+    "Not full Go/PostgreSQL/CI validation",
+    "No physical media, fanout capacity or long soak acceptance",
+    "Historical panel CI failure root cause remains open"
+  ],
+  "vet": "PASS: go vet -mod=readonly -p=2 ./services",
+  "sourceSha256": "db75c2a57ad2933f1a99184dcfd8447b4a62fa0138263ee142fefabf97864ef0"
+}

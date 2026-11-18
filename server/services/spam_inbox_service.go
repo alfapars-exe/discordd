@@ -29,8 +29,6 @@ type SpamInboxService struct {
 	hub         ws.Broadcaster
 }
 
-func (s *SpamInboxService) SetBroadcaster(hub ws.Broadcaster) { s.hub = hub }
-
 // RecipientRevision shares the existing read/access gate with recipient-private
 // media annotations. It does not record spam, inspect plaintext or mutate state.
 func (s *SpamInboxService) RecipientRevision(ctx context.Context, userID, kind, channelID, messageID string) (string, error) {
@@ -44,8 +42,8 @@ func (s *SpamInboxService) Decisions(ctx context.Context, userID, cursor string,
 	return s.store.Decisions(ctx, userID, cursor, limit)
 }
 
-func NewSpamInboxService(store spamInboxStore, messages repository.MessageRepository, channels repository.ChannelRepository, dms repository.DMRepository, groups repository.GroupDMRepository, permissions ChannelPermResolver) *SpamInboxService {
-	return &SpamInboxService{store: store, messages: messages, channels: channels, dms: dms, groups: groups, permissions: permissions}
+func NewSpamInboxService(store spamInboxStore, messages repository.MessageRepository, channels repository.ChannelRepository, dms repository.DMRepository, groups repository.GroupDMRepository, permissions ChannelPermResolver, hub ws.Broadcaster) *SpamInboxService {
+	return &SpamInboxService{hub: hub, store: store, messages: messages, channels: channels, dms: dms, groups: groups, permissions: permissions}
 }
 
 func (s *SpamInboxService) source(ctx context.Context, userID string, e *models.SpamInboxEntry) (string, error) {

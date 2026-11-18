@@ -1,0 +1,3165 @@
+{
+  "pr": {
+    "headRefOid": "fe6852fdd11e070073e56b346856c8b44c4839c5",
+    "statusCheckRollup": [
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:44:50Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868373/job/132319042345",
+        "name": "native (ubuntu-latest)",
+        "startedAt": "2026-11-14T03:40:53Z",
+        "status": "COMPLETED",
+        "workflowName": "Mobile native builds"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:42:56Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868343/job/132319042645",
+        "name": "package (ubuntu-latest)",
+        "startedAt": "2026-11-14T03:40:53Z",
+        "status": "COMPLETED",
+        "workflowName": "Private frontend artifacts"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:48:55Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043063",
+        "name": "Go base tests & build",
+        "startedAt": "2026-11-14T03:41:10Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:47:31Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868373/job/132319042658",
+        "name": "native (macos-latest)",
+        "startedAt": "2026-11-14T03:41:07Z",
+        "status": "COMPLETED",
+        "workflowName": "Mobile native builds"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:43:33Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868343/job/132319042357",
+        "name": "package (windows-latest)",
+        "startedAt": "2026-11-14T03:40:53Z",
+        "status": "COMPLETED",
+        "workflowName": "Private frontend artifacts"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:52:21Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043203",
+        "name": "Go tests (./repository shard 0/8)",
+        "startedAt": "2026-11-14T03:41:37Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:52:47Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043272",
+        "name": "Go tests (./repository shard 1/8)",
+        "startedAt": "2026-11-14T03:43:21Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:51:36Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043240",
+        "name": "Go tests (./repository shard 2/8)",
+        "startedAt": "2026-11-14T03:43:26Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:54:14Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043165",
+        "name": "Go tests (./repository shard 3/8)",
+        "startedAt": "2026-11-14T03:43:14Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:50:15Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043302",
+        "name": "Go tests (./repository shard 4/8)",
+        "startedAt": "2026-11-14T03:43:35Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:53:10Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043259",
+        "name": "Go tests (./repository shard 5/8)",
+        "startedAt": "2026-11-14T03:44:33Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:52:45Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043242",
+        "name": "Go tests (./repository shard 6/8)",
+        "startedAt": "2026-11-14T03:42:58Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:54:34Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043310",
+        "name": "Go tests (./repository shard 7/8)",
+        "startedAt": "2026-11-14T03:43:43Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:43:24Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319042991",
+        "name": "Go tests (./services shard 0/8)",
+        "startedAt": "2026-11-14T03:40:53Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:46:29Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043235",
+        "name": "Go tests (./services shard 1/8)",
+        "startedAt": "2026-11-14T03:41:43Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:46:25Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043199",
+        "name": "Go tests (./services shard 2/8)",
+        "startedAt": "2026-11-14T03:42:19Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:48:48Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043293",
+        "name": "Go tests (./services shard 3/8)",
+        "startedAt": "2026-11-14T03:43:48Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:49:34Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043376",
+        "name": "Go tests (./services shard 4/8)",
+        "startedAt": "2026-11-14T03:44:39Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:47:16Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043208",
+        "name": "Go tests (./services shard 5/8)",
+        "startedAt": "2026-11-14T03:43:23Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:48:43Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043251",
+        "name": "Go tests (./services shard 6/8)",
+        "startedAt": "2026-11-14T03:43:04Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:48:14Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043193",
+        "name": "Go tests (./services shard 7/8)",
+        "startedAt": "2026-11-14T03:41:34Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:50:42Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043064",
+        "name": "PostgreSQL repository and migration contracts",
+        "startedAt": "2026-11-14T03:41:27Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:41:33Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043016",
+        "name": "PostgreSQL client certificate reconnect",
+        "startedAt": "2026-11-14T03:40:53Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:42:17Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319042994",
+        "name": "golangci-lint",
+        "startedAt": "2026-11-14T03:40:53Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:44:32Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319042825",
+        "name": "Security scan",
+        "startedAt": "2026-11-14T03:40:53Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:50:38Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319042953",
+        "name": "Client lint, type, test & build",
+        "startedAt": "2026-11-14T03:40:53Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:41:31Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043048",
+        "name": "npm audit (.)",
+        "startedAt": "2026-11-14T03:41:20Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:41:36Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319042972",
+        "name": "npm audit (client)",
+        "startedAt": "2026-11-14T03:40:54Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:41:04Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319042942",
+        "name": "npm audit (e2e)",
+        "startedAt": "2026-11-14T03:40:53Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:45:40Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043109",
+        "name": "Playwright E2E",
+        "startedAt": "2026-11-14T03:41:32Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:41:26Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319042943",
+        "name": "Electron main-process tests",
+        "startedAt": "2026-11-14T03:40:53Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:44:53Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319042983",
+        "name": "Prod image build (HF Dockerfile)",
+        "startedAt": "2026-11-14T03:40:53Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:41:08Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319042962",
+        "name": "Migration filename hygiene",
+        "startedAt": "2026-11-14T03:40:54Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:55:00Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132322576453",
+        "name": "Combined Go statement coverage",
+        "startedAt": "2026-11-14T03:54:36Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:55:06Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132322681868",
+        "name": "Go test & build",
+        "startedAt": "2026-11-14T03:55:02Z",
+        "status": "COMPLETED",
+        "workflowName": "Server CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-11-14T03:42:12Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://sonarcloud.io/dashboard?id=alfapars-exe_discordd&pullRequest=304",
+        "name": "SonarCloud Code Analysis",
+        "startedAt": "2026-11-14T03:41:02Z",
+        "status": "COMPLETED",
+        "workflowName": ""
+      }
+    ],
+    "url": "https://github.com/alfapars-exe/discordd/pull/304"
+  },
+  "server_run_id": 43552868347,
+  "server_ci": {
+    "conclusion": "success",
+    "headSha": "fe6852fdd11e070073e56b346856c8b44c4839c5",
+    "jobs": [
+      {
+        "completedAt": "2026-11-14T03:44:32Z",
+        "conclusion": "success",
+        "databaseId": 132319042825,
+        "name": "Security scan",
+        "startedAt": "2026-11-14T03:40:53Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:40:55Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:40:54Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:00Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:40:55Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:02Z",
+            "conclusion": "success",
+            "name": "Self-scan (SECURE-CODING \u00a70.10)",
+            "number": 3,
+            "startedAt": "2026-11-14T03:41:00Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:02Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 4,
+            "startedAt": "2026-11-14T03:41:02Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:02Z",
+            "conclusion": "success",
+            "name": "Guardrail drift check (SECURE-CODING \u00a70.12.3)",
+            "number": 5,
+            "startedAt": "2026-11-14T03:41:02Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:06Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 6,
+            "startedAt": "2026-11-14T03:41:02Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:40Z",
+            "conclusion": "success",
+            "name": "govulncheck",
+            "number": 7,
+            "startedAt": "2026-11-14T03:41:06Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:42Z",
+            "conclusion": "success",
+            "name": "govulncheck welcome-bot",
+            "number": 8,
+            "startedAt": "2026-11-14T03:41:40Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:44:28Z",
+            "conclusion": "success",
+            "name": "gosec",
+            "number": 9,
+            "startedAt": "2026-11-14T03:41:42Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:44:28Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 16,
+            "startedAt": "2026-11-14T03:44:28Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:44:28Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 17,
+            "startedAt": "2026-11-14T03:44:28Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:44:28Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 18,
+            "startedAt": "2026-11-14T03:44:28Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:44:28Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 19,
+            "startedAt": "2026-11-14T03:44:28Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319042825"
+      },
+      {
+        "completedAt": "2026-11-14T03:41:04Z",
+        "conclusion": "success",
+        "databaseId": 132319042942,
+        "name": "npm audit (e2e)",
+        "startedAt": "2026-11-14T03:40:53Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:40:55Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:40:54Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:00Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:40:55Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:00Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+            "number": 3,
+            "startedAt": "2026-11-14T03:41:00Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:01Z",
+            "conclusion": "success",
+            "name": "Run npm audit --package-lock-only --audit-level=high",
+            "number": 4,
+            "startedAt": "2026-11-14T03:41:00Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:01Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+            "number": 7,
+            "startedAt": "2026-11-14T03:41:01Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:01Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 8,
+            "startedAt": "2026-11-14T03:41:01Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:02Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 9,
+            "startedAt": "2026-11-14T03:41:01Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319042942"
+      },
+      {
+        "completedAt": "2026-11-14T03:41:26Z",
+        "conclusion": "success",
+        "databaseId": 132319042943,
+        "name": "Electron main-process tests",
+        "startedAt": "2026-11-14T03:40:53Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:40:55Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:40:53Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:04Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:40:55Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:10Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+            "number": 3,
+            "startedAt": "2026-11-14T03:41:04Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:14Z",
+            "conclusion": "success",
+            "name": "Install root deps",
+            "number": 4,
+            "startedAt": "2026-11-14T03:41:10Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:15Z",
+            "conclusion": "success",
+            "name": "Resolve Electron binary",
+            "number": 5,
+            "startedAt": "2026-11-14T03:41:14Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:17Z",
+            "conclusion": "success",
+            "name": "electron:test (resolve-path + regression suite)",
+            "number": 6,
+            "startedAt": "2026-11-14T03:41:15Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:17Z",
+            "conclusion": "success",
+            "name": "Quality runner and acceptance validator tests",
+            "number": 7,
+            "startedAt": "2026-11-14T03:41:17Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:17Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 8,
+            "startedAt": "2026-11-14T03:41:17Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:24Z",
+            "conclusion": "success",
+            "name": "Run python3 -m pip install huggingface_hub==1.26.0",
+            "number": 9,
+            "startedAt": "2026-11-14T03:41:17Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:25Z",
+            "conclusion": "success",
+            "name": "Source encoding and Python tool regressions",
+            "number": 10,
+            "startedAt": "2026-11-14T03:41:24Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:25Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 18,
+            "startedAt": "2026-11-14T03:41:25Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:25Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+            "number": 19,
+            "startedAt": "2026-11-14T03:41:25Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:25Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 20,
+            "startedAt": "2026-11-14T03:41:25Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:25Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 21,
+            "startedAt": "2026-11-14T03:41:25Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319042943"
+      },
+      {
+        "completedAt": "2026-11-14T03:50:38Z",
+        "conclusion": "success",
+        "databaseId": 132319042953,
+        "name": "Client lint, type, test & build",
+        "startedAt": "2026-11-14T03:40:53Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:40:55Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:40:54Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:03Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:40:55Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:08Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+            "number": 3,
+            "startedAt": "2026-11-14T03:41:03Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:56Z",
+            "conclusion": "success",
+            "name": "Install deps",
+            "number": 4,
+            "startedAt": "2026-11-14T03:41:08Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:42:45Z",
+            "conclusion": "success",
+            "name": "ESLint",
+            "number": 5,
+            "startedAt": "2026-11-14T03:41:56Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:47:41Z",
+            "conclusion": "success",
+            "name": "Vitest",
+            "number": 6,
+            "startedAt": "2026-11-14T03:42:45Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:47:42Z",
+            "conclusion": "success",
+            "name": "Upload client statement and branch coverage",
+            "number": 7,
+            "startedAt": "2026-11-14T03:47:41Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:17Z",
+            "conclusion": "success",
+            "name": "Build",
+            "number": 8,
+            "startedAt": "2026-11-14T03:47:42Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:17Z",
+            "conclusion": "success",
+            "name": "Microphone worklet CSP packaging",
+            "number": 9,
+            "startedAt": "2026-11-14T03:48:17Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:50:36Z",
+            "conclusion": "success",
+            "name": "Production client image and Nginx CSP",
+            "number": 10,
+            "startedAt": "2026-11-14T03:48:17Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:50:36Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+            "number": 19,
+            "startedAt": "2026-11-14T03:50:36Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:50:36Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 20,
+            "startedAt": "2026-11-14T03:50:36Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:50:36Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 21,
+            "startedAt": "2026-11-14T03:50:36Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319042953"
+      },
+      {
+        "completedAt": "2026-11-14T03:41:08Z",
+        "conclusion": "success",
+        "databaseId": 132319042962,
+        "name": "Migration filename hygiene",
+        "startedAt": "2026-11-14T03:40:54Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:40:57Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:40:55Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:04Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:40:57Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:05Z",
+            "conclusion": "success",
+            "name": "Check for duplicate migration numeric prefixes",
+            "number": 3,
+            "startedAt": "2026-11-14T03:41:04Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:05Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 6,
+            "startedAt": "2026-11-14T03:41:05Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:05Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 7,
+            "startedAt": "2026-11-14T03:41:05Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319042962"
+      },
+      {
+        "completedAt": "2026-11-14T03:41:36Z",
+        "conclusion": "success",
+        "databaseId": 132319042972,
+        "name": "npm audit (client)",
+        "startedAt": "2026-11-14T03:40:54Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:40:56Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:40:54Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:04Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:40:56Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:07Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+            "number": 3,
+            "startedAt": "2026-11-14T03:41:04Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:33Z",
+            "conclusion": "success",
+            "name": "Run npm audit --package-lock-only --audit-level=high",
+            "number": 4,
+            "startedAt": "2026-11-14T03:41:07Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:33Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+            "number": 7,
+            "startedAt": "2026-11-14T03:41:33Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:33Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 8,
+            "startedAt": "2026-11-14T03:41:33Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:33Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 9,
+            "startedAt": "2026-11-14T03:41:33Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319042972"
+      },
+      {
+        "completedAt": "2026-11-14T03:44:53Z",
+        "conclusion": "success",
+        "databaseId": 132319042983,
+        "name": "Prod image build (HF Dockerfile)",
+        "startedAt": "2026-11-14T03:40:53Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:40:56Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:40:53Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:02Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:40:56Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:10Z",
+            "conclusion": "success",
+            "name": "Set up Docker Buildx",
+            "number": 3,
+            "startedAt": "2026-11-14T03:41:02Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:44:08Z",
+            "conclusion": "success",
+            "name": "Build prod image (no push)",
+            "number": 4,
+            "startedAt": "2026-11-14T03:41:10Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:44:29Z",
+            "conclusion": "success",
+            "name": "Scan production image with Trivy",
+            "number": 5,
+            "startedAt": "2026-11-14T03:44:08Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:44:33Z",
+            "conclusion": "success",
+            "name": "Post Scan production image with Trivy",
+            "number": 7,
+            "startedAt": "2026-11-14T03:44:29Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:44:35Z",
+            "conclusion": "success",
+            "name": "Post Build prod image (no push)",
+            "number": 8,
+            "startedAt": "2026-11-14T03:44:33Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:44:51Z",
+            "conclusion": "success",
+            "name": "Post Set up Docker Buildx",
+            "number": 9,
+            "startedAt": "2026-11-14T03:44:35Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:44:51Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 10,
+            "startedAt": "2026-11-14T03:44:51Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:44:51Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 11,
+            "startedAt": "2026-11-14T03:44:51Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319042983"
+      },
+      {
+        "completedAt": "2026-11-14T03:43:24Z",
+        "conclusion": "success",
+        "databaseId": 132319042991,
+        "name": "Go tests (./services shard 0/8)",
+        "startedAt": "2026-11-14T03:40:53Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:40:55Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:40:53Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:00Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:40:55Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:02Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 3,
+            "startedAt": "2026-11-14T03:41:00Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:02Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 4,
+            "startedAt": "2026-11-14T03:41:02Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:20Z",
+            "conclusion": "success",
+            "name": "go test shard (race + cover)",
+            "number": 5,
+            "startedAt": "2026-11-14T03:41:02Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:21Z",
+            "conclusion": "success",
+            "name": "Upload shard coverage",
+            "number": 6,
+            "startedAt": "2026-11-14T03:43:20Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:21Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 10,
+            "startedAt": "2026-11-14T03:43:21Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:22Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 11,
+            "startedAt": "2026-11-14T03:43:21Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:22Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 12,
+            "startedAt": "2026-11-14T03:43:22Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:22Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 13,
+            "startedAt": "2026-11-14T03:43:22Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319042991"
+      },
+      {
+        "completedAt": "2026-11-14T03:42:17Z",
+        "conclusion": "success",
+        "databaseId": 132319042994,
+        "name": "golangci-lint",
+        "startedAt": "2026-11-14T03:40:53Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:40:55Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:40:54Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:01Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:40:55Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:04Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 3,
+            "startedAt": "2026-11-14T03:41:01Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:42:14Z",
+            "conclusion": "success",
+            "name": "golangci-lint",
+            "number": 4,
+            "startedAt": "2026-11-14T03:41:04Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:42:14Z",
+            "conclusion": "success",
+            "name": "Post golangci-lint",
+            "number": 6,
+            "startedAt": "2026-11-14T03:42:14Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:42:14Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 7,
+            "startedAt": "2026-11-14T03:42:14Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:42:14Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 8,
+            "startedAt": "2026-11-14T03:42:14Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:42:14Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 9,
+            "startedAt": "2026-11-14T03:42:14Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319042994"
+      },
+      {
+        "completedAt": "2026-11-14T03:41:33Z",
+        "conclusion": "success",
+        "databaseId": 132319043016,
+        "name": "PostgreSQL client certificate reconnect",
+        "startedAt": "2026-11-14T03:40:53Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:40:56Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:40:53Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:03Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:40:56Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:06Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 3,
+            "startedAt": "2026-11-14T03:41:03Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:32Z",
+            "conclusion": "success",
+            "name": "Provision isolated certificate-authenticated database",
+            "number": 4,
+            "startedAt": "2026-11-14T03:41:06Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:32Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 7,
+            "startedAt": "2026-11-14T03:41:32Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:32Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 8,
+            "startedAt": "2026-11-14T03:41:32Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:32Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 9,
+            "startedAt": "2026-11-14T03:41:32Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043016"
+      },
+      {
+        "completedAt": "2026-11-14T03:41:31Z",
+        "conclusion": "success",
+        "databaseId": 132319043048,
+        "name": "npm audit (.)",
+        "startedAt": "2026-11-14T03:41:20Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:41:22Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:41:21Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:26Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:41:22Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:27Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+            "number": 3,
+            "startedAt": "2026-11-14T03:41:26Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:28Z",
+            "conclusion": "success",
+            "name": "Run npm audit --package-lock-only --audit-level=high",
+            "number": 4,
+            "startedAt": "2026-11-14T03:41:27Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:28Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+            "number": 7,
+            "startedAt": "2026-11-14T03:41:28Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:28Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 8,
+            "startedAt": "2026-11-14T03:41:28Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:28Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 9,
+            "startedAt": "2026-11-14T03:41:28Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043048"
+      },
+      {
+        "completedAt": "2026-11-14T03:48:55Z",
+        "conclusion": "success",
+        "databaseId": 132319043063,
+        "name": "Go base tests & build",
+        "startedAt": "2026-11-14T03:41:10Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:41:12Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:41:11Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:17Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:41:12Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:20Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 3,
+            "startedAt": "2026-11-14T03:41:17Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:42:19Z",
+            "conclusion": "success",
+            "name": "go vet",
+            "number": 4,
+            "startedAt": "2026-11-14T03:41:20Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:42:21Z",
+            "conclusion": "success",
+            "name": "go mod tidy (no drift)",
+            "number": 5,
+            "startedAt": "2026-11-14T03:42:19Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:42:21Z",
+            "conclusion": "success",
+            "name": "Go shard runner unit tests",
+            "number": 6,
+            "startedAt": "2026-11-14T03:42:21Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:42:22Z",
+            "conclusion": "success",
+            "name": "Welcome bot tests and vet (independent Go module)",
+            "number": 7,
+            "startedAt": "2026-11-14T03:42:21Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:42:31Z",
+            "conclusion": "success",
+            "name": "Pinned JS solver Linux process and real Deno contracts",
+            "number": 8,
+            "startedAt": "2026-11-14T03:42:22Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:02Z",
+            "conclusion": "success",
+            "name": "go test (race + cover, remaining packages)",
+            "number": 9,
+            "startedAt": "2026-11-14T03:42:31Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:03Z",
+            "conclusion": "success",
+            "name": "Upload base coverage",
+            "number": 10,
+            "startedAt": "2026-11-14T03:48:02Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:52Z",
+            "conclusion": "success",
+            "name": "go build",
+            "number": 11,
+            "startedAt": "2026-11-14T03:48:03Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:52Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 21,
+            "startedAt": "2026-11-14T03:48:52Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:52Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 22,
+            "startedAt": "2026-11-14T03:48:52Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:52Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 23,
+            "startedAt": "2026-11-14T03:48:52Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043063"
+      },
+      {
+        "completedAt": "2026-11-14T03:50:42Z",
+        "conclusion": "success",
+        "databaseId": 132319043064,
+        "name": "PostgreSQL repository and migration contracts",
+        "startedAt": "2026-11-14T03:41:27Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:41:29Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:41:28Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:42Z",
+            "conclusion": "success",
+            "name": "Initialize containers",
+            "number": 2,
+            "startedAt": "2026-11-14T03:41:29Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:46Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 3,
+            "startedAt": "2026-11-14T03:41:42Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:49Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 4,
+            "startedAt": "2026-11-14T03:41:46Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:49Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 5,
+            "startedAt": "2026-11-14T03:41:49Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:20Z",
+            "conclusion": "success",
+            "name": "Execute server, repository, and database tests; reject required test skips",
+            "number": 6,
+            "startedAt": "2026-11-14T03:41:49Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:50:40Z",
+            "conclusion": "success",
+            "name": "Race-check role mutations, durable delivery and email queues against PostgreSQL",
+            "number": 7,
+            "startedAt": "2026-11-14T03:48:20Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:50:40Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 11,
+            "startedAt": "2026-11-14T03:50:40Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:50:40Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 12,
+            "startedAt": "2026-11-14T03:50:40Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:50:40Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 13,
+            "startedAt": "2026-11-14T03:50:40Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:50:41Z",
+            "conclusion": "success",
+            "name": "Stop containers",
+            "number": 14,
+            "startedAt": "2026-11-14T03:50:40Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:50:41Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 15,
+            "startedAt": "2026-11-14T03:50:41Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043064"
+      },
+      {
+        "completedAt": "2026-11-14T03:45:40Z",
+        "conclusion": "success",
+        "databaseId": 132319043109,
+        "name": "Playwright E2E",
+        "startedAt": "2026-11-14T03:41:32Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:41:35Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:41:33Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:44Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:41:35Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:49Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 3,
+            "startedAt": "2026-11-14T03:41:44Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:53Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+            "number": 4,
+            "startedAt": "2026-11-14T03:41:49Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:42:31Z",
+            "conclusion": "success",
+            "name": "Install client deps",
+            "number": 5,
+            "startedAt": "2026-11-14T03:41:53Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:42:32Z",
+            "conclusion": "success",
+            "name": "Install e2e deps",
+            "number": 6,
+            "startedAt": "2026-11-14T03:42:31Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:42:32Z",
+            "conclusion": "success",
+            "name": "Verify disposable E2E isolation guards",
+            "number": 7,
+            "startedAt": "2026-11-14T03:42:32Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:21Z",
+            "conclusion": "success",
+            "name": "Install Playwright Chromium and WebKit",
+            "number": 8,
+            "startedAt": "2026-11-14T03:42:32Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:38Z",
+            "conclusion": "success",
+            "name": "Start isolated PostgreSQL with mutual TLS",
+            "number": 9,
+            "startedAt": "2026-11-14T03:43:21Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:45:36Z",
+            "conclusion": "success",
+            "name": "Playwright test",
+            "number": 10,
+            "startedAt": "2026-11-14T03:43:38Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:45:37Z",
+            "conclusion": "success",
+            "name": "Stop isolated PostgreSQL",
+            "number": 11,
+            "startedAt": "2026-11-14T03:45:36Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:45:37Z",
+            "conclusion": "skipped",
+            "name": "Upload report on failure",
+            "number": 12,
+            "startedAt": "2026-11-14T03:45:37Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:45:37Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+            "number": 22,
+            "startedAt": "2026-11-14T03:45:37Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:45:37Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 23,
+            "startedAt": "2026-11-14T03:45:37Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:45:37Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 24,
+            "startedAt": "2026-11-14T03:45:37Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:45:37Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 25,
+            "startedAt": "2026-11-14T03:45:37Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043109"
+      },
+      {
+        "completedAt": "2026-11-14T03:54:14Z",
+        "conclusion": "success",
+        "databaseId": 132319043165,
+        "name": "Go tests (./repository shard 3/8)",
+        "startedAt": "2026-11-14T03:43:14Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:43:16Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:43:15Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:23Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:43:16Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:26Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 3,
+            "startedAt": "2026-11-14T03:43:23Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:26Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 4,
+            "startedAt": "2026-11-14T03:43:26Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:54:10Z",
+            "conclusion": "success",
+            "name": "go test shard (race + cover)",
+            "number": 5,
+            "startedAt": "2026-11-14T03:43:26Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:54:11Z",
+            "conclusion": "success",
+            "name": "Upload shard coverage",
+            "number": 6,
+            "startedAt": "2026-11-14T03:54:10Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:54:11Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 10,
+            "startedAt": "2026-11-14T03:54:11Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:54:11Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 11,
+            "startedAt": "2026-11-14T03:54:11Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:54:11Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 12,
+            "startedAt": "2026-11-14T03:54:11Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:54:11Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 13,
+            "startedAt": "2026-11-14T03:54:11Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043165"
+      },
+      {
+        "completedAt": "2026-11-14T03:48:14Z",
+        "conclusion": "success",
+        "databaseId": 132319043193,
+        "name": "Go tests (./services shard 7/8)",
+        "startedAt": "2026-11-14T03:41:34Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:41:36Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:41:35Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:40Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:41:36Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:42Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 3,
+            "startedAt": "2026-11-14T03:41:40Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:42Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 4,
+            "startedAt": "2026-11-14T03:41:42Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:11Z",
+            "conclusion": "success",
+            "name": "go test shard (race + cover)",
+            "number": 5,
+            "startedAt": "2026-11-14T03:41:42Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:12Z",
+            "conclusion": "success",
+            "name": "Upload shard coverage",
+            "number": 6,
+            "startedAt": "2026-11-14T03:48:11Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:12Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 10,
+            "startedAt": "2026-11-14T03:48:12Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:12Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 11,
+            "startedAt": "2026-11-14T03:48:12Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:12Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 12,
+            "startedAt": "2026-11-14T03:48:12Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:12Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 13,
+            "startedAt": "2026-11-14T03:48:12Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043193"
+      },
+      {
+        "completedAt": "2026-11-14T03:46:25Z",
+        "conclusion": "success",
+        "databaseId": 132319043199,
+        "name": "Go tests (./services shard 2/8)",
+        "startedAt": "2026-11-14T03:42:19Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:42:22Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:42:19Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:42:31Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:42:22Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:42:33Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 3,
+            "startedAt": "2026-11-14T03:42:31Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:42:33Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 4,
+            "startedAt": "2026-11-14T03:42:33Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:46:22Z",
+            "conclusion": "success",
+            "name": "go test shard (race + cover)",
+            "number": 5,
+            "startedAt": "2026-11-14T03:42:33Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:46:23Z",
+            "conclusion": "success",
+            "name": "Upload shard coverage",
+            "number": 6,
+            "startedAt": "2026-11-14T03:46:22Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:46:23Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 10,
+            "startedAt": "2026-11-14T03:46:23Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:46:23Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 11,
+            "startedAt": "2026-11-14T03:46:23Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:46:23Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 12,
+            "startedAt": "2026-11-14T03:46:23Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:46:23Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 13,
+            "startedAt": "2026-11-14T03:46:23Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043199"
+      },
+      {
+        "completedAt": "2026-11-14T03:52:21Z",
+        "conclusion": "success",
+        "databaseId": 132319043203,
+        "name": "Go tests (./repository shard 0/8)",
+        "startedAt": "2026-11-14T03:41:37Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:41:39Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:41:38Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:43Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:41:39Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:47Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 3,
+            "startedAt": "2026-11-14T03:41:43Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:47Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 4,
+            "startedAt": "2026-11-14T03:41:47Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:52:18Z",
+            "conclusion": "success",
+            "name": "go test shard (race + cover)",
+            "number": 5,
+            "startedAt": "2026-11-14T03:41:47Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:52:19Z",
+            "conclusion": "success",
+            "name": "Upload shard coverage",
+            "number": 6,
+            "startedAt": "2026-11-14T03:52:18Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:52:19Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 10,
+            "startedAt": "2026-11-14T03:52:19Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:52:19Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 11,
+            "startedAt": "2026-11-14T03:52:19Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:52:19Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 12,
+            "startedAt": "2026-11-14T03:52:19Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:52:19Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 13,
+            "startedAt": "2026-11-14T03:52:19Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043203"
+      },
+      {
+        "completedAt": "2026-11-14T03:47:16Z",
+        "conclusion": "success",
+        "databaseId": 132319043208,
+        "name": "Go tests (./services shard 5/8)",
+        "startedAt": "2026-11-14T03:43:23Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:43:26Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:43:23Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:32Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:43:26Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:34Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 3,
+            "startedAt": "2026-11-14T03:43:32Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:34Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 4,
+            "startedAt": "2026-11-14T03:43:34Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:47:14Z",
+            "conclusion": "success",
+            "name": "go test shard (race + cover)",
+            "number": 5,
+            "startedAt": "2026-11-14T03:43:34Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:47:14Z",
+            "conclusion": "success",
+            "name": "Upload shard coverage",
+            "number": 6,
+            "startedAt": "2026-11-14T03:47:14Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:47:15Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 10,
+            "startedAt": "2026-11-14T03:47:14Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:47:15Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 11,
+            "startedAt": "2026-11-14T03:47:15Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:47:15Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 12,
+            "startedAt": "2026-11-14T03:47:15Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:47:15Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 13,
+            "startedAt": "2026-11-14T03:47:15Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043208"
+      },
+      {
+        "completedAt": "2026-11-14T03:46:29Z",
+        "conclusion": "success",
+        "databaseId": 132319043235,
+        "name": "Go tests (./services shard 1/8)",
+        "startedAt": "2026-11-14T03:41:43Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:41:46Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:41:43Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:54Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:41:46Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:56Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 3,
+            "startedAt": "2026-11-14T03:41:54Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:41:57Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 4,
+            "startedAt": "2026-11-14T03:41:56Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:46:26Z",
+            "conclusion": "success",
+            "name": "go test shard (race + cover)",
+            "number": 5,
+            "startedAt": "2026-11-14T03:41:57Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:46:27Z",
+            "conclusion": "success",
+            "name": "Upload shard coverage",
+            "number": 6,
+            "startedAt": "2026-11-14T03:46:26Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:46:27Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 10,
+            "startedAt": "2026-11-14T03:46:27Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:46:27Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 11,
+            "startedAt": "2026-11-14T03:46:27Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:46:28Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 12,
+            "startedAt": "2026-11-14T03:46:27Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:46:28Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 13,
+            "startedAt": "2026-11-14T03:46:28Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043235"
+      },
+      {
+        "completedAt": "2026-11-14T03:51:36Z",
+        "conclusion": "success",
+        "databaseId": 132319043240,
+        "name": "Go tests (./repository shard 2/8)",
+        "startedAt": "2026-11-14T03:43:26Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:43:29Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:43:26Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:38Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:43:29Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:41Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 3,
+            "startedAt": "2026-11-14T03:43:38Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:41Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 4,
+            "startedAt": "2026-11-14T03:43:41Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:51:34Z",
+            "conclusion": "success",
+            "name": "go test shard (race + cover)",
+            "number": 5,
+            "startedAt": "2026-11-14T03:43:41Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:51:35Z",
+            "conclusion": "success",
+            "name": "Upload shard coverage",
+            "number": 6,
+            "startedAt": "2026-11-14T03:51:34Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:51:35Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 10,
+            "startedAt": "2026-11-14T03:51:35Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:51:35Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 11,
+            "startedAt": "2026-11-14T03:51:35Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:51:35Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 12,
+            "startedAt": "2026-11-14T03:51:35Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:51:35Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 13,
+            "startedAt": "2026-11-14T03:51:35Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043240"
+      },
+      {
+        "completedAt": "2026-11-14T03:52:45Z",
+        "conclusion": "success",
+        "databaseId": 132319043242,
+        "name": "Go tests (./repository shard 6/8)",
+        "startedAt": "2026-11-14T03:42:58Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:43:00Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:42:59Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:06Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:43:00Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:09Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 3,
+            "startedAt": "2026-11-14T03:43:06Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:09Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 4,
+            "startedAt": "2026-11-14T03:43:09Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:52:42Z",
+            "conclusion": "success",
+            "name": "go test shard (race + cover)",
+            "number": 5,
+            "startedAt": "2026-11-14T03:43:09Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:52:43Z",
+            "conclusion": "success",
+            "name": "Upload shard coverage",
+            "number": 6,
+            "startedAt": "2026-11-14T03:52:42Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:52:43Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 10,
+            "startedAt": "2026-11-14T03:52:43Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:52:43Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 11,
+            "startedAt": "2026-11-14T03:52:43Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:52:43Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 12,
+            "startedAt": "2026-11-14T03:52:43Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:52:43Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 13,
+            "startedAt": "2026-11-14T03:52:43Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043242"
+      },
+      {
+        "completedAt": "2026-11-14T03:48:43Z",
+        "conclusion": "success",
+        "databaseId": 132319043251,
+        "name": "Go tests (./services shard 6/8)",
+        "startedAt": "2026-11-14T03:43:04Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:43:06Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:43:05Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:13Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:43:06Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:15Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 3,
+            "startedAt": "2026-11-14T03:43:13Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:15Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 4,
+            "startedAt": "2026-11-14T03:43:15Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:40Z",
+            "conclusion": "success",
+            "name": "go test shard (race + cover)",
+            "number": 5,
+            "startedAt": "2026-11-14T03:43:15Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:41Z",
+            "conclusion": "success",
+            "name": "Upload shard coverage",
+            "number": 6,
+            "startedAt": "2026-11-14T03:48:40Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:41Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 10,
+            "startedAt": "2026-11-14T03:48:41Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:41Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 11,
+            "startedAt": "2026-11-14T03:48:41Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:41Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 12,
+            "startedAt": "2026-11-14T03:48:41Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:41Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 13,
+            "startedAt": "2026-11-14T03:48:41Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043251"
+      },
+      {
+        "completedAt": "2026-11-14T03:53:10Z",
+        "conclusion": "success",
+        "databaseId": 132319043259,
+        "name": "Go tests (./repository shard 5/8)",
+        "startedAt": "2026-11-14T03:44:33Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:44:36Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:44:34Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:44:45Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:44:36Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:44:48Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 3,
+            "startedAt": "2026-11-14T03:44:45Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:44:48Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 4,
+            "startedAt": "2026-11-14T03:44:48Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:53:07Z",
+            "conclusion": "success",
+            "name": "go test shard (race + cover)",
+            "number": 5,
+            "startedAt": "2026-11-14T03:44:48Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:53:08Z",
+            "conclusion": "success",
+            "name": "Upload shard coverage",
+            "number": 6,
+            "startedAt": "2026-11-14T03:53:07Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:53:08Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 10,
+            "startedAt": "2026-11-14T03:53:08Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:53:08Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 11,
+            "startedAt": "2026-11-14T03:53:08Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:53:08Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 12,
+            "startedAt": "2026-11-14T03:53:08Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:53:08Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 13,
+            "startedAt": "2026-11-14T03:53:08Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043259"
+      },
+      {
+        "completedAt": "2026-11-14T03:52:47Z",
+        "conclusion": "success",
+        "databaseId": 132319043272,
+        "name": "Go tests (./repository shard 1/8)",
+        "startedAt": "2026-11-14T03:43:21Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:43:23Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:43:21Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:29Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:43:23Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:31Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 3,
+            "startedAt": "2026-11-14T03:43:29Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:31Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 4,
+            "startedAt": "2026-11-14T03:43:31Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:52:44Z",
+            "conclusion": "success",
+            "name": "go test shard (race + cover)",
+            "number": 5,
+            "startedAt": "2026-11-14T03:43:31Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:52:45Z",
+            "conclusion": "success",
+            "name": "Upload shard coverage",
+            "number": 6,
+            "startedAt": "2026-11-14T03:52:44Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:52:45Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 10,
+            "startedAt": "2026-11-14T03:52:45Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:52:45Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 11,
+            "startedAt": "2026-11-14T03:52:45Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:52:45Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 12,
+            "startedAt": "2026-11-14T03:52:45Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:52:45Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 13,
+            "startedAt": "2026-11-14T03:52:45Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043272"
+      },
+      {
+        "completedAt": "2026-11-14T03:48:48Z",
+        "conclusion": "success",
+        "databaseId": 132319043293,
+        "name": "Go tests (./services shard 3/8)",
+        "startedAt": "2026-11-14T03:43:48Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:43:51Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:43:48Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:44:01Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:43:51Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:44:03Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 3,
+            "startedAt": "2026-11-14T03:44:01Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:44:04Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 4,
+            "startedAt": "2026-11-14T03:44:03Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:45Z",
+            "conclusion": "success",
+            "name": "go test shard (race + cover)",
+            "number": 5,
+            "startedAt": "2026-11-14T03:44:04Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:46Z",
+            "conclusion": "success",
+            "name": "Upload shard coverage",
+            "number": 6,
+            "startedAt": "2026-11-14T03:48:45Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:46Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 10,
+            "startedAt": "2026-11-14T03:48:46Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:46Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 11,
+            "startedAt": "2026-11-14T03:48:46Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:46Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 12,
+            "startedAt": "2026-11-14T03:48:46Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:48:47Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 13,
+            "startedAt": "2026-11-14T03:48:46Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043293"
+      },
+      {
+        "completedAt": "2026-11-14T03:50:15Z",
+        "conclusion": "success",
+        "databaseId": 132319043302,
+        "name": "Go tests (./repository shard 4/8)",
+        "startedAt": "2026-11-14T03:43:35Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:43:37Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:43:36Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:41Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:43:37Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:44Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 3,
+            "startedAt": "2026-11-14T03:43:41Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:44Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 4,
+            "startedAt": "2026-11-14T03:43:44Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:50:12Z",
+            "conclusion": "success",
+            "name": "go test shard (race + cover)",
+            "number": 5,
+            "startedAt": "2026-11-14T03:43:44Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:50:13Z",
+            "conclusion": "success",
+            "name": "Upload shard coverage",
+            "number": 6,
+            "startedAt": "2026-11-14T03:50:12Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:50:13Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 10,
+            "startedAt": "2026-11-14T03:50:13Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:50:13Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 11,
+            "startedAt": "2026-11-14T03:50:13Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:50:13Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 12,
+            "startedAt": "2026-11-14T03:50:13Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:50:13Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 13,
+            "startedAt": "2026-11-14T03:50:13Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043302"
+      },
+      {
+        "completedAt": "2026-11-14T03:54:34Z",
+        "conclusion": "success",
+        "databaseId": 132319043310,
+        "name": "Go tests (./repository shard 7/8)",
+        "startedAt": "2026-11-14T03:43:43Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:43:45Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:43:44Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:50Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:43:45Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:54Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 3,
+            "startedAt": "2026-11-14T03:43:50Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:43:54Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 4,
+            "startedAt": "2026-11-14T03:43:54Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:54:30Z",
+            "conclusion": "success",
+            "name": "go test shard (race + cover)",
+            "number": 5,
+            "startedAt": "2026-11-14T03:43:54Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:54:31Z",
+            "conclusion": "success",
+            "name": "Upload shard coverage",
+            "number": 6,
+            "startedAt": "2026-11-14T03:54:30Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:54:31Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 10,
+            "startedAt": "2026-11-14T03:54:31Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:54:31Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 11,
+            "startedAt": "2026-11-14T03:54:31Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:54:32Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 12,
+            "startedAt": "2026-11-14T03:54:31Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:54:32Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 13,
+            "startedAt": "2026-11-14T03:54:32Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043310"
+      },
+      {
+        "completedAt": "2026-11-14T03:49:34Z",
+        "conclusion": "success",
+        "databaseId": 132319043376,
+        "name": "Go tests (./services shard 4/8)",
+        "startedAt": "2026-11-14T03:44:39Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:44:41Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:44:39Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:44:47Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:44:41Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:44:49Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 3,
+            "startedAt": "2026-11-14T03:44:47Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:44:50Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 4,
+            "startedAt": "2026-11-14T03:44:49Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:49:32Z",
+            "conclusion": "success",
+            "name": "go test shard (race + cover)",
+            "number": 5,
+            "startedAt": "2026-11-14T03:44:50Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:49:32Z",
+            "conclusion": "success",
+            "name": "Upload shard coverage",
+            "number": 6,
+            "startedAt": "2026-11-14T03:49:32Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:49:33Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+            "number": 10,
+            "startedAt": "2026-11-14T03:49:32Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:49:33Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 11,
+            "startedAt": "2026-11-14T03:49:33Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:49:33Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 12,
+            "startedAt": "2026-11-14T03:49:33Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:49:33Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 13,
+            "startedAt": "2026-11-14T03:49:33Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132319043376"
+      },
+      {
+        "completedAt": "2026-11-14T03:55:00Z",
+        "conclusion": "success",
+        "databaseId": 132322576453,
+        "name": "Combined Go statement coverage",
+        "startedAt": "2026-11-14T03:54:36Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:54:38Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:54:37Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:54:43Z",
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 2,
+            "startedAt": "2026-11-14T03:54:38Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:54:46Z",
+            "conclusion": "success",
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 3,
+            "startedAt": "2026-11-14T03:54:43Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:54:47Z",
+            "conclusion": "success",
+            "name": "Run actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333",
+            "number": 4,
+            "startedAt": "2026-11-14T03:54:46Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:54:47Z",
+            "conclusion": "success",
+            "name": "Merge only profiles from identical source manifests",
+            "number": 5,
+            "startedAt": "2026-11-14T03:54:47Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:54:57Z",
+            "conclusion": "success",
+            "name": "Report statement coverage",
+            "number": 6,
+            "startedAt": "2026-11-14T03:54:47Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:54:58Z",
+            "conclusion": "success",
+            "name": "Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+            "number": 7,
+            "startedAt": "2026-11-14T03:54:57Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:54:58Z",
+            "conclusion": "success",
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "number": 13,
+            "startedAt": "2026-11-14T03:54:58Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:54:59Z",
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "number": 14,
+            "startedAt": "2026-11-14T03:54:58Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:54:59Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 15,
+            "startedAt": "2026-11-14T03:54:59Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132322576453"
+      },
+      {
+        "completedAt": "2026-11-14T03:55:06Z",
+        "conclusion": "success",
+        "databaseId": 132322681868,
+        "name": "Go test & build",
+        "startedAt": "2026-11-14T03:55:02Z",
+        "status": "completed",
+        "steps": [
+          {
+            "completedAt": "2026-11-14T03:55:03Z",
+            "conclusion": "success",
+            "name": "Set up job",
+            "number": 1,
+            "startedAt": "2026-11-14T03:55:03Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:55:03Z",
+            "conclusion": "success",
+            "name": "Require every Go test and build job to succeed",
+            "number": 2,
+            "startedAt": "2026-11-14T03:55:03Z",
+            "status": "completed"
+          },
+          {
+            "completedAt": "2026-11-14T03:55:03Z",
+            "conclusion": "success",
+            "name": "Complete job",
+            "number": 3,
+            "startedAt": "2026-11-14T03:55:03Z",
+            "status": "completed"
+          }
+        ],
+        "url": "https://github.com/alfapars-exe/discordd/actions/runs/43552868347/job/132322681868"
+      }
+    ],
+    "status": "completed"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "scope": "RF11 optional readiness behavior beyond owner presence",
+  "test": "TestMetricsOptionalReadinessPreservesCollectionAndCancellation",
+  "method": "Actual collectOne path with controlled HTTP transport and recording history/readiness providers; no external requests. Four enabled/disabled and success/cancellation cases.",
+  "assertions": [
+    "Disabled readiness still persists available snapshot with 2 rooms and 3 participants",
+    "Enabled readiness emits one successful reachability observation and same measurement values",
+    "Cancellation emits no outage observation and persists no snapshot in both modes"
+  ],
+  "checks": {
+    "metrics_suite": "PASS optional readiness and collector lifecycle tests, three repetitions, 0.961s",
+    "vet": "PASS go vet ./services",
+    "reviewed_manifest": "PASS 50 exact records",
+    "preceding_root": "Full root package passed 6.385s on 78bf1b88 server source; excludes later test extension"
+  },
+  "limits": [
+    "Controlled transport contract, not physical LiveKit/provider acceptance.",
+    "New Linux race/current-source CI separate; full project refactor incomplete."
+  ]
+}

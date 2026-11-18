@@ -82,7 +82,7 @@ func newFriendshipFixture(t *testing.T) (FriendshipService, *testutil.MockNotifi
 	notif := &testutil.MockNotificationRepo{}
 	ev := &readEvents{}
 	hub := &testutil.MockBroadcaster{BroadcastToUserFn: ev.hook()}
-	svc := NewFriendshipService(&stubFriendRepo{byID: map[string]*models.Friendship{"fr-1": pending}}, users, notif, hub)
+	svc := NewFriendshipService(nil, &stubFriendRepo{byID: map[string]*models.Friendship{"fr-1": pending}}, users, notif, hub, nil, nil)
 	return svc, notif, ev
 }
 

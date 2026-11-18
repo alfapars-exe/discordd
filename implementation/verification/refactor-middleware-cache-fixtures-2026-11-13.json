@@ -1,0 +1,41 @@
+{
+  "scope": "RF08 auth and permission middleware fixture ownership",
+  "before": {
+    "retained_workers_by_group": {
+      "auth_scopes": 3,
+      "session_boundary": 1,
+      "bot_token": 1,
+      "banned_bot": 1,
+      "profile_write": 1,
+      "permission_cache": 1,
+      "scoped_invalidation": 1,
+      "role_http": 24,
+      "inflight_grant": 3,
+      "invalidation_churn": 1
+    },
+    "retained_workers_total": 37,
+    "failing_fixture_groups": 10,
+    "already_owned_shutdown_control": "PASS (zero retained workers)"
+  },
+  "change": "Pass testing.TB to the real-auth fixture helper and register Stop immediately after every direct middleware construction. Name inline permission middleware before building its HTTP gate. Existing request/auth/permission assertions remain.",
+  "after": {
+    "fixture_scope_groups": 11,
+    "selected_tests_count_5": "PASS 3.832s",
+    "full_middleware_race": "PASS 28.510s",
+    "selected_fixture_race_count_5": "PASS 64.071s",
+    "full_go_vet_and_build": "PASS",
+    "golangci_lint": "0 issues",
+    "retained_workers": "0 relative to each fixture baseline",
+    "shared_observation_helper": "Same blob e0faff7956d7d69819f8cc1799b455abe72b6d10 as PR293; diagnostic profile calls remain in _test.go files.",
+    "integrated_selected_tests_count_5": "PASS 4.062s",
+    "integrated_selected_race_count_5": "PASS 59.096s",
+    "integrated_full_go_vet_and_build": "PASS"
+  },
+  "inventory_note": "Permission benchmark constructor has three callers already deferring cache.Close; their ownership is preserved.",
+  "limitations": [
+    "New-head PR292 full CI is pending after this follow-up.",
+    "This closes the named middleware fixture gaps, not real-process shutdown or active-media acceptance."
+  ],
+  "canonical_source": "9c026c88",
+  "integrated_source": "9ce26046"
+}

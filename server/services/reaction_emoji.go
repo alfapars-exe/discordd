@@ -45,9 +45,3 @@ func validateReactionEmoji(ctx context.Context, r EmojiResolver, userID, emoji s
 	}
 	return key, false, nil
 }
-
-// SetEmojiResolver wires custom-emoji reaction validation (init_services.go).
-func (s *reactionService) SetEmojiResolver(r EmojiResolver) { s.emojiResolver = r }
-
-// SetEmojiResolver wires custom-emoji reaction validation (init_services.go).
-func (s *dmService) SetEmojiResolver(r EmojiResolver) { s.emojiResolver = r }

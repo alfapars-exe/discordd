@@ -1,0 +1,27 @@
+{
+  "sourceCommit": "658271b2a21572a5dfb93223227227f28c823803",
+  "files": [
+    {
+      "file": "server/moderation_wiring.go",
+      "sourceMatchesHEAD": true,
+      "sha256LF": "bb8d371678793ee358aefc6af8b473681710e77e39ae7e067c151fa113493112",
+      "openIssues": 0,
+      "issues": []
+    },
+    {
+      "file": "server/privacy_policy_wiring.go",
+      "sourceMatchesHEAD": true,
+      "sha256LF": "cfbde2dc261a5ac6b47dbec2c50edbccf00ae93ba39cb966b30d6a87bb179b61",
+      "openIssues": 0,
+      "issues": []
+    },
+    {
+      "file": "client/src/crypto/keyDatabase.openLifecycle.test.ts",
+      "sourceMatchesHEAD": true,
+      "sha256LF": "fe76b312cce75e763b183d993340a11b8e3c68868c6de94ca68dd946dc3abdae",
+      "openIssues": 0,
+      "issues": []
+    }
+  ],
+  "scope": "Source-matched Sonar results for selected composition interfaces and concurrency test; not whole-project closure"
+}

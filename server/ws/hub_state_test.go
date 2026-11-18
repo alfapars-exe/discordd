@@ -60,3 +60,54 @@ func TestRemoveClient_EvictsUserInfoOnlyOnFullDisconnect(t *testing.T) {
 		t.Fatalf("full disconnect must evict user info, got %+v", info)
 	}
 }
+
+func TestRegistrationProfileFollowsActiveConnections(t *testing.T) {
+	h := NewHub()
+	connect := func(name string, rejected bool) *Client {
+		c := &Client{hub: h, userID: "reader", done: make(chan struct{}), registrationProfile: &cachedUserInfo{Username: name}}
+		if rejected {
+			c.closeDone()
+		}
+		h.addClient(c)
+		return c
+	}
+
+	rejected := connect("rejected", true)
+	if rejected.registrationProfile != nil {
+		t.Fatal("rejected client retained its registration profile")
+	}
+	if len(h.userInfos) != 0 {
+		t.Fatal("rejected registration retained a profile")
+	}
+	first := connect("original", false)
+	h.UpdateUserInfo("reader", "updated", "", "")
+	second := connect("stale", false)
+	h.removeClient(first)
+	if got := h.getUserUsername("reader"); got != "updated" {
+		t.Fatalf("second tab replaced the active profile: %q", got)
+	}
+	h.removeClient(second)
+	if len(h.userInfos) != 0 {
+		t.Fatal("last disconnect retained a profile")
+	}
+}
+
+func TestShutdownRegistrationReleasesTemporaryProfile(t *testing.T) {
+	h := NewHub()
+	h.shuttingDown = true
+	c := &Client{hub: h, userID: "reader", done: make(chan struct{}), registered: make(chan struct{}), registrationProfile: &cachedUserInfo{Username: "rejected"}}
+	h.addClient(c)
+	if c.registrationProfile != nil || len(h.userInfos) != 0 || len(h.clients) != 0 {
+		t.Fatal("shutdown registration retained client or profile state")
+	}
+	select {
+	case <-c.registered:
+	default:
+		t.Fatal("rejected registration did not release its waiter")
+	}
+	select {
+	case <-c.done:
+	default:
+		t.Fatal("shutdown registration left the client open")
+	}
+}

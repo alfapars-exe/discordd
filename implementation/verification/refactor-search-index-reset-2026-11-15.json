@@ -1,0 +1,141 @@
+{
+  "baseCommit": "9fb5865b744fb76eda84ccfc237faa33ba24f103",
+  "scope": "Source cache reset fences and physical derived-index cleanup before panel migration",
+  "behavior": "clearAllE2EEData cancels local active index creation/handles and blocks new local queries during overlapping resets; atomically rotates a source metadata epoch with all source-store clears; removes derived refs/headers, including abandoned/cross-tab records",
+  "crossTab": "Snapshot creation and operations validate the durable source epoch. Streaming scans check before/after their coherent message-cache read and do not hold a long metadata read lock. Nonportable epoch cannot be replayed from backup rollback or device-handoff metadata.",
+  "verification": {
+    "red": "Two reset regressions failed on prior source;14 existing snapshot tests passed",
+    "selected": "146 storage/backup/scanner/snapshot/handoff/archive tests passed,18.58s, before the final equivalent lint-flow refactor",
+    "full": "480 files,4966 passed/1 skipped,121.21s on final source",
+    "coverage": {
+      "statements": 66.95,
+      "branches": 64.32,
+      "functions": 61.27,
+      "lines": 67.93,
+      "snapshotLines": 97.31,
+      "snapshotBranches": 89,
+      "scannerLines": 100,
+      "scannerBranches": 94.44,
+      "epochLines": 100,
+      "epochBranches": 88.88
+    },
+    "lint": "0 errors,2 existing TanStack warnings",
+    "build": "tsc/Vite passed; Vite chunk-size warning remains visible",
+    "native": "Real Chromium156/Node26.13.1: ordered index/page/count/delete benchmarks1k/10k/50k, one warmup+nine samples, then an actual second page/JS realm resets the same account; first-page handle rejected and both derived stores counted0",
+    "nativeReports": [
+      {
+        "kind": "channel",
+        "size": 1000,
+        "matches": 267,
+        "repetitions": 9,
+        "buildMedianMs": 39.900000005960464,
+        "firstPageMedianMs": 2.2000000178813934,
+        "nextPageMedianMs": 2.199999988079071,
+        "previousPageMedianMs": 2.100000023841858,
+        "retainedDeltaMedianBytes": 9352,
+        "maxPageIds": 25,
+        "scope": "Disk ordering snapshot API and25-ID windows, one warmup. Post-GC retained handle heap only; excludes transient peak, full panels and IndexedDB disk usage. Source cache writes wait during scan."
+      },
+      {
+        "kind": "channel",
+        "size": 10000,
+        "matches": 2667,
+        "repetitions": 9,
+        "buildMedianMs": 335.59999999403954,
+        "firstPageMedianMs": 1.9000000059604645,
+        "nextPageMedianMs": 2.199999988079071,
+        "previousPageMedianMs": 2,
+        "retainedDeltaMedianBytes": 6972,
+        "maxPageIds": 25,
+        "scope": "Disk ordering snapshot API and25-ID windows, one warmup. Post-GC retained handle heap only; excludes transient peak, full panels and IndexedDB disk usage. Source cache writes wait during scan."
+      },
+      {
+        "kind": "channel",
+        "size": 50000,
+        "matches": 13333,
+        "repetitions": 9,
+        "buildMedianMs": 2652.199999988079,
+        "firstPageMedianMs": 3,
+        "nextPageMedianMs": 3.0999999940395355,
+        "previousPageMedianMs": 3.0999999940395355,
+        "retainedDeltaMedianBytes": 23288,
+        "maxPageIds": 25,
+        "scope": "Disk ordering snapshot API and25-ID windows, one warmup. Post-GC retained handle heap only; excludes transient peak, full panels and IndexedDB disk usage. Source cache writes wait during scan."
+      },
+      {
+        "kind": "dm",
+        "size": 1000,
+        "matches": 267,
+        "repetitions": 9,
+        "buildMedianMs": 50.19999998807907,
+        "firstPageMedianMs": 2.7999999821186066,
+        "nextPageMedianMs": 2.800000011920929,
+        "previousPageMedianMs": 2.7999999821186066,
+        "retainedDeltaMedianBytes": 8136,
+        "maxPageIds": 25,
+        "scope": "Disk ordering snapshot API and25-ID windows, one warmup. Post-GC retained handle heap only; excludes transient peak, full panels and IndexedDB disk usage. Source cache writes wait during scan."
+      },
+      {
+        "kind": "dm",
+        "size": 10000,
+        "matches": 2667,
+        "repetitions": 9,
+        "buildMedianMs": 477.89999997615814,
+        "firstPageMedianMs": 2.9000000059604645,
+        "nextPageMedianMs": 3.0999999940395355,
+        "previousPageMedianMs": 2.5999999940395355,
+        "retainedDeltaMedianBytes": 11580,
+        "maxPageIds": 25,
+        "scope": "Disk ordering snapshot API and25-ID windows, one warmup. Post-GC retained handle heap only; excludes transient peak, full panels and IndexedDB disk usage. Source cache writes wait during scan."
+      },
+      {
+        "kind": "dm",
+        "size": 50000,
+        "matches": 13333,
+        "repetitions": 9,
+        "buildMedianMs": 2819.7999999821186,
+        "firstPageMedianMs": 3.300000011920929,
+        "nextPageMedianMs": 3.0999999940395355,
+        "previousPageMedianMs": 2.7000000178813934,
+        "retainedDeltaMedianBytes": 23288,
+        "maxPageIds": 25,
+        "scope": "Disk ordering snapshot API and25-ID windows, one warmup. Post-GC retained handle heap only; excludes transient peak, full panels and IndexedDB disk usage. Source cache writes wait during scan."
+      },
+      {
+        "crossTabReset": {
+          "rejected": true,
+          "refs": 0,
+          "snapshots": 0
+        }
+      }
+    ],
+    "measurementLimit": "Benchmarks ran alongside full client validation; timings are samples, not isolated capacity or speedup evidence. Retained heap excludes transient peak, full panels and IndexedDB disk.",
+    "correctedFailures": "Initial lint rejected throws nested in finally; reset outcome/cleanup error handling was moved outside finally and full checks rerun. Initial native multi-page step failed because browser.newPage owned its context; explicit newContext fixed it and the entire native script passed.",
+    "cleanup": "Owned Chromium/Vite native run completed exit0 and closed in finally"
+  },
+  "normalizedLFSourceSha256": {
+    "client/src/crypto/cachedSearchEpoch.ts": "f8276ea7ea53623235435087b26af8878914a09d64e028b6c44adbed34d86edc",
+    "client/src/crypto/cachedSearchScan.ts": "4f27907a5bc35935b922590f289fe31b29f74ed2c2d919386161699e87ccf8e8",
+    "client/src/crypto/cachedSearchScan.test.ts": "74ecef2bd21d2d037d8d7c78e747000a3e7e6614c1ffcc5e903a1f0063f5c3b9",
+    "client/src/crypto/cachedSearchSnapshot.ts": "a4b167ca6f1746c0fc1fed6c75a136783324751abf478e39fdc2187aa40cdd19",
+    "client/src/crypto/cachedSearchSnapshot.test.ts": "d5c750041c9f3bc90d08db98a8c425543231127273990e4d917dcf176e8131ad",
+    "client/src/crypto/keyStorage.ts": "bad484db935082ec89bea881eced419ea73037e28df6ec99e34452e5b98e177a",
+    "client/src/crypto/deviceHandoff.ts": "4d9cf6b85cc1573928c3caeac5210001acc517af242be411b2516c08cb668d96",
+    "e2e/scripts/benchmark-search-snapshot.mjs": "b35f29f889c728ac3046a4eb6cfbe2a0a758e8af250154036b7b87ed9e83fb44"
+  },
+  "logSha256": {
+    "hichat-search-reset-red.log": "bb2bedf99d1939213c52f4ddf9270376e5b0b1f34d45192c0c039a60d9436c1c",
+    "hichat-search-reset-storage-final.log": "c1056b3763a472a1d59681934a0a3b9e688747a152d9b9a64003ccf64c04bf73",
+    "hichat-search-reset-final-full-coverage.log": "586b82b7019cfab1e0165625c84f92fe6e0edc192172cb144d9098e2d28a5682",
+    "hichat-search-reset-final-lint.log": "b51344ffc39e8ec9a8569b51c5ae7b28aa35df7af955a93bafae4f7a267c30fa",
+    "hichat-search-reset-final-build.log": "b33d8610f7b45f63278a19e50272ba8303adc6013995cf2e78d9cf8b4784c03f",
+    "hichat-search-reset-final-chromium.log": "99890b654b5d44a815c80bbfb28f4c6ace34e79527904165ec146e45c1f15c8f"
+  },
+  "remaining": [
+    "Both production panels still retain full matching-ID arrays; migrate them to the index",
+    "Preserve stale-hit refill, live deletions during creation, query changes, permission/account fences and index disposal",
+    "Final panel/source heap, controlled performance, recovery browser acceptance and current CI pending",
+    "This reset proof is a storage API test, not UI removal of already displayed results",
+    "Whole-project physical/platform/transport and full refactor acceptance remain open"
+  ]
+}

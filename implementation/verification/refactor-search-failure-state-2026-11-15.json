@@ -1,0 +1,79 @@
+{
+  "scope": "Encrypted channel and DM search failure presentation; no claim about REST search error handling or bounded active unique-ID frontier.",
+  "red": "2failed37passed before change; missing alert and false noSearchResults on injected quota error.",
+  "green": "39passed2files3.64s; injected QuotaExceededError is an alert rather than an empty result; subsequent successful empty query clears alert.",
+  "native": [
+    {
+      "variant": "after",
+      "react": "19.3.1",
+      "productionBuild": true,
+      "historicalOverrides": 0
+    },
+    {
+      "variant": "after",
+      "kind": "channel",
+      "failedSearchFrontier": [
+        {
+          "events": 1000,
+          "retainedGrowthBytes": 76992
+        },
+        {
+          "events": 5000,
+          "retainedGrowthBytes": 77584
+        },
+        {
+          "events": 10000,
+          "retainedGrowthBytes": 77456
+        }
+      ]
+    },
+    {
+      "variant": "after",
+      "kind": "dm",
+      "failedSearchFrontier": [
+        {
+          "events": 1000,
+          "retainedGrowthBytes": 14708
+        },
+        {
+          "events": 5000,
+          "retainedGrowthBytes": 14708
+        },
+        {
+          "events": 10000,
+          "retainedGrowthBytes": 14320
+        }
+      ]
+    }
+  ],
+  "nativeScope": "Actual production React/Chromium IndexedDB with controlled providers and injected index-creation Error;asserts alert,then10000missing-ID store events and post-GC retained growth<256KiB;not physical quota exhaustion or full WS/cache pipeline.",
+  "sha256": {
+    "client/src/components/chat/SearchPanel.tsx": "a4945fb46fb89872dcee178f648a7c0efaf438349f8fa37a5908988e1c0c0c72",
+    "client/src/components/dm/DMSearchPanel.tsx": "8a0d34a53ee01b56e1cfeffc49d027d73b8e5a7bc7c823aa019f1ebe8a153da5",
+    "client/src/components/chat/SearchPanel.test.tsx": "b1fe795083818e51c2ba1d7ba83b1e0023d94ef0db9d6cfb14f2e9437e95bda6",
+    "client/src/components/dm/DMSearchPanel.test.tsx": "698c50dcd83dca3ebb8fcf13505dee6195dcfbd7de1110e3cb7da1afbcc2b636",
+    "client/src/i18n/locales/en/chat.json": "909b8f542af3301a464bdc85f773061ebe464e405cc4d2afe3dd88e253d98cad",
+    "client/src/i18n/locales/tr/chat.json": "c465fa1091adf3ac5aa9b643a284d3bf7f603f85cd0b17fa1bbc415b7a86ef59",
+    "e2e/scripts/benchmark-search-panels.mjs": "5a9e2a48fe4407781b27f4920cc263bed42d04d88a6116581b8c00f664099ef9"
+  },
+  "contract": "Catch paths dispose failed snapshot,clear pending IDs,hide stale rows and show localized role=alert. Owner/sequence fences still suppress late abandoned errors;new input clears failure.",
+  "requiredCi": "Native failure/idle-budget probe is a required Server CI step; all workflow expressions validated by actionlint1.7.12(shellcheck/pyflakes disabled).",
+  "limitations": [
+    "Active unique-ID frontier still unbounded.",
+    "A future overflow recovery must wait for actual source writers and fail safely when cleanup fails.",
+    "No automatic retry against potentially stale cache is introduced."
+  ],
+  "sourceRevision": "cfc8d94ba94b1bc5e1bad9919d985db5666e4586",
+  "fullClientCoverage": {
+    "files": 485,
+    "passed": 5056,
+    "skipped": 1,
+    "seconds": 114.03,
+    "statementPercent": 67.31,
+    "branchPercent": 64.52,
+    "functionPercent": 61.51,
+    "linePercent": 68.38
+  },
+  "build": "actual tsc-b/VitePASS3.03s; existing chunk warning",
+  "lint": "changed-files lintPASS; previous frozen general0errors2existing warnings"
+}

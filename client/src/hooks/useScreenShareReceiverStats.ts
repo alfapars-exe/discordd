@@ -37,7 +37,7 @@
  * remoteParticipants every cycle.
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import {
   RoomEvent,
   Track,
@@ -52,6 +52,12 @@ import { logOptionalTelemetry } from "../api/clientLog";
 import { useVoiceStore } from "../stores/voiceStore";
 import { resolveUserId } from "../utils/constants";
 import type { ScreenShareQualityGrade } from "../stores/slices/voiceScreenShareSlice";
+import {
+  captureReceiverBaseline,
+  calculateReceiverDeltas,
+  type ReceiverStatsBaseline as Baseline,
+  type ReceiverStatsSnapshot as InboundRtpSnapshot,
+} from "./screenShareReceiverSample";
 
 /**
  * Map this-window stats to a coarse quality grade for the per-panel
@@ -77,29 +83,6 @@ function computeGrade(args: {
 }
 
 const STATS_INTERVAL_MS = 10_000;
-
-type Baseline = {
-  timestamp: number;
-  bytesReceived: number;
-  framesDecoded: number;
-  framesDropped: number;
-  freezeCount: number;
-  totalFreezesDuration: number;
-  pauseCount: number;
-  totalPausesDuration: number;
-  jitterBufferDelay: number;
-  jitterBufferEmittedCount: number;
-  packetsLost: number;
-  packetsReceived: number;
-  nackCount: number;
-  firCount: number;
-  pliCount: number;
-};
-
-type InboundRtpSnapshot = Baseline & {
-  frameWidth: number;
-  frameHeight: number;
-};
 
 function summariseInbound(report: RTCStatsReport): InboundRtpSnapshot {
   // Walk every inbound-rtp video stat. With dynacast/adaptiveStream the
@@ -187,12 +170,10 @@ function getReceiver(track: RemoteVideoTrack): RTCRtpReceiver | undefined {
 }
 
 export function useScreenShareReceiverStats(room: Room): void {
-  // Per-track baselines outlive a single render so cumulative→delta
-  // math survives across the 10 s ticks. Keyed by participant + sid so
-  // re-subscribes and layer switches don't reset accidentally.
-  const baselinesRef = useRef<Map<TrackKey, Baseline>>(new Map());
-
   useEffect(() => {
+    // Delta samples belong to one room and persist across its timer ticks.
+    const baselines = new Map<TrackKey, Baseline>();
+    const sampling = new Map<TrackKey, symbol>();
     let cancelled = false;
 
     async function sampleOne(
@@ -208,96 +189,41 @@ export function useScreenShareReceiverStats(room: Room): void {
 
       const receiver = getReceiver(track);
       if (!receiver) return;
+      const key = keyFor(participant, publication);
+      if (sampling.has(key)) return;
+      const sample = Symbol();
+      sampling.set(key, sample);
 
       let report: RTCStatsReport;
       try {
         report = await receiver.getStats();
+        if (cancelled || sampling.get(key) !== sample || publication.track !== track || !publication.isSubscribed) return;
       } catch (err) {
-        console.warn("[screen-share-receiver-stats] getStats failed:", err);
+        if (!cancelled && sampling.get(key) === sample) console.warn("[screen-share-receiver-stats] getStats failed:", err);
         return;
+      } finally {
+        if (sampling.get(key) === sample) sampling.delete(key);
       }
-      if (cancelled) return;
 
       const now = Date.now();
       const snap = summariseInbound(report);
-      const key = keyFor(participant, publication);
-      const prev = baselinesRef.current.get(key);
+      const prev = baselines.get(key);
 
       // First sample for this (publisher, track) → baseline only. Same
       // reasoning as the publisher hook: cumulative-vs-delta confusion
       // would report the entire publish-lifetime bitrate as "current".
       if (!prev) {
-        baselinesRef.current.set(key, {
-          timestamp: now,
-          bytesReceived: snap.bytesReceived,
-          framesDecoded: snap.framesDecoded,
-          framesDropped: snap.framesDropped,
-          freezeCount: snap.freezeCount,
-          totalFreezesDuration: snap.totalFreezesDuration,
-          pauseCount: snap.pauseCount,
-          totalPausesDuration: snap.totalPausesDuration,
-          jitterBufferDelay: snap.jitterBufferDelay,
-          jitterBufferEmittedCount: snap.jitterBufferEmittedCount,
-          packetsLost: snap.packetsLost,
-          packetsReceived: snap.packetsReceived,
-          nackCount: snap.nackCount,
-          firCount: snap.firCount,
-          pliCount: snap.pliCount,
-        });
+        baselines.set(key, captureReceiverBaseline(snap, now));
         return;
       }
 
       const dtSec = (now - prev.timestamp) / 1000;
       if (dtSec <= 0) return;
 
-      const dBytes = Math.max(0, snap.bytesReceived - prev.bytesReceived);
-      const dDecoded = Math.max(0, snap.framesDecoded - prev.framesDecoded);
-      const dDropped = Math.max(0, snap.framesDropped - prev.framesDropped);
-      const dFreezeCount = Math.max(0, snap.freezeCount - prev.freezeCount);
-      const dFreezeMs = Math.max(
-        0,
-        (snap.totalFreezesDuration - prev.totalFreezesDuration) * 1000,
-      );
-      const dPauseCount = Math.max(0, snap.pauseCount - prev.pauseCount);
-      const dPauseMs = Math.max(
-        0,
-        (snap.totalPausesDuration - prev.totalPausesDuration) * 1000,
-      );
-      // jitterBufferDelay is cumulative seconds across all emitted frames.
-      // The delta over delta-emitted frames gives the per-frame mean delay
-      // during this window — that's the number that drives "feels laggy".
-      const dJitterSec = Math.max(0, snap.jitterBufferDelay - prev.jitterBufferDelay);
-      const dEmitted = Math.max(
-        0,
-        snap.jitterBufferEmittedCount - prev.jitterBufferEmittedCount,
-      );
-      const jitterBufferDelayMs = dEmitted > 0 ? Math.round((dJitterSec / dEmitted) * 1000) : 0;
-      const dLost = Math.max(0, snap.packetsLost - prev.packetsLost);
-      const dRecv = Math.max(0, snap.packetsReceived - prev.packetsReceived);
-      const lossDenom = dLost + dRecv;
-      const packetLossPct = lossDenom > 0 ? Math.round((dLost / lossDenom) * 1000) / 10 : 0;
-      const dNack = Math.max(0, snap.nackCount - prev.nackCount);
-      const dFir = Math.max(0, snap.firCount - prev.firCount);
-      const dPli = Math.max(0, snap.pliCount - prev.pliCount);
+      const { dBytes, dDecoded, dDropped, dFreezeCount, dFreezeMs, dPauseCount, dPauseMs, jitterBufferDelayMs, packetLossPct, dNack, dFir, dPli } = calculateReceiverDeltas(snap, prev);
 
       // Update baseline BEFORE the (potentially slow) log call.
-      baselinesRef.current.set(key, {
-        timestamp: now,
-        bytesReceived: snap.bytesReceived,
-        framesDecoded: snap.framesDecoded,
-        framesDropped: snap.framesDropped,
-        freezeCount: snap.freezeCount,
-        totalFreezesDuration: snap.totalFreezesDuration,
-        pauseCount: snap.pauseCount,
-        totalPausesDuration: snap.totalPausesDuration,
-        jitterBufferDelay: snap.jitterBufferDelay,
-        jitterBufferEmittedCount: snap.jitterBufferEmittedCount,
-        packetsLost: snap.packetsLost,
-        packetsReceived: snap.packetsReceived,
-        nackCount: snap.nackCount,
-        firCount: snap.firCount,
-        pliCount: snap.pliCount,
-      });
+      baselines.set(key, captureReceiverBaseline(snap, now));
 
       const kbps = Math.round((dBytes * 8) / dtSec / 1000);
       const fps = Math.round(dDecoded / dtSec);
@@ -357,7 +283,9 @@ export function useScreenShareReceiverStats(room: Room): void {
       // delta spike when the user re-opens a tab that triggered a layer
       // unsubscribe). Also drop the cached quality grade so the panel
       // badge fades back to neutral instead of showing a stale red dot.
-      baselinesRef.current.delete(keyFor(participant, publication));
+      const key = keyFor(participant, publication);
+      sampling.delete(key);
+      baselines.delete(key);
       if (publication.source === Track.Source.ScreenShare) {
         useVoiceStore.getState().clearScreenShareQualityGrade(
           resolveUserId(participant.identity),
@@ -369,8 +297,11 @@ export function useScreenShareReceiverStats(room: Room): void {
       // Walk our baselines and drop any for this participant. A bit O(N)
       // but the map size is bounded by active share count, which is small.
       const prefix = `${participant.identity}::`;
-      for (const key of baselinesRef.current.keys()) {
-        if (key.startsWith(prefix)) baselinesRef.current.delete(key);
+      for (const key of sampling.keys()) {
+        if (key.startsWith(prefix)) sampling.delete(key);
+      }
+      for (const key of baselines.keys()) {
+        if (key.startsWith(prefix)) baselines.delete(key);
       }
       useVoiceStore.getState().clearScreenShareQualityGrade(
         resolveUserId(participant.identity),
@@ -388,7 +319,7 @@ export function useScreenShareReceiverStats(room: Room): void {
       clearInterval(handle);
       room.off(RoomEvent.TrackUnsubscribed, handleUnsubscribed);
       room.off(RoomEvent.ParticipantDisconnected, handleDisconnected);
-      baselinesRef.current.clear();
+      baselines.clear();
     };
   }, [room]);
 }

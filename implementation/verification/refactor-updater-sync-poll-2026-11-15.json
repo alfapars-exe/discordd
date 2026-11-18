@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-15",
+  "base": "50f84051",
+  "sources": {
+    "electron/runtime-updater.ts": "7e77bf02cfabd107451ef4ceca76339bd46300211385a213ae078767bd266274",
+    "electron/runtime-updater.test.ts": "e87a998427823650a2c9a0dc60b775a9fdbea9d12afb3a711fa83f98c4ca5e53"
+  },
+  "before": "poll callback regression failed because synchronous SDK error escaped timer",
+  "fix": "Catch synchronous update-check exceptions and forward through existing failure callback; keep SDK rejected-promise error-event behavior without duplicate notification",
+  "validation": {
+    "command": "npm run electron:test",
+    "result": "406passed;1skipped;407total",
+    "compilation": "full Electron TypeScript compiled by canonical runner"
+  },
+  "invariants": [
+    "periodic synchronous failure does not escape timer",
+    "same poller recovers on next check",
+    "disposed callback cannot issue checks",
+    "SDK error event plus rejected promise reports exactly once"
+  ],
+  "limits": [
+    "native installer/physical upgrade still unverified",
+    "local delivery held pending remote c2baaec1 CI completion"
+  ]
+}

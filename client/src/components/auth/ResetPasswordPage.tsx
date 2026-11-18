@@ -12,11 +12,14 @@ import { localizeAuthError } from "../../utils/authErrors";
 import { newPasswordError } from "../../utils/passwordPolicy";
 
 function ResetPasswordPage() {
-  // ─── Hooks ───
-  const { t } = useTranslation("auth");
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token") ?? "";
 
+  return <ResetPasswordForm key={token} token={token} />;
+}
+
+function ResetPasswordForm({ token }: { readonly token: string }) {
+  const { t } = useTranslation("auth");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -63,7 +66,7 @@ function ResetPasswordPage() {
       <main className="auth-page">
         <div className="auth-card">
           <h1 className="auth-title">{t("resetPasswordTitle")}</h1>
-          <div className="auth-error">{t("invalidOrExpiredToken")}</div>
+          <div className="auth-error" role="alert">{t("invalidOrExpiredToken")}</div>
           <p className="auth-link">
             <Link to="/login">{t("goToLogin")}</Link>
           </p>
@@ -94,7 +97,7 @@ function ResetPasswordPage() {
         <h1 className="auth-title">{t("resetPasswordTitle")}</h1>
         <p className="auth-subtitle">{t("resetPasswordSubtitle")}</p>
 
-        {error && <div className="auth-error">{localizeAuthError(error, t)}</div>}
+        {error && <div className="auth-error" role="alert">{localizeAuthError(error, t)}</div>}
 
         <form onSubmit={handleSubmit}>
           <div className="auth-field">

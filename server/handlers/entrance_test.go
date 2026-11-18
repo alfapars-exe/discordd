@@ -165,7 +165,9 @@ func TestEntranceHandler_Upload_Rejections(t *testing.T) {
 }
 
 func TestEntranceHandler_Upload_RateLimited(t *testing.T) {
-	f := newEntranceHandlerFixture(t, ratelimit.NewMessageRateLimiter(1, time.Minute, 30*time.Second))
+	limiter := ratelimit.NewMessageRateLimiter(1, time.Minute, 30*time.Second)
+	t.Cleanup(limiter.Stop)
+	f := newEntranceHandlerFixture(t, limiter)
 	first := httptest.NewRecorder()
 	f.h.Upload(first, entranceUploadRequest(t, "alice", "audio/wav", entranceTestWav(300), map[string]string{"name": "a"}))
 	if first.Code != http.StatusCreated {

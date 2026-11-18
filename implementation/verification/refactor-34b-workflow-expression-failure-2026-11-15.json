@@ -1,0 +1,31 @@
+{
+  "failed_head": "34b866c8ec748e36d732499b2e064cf251196cd8",
+  "failed_workflow_run": {
+    "id": 43699726100,
+    "url": "https://github.com/alfapars-exe/discordd/actions/runs/43699726100",
+    "status": "completed",
+    "conclusion": "failure",
+    "jobs_created": 0
+  },
+  "cause": "runner.temp placed in job.env,where runner context is unavailable;plain YAML parse did not validate expression scope",
+  "red_proof": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-34b-workflow-context-red.log",
+  "correction": "Resolve runner.temp in preparation step env and export NPM_CONFIG_CACHE through GITHUB_ENV before setup-node and unchanged installs",
+  "official_context_reference": "https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#context-availability",
+  "actionlint": {
+    "version": "v1.7.12",
+    "go_minimum": "1.25.0;CI1.26.11 sufficient",
+    "result": "0errors9workflowfiles",
+    "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-workflows-actionlint-all.log",
+    "shellcheck_pyflakes": "disabled;no shell/Python lint claim",
+    "required_ci_gate": "Server CI first validation step after setup-go"
+  },
+  "source_sha256": {
+    ".github/workflows/frontend-artifacts.yml": "19e0a439c1be611a59da76124efdef6d645f90dea1e52cd26e826e1575b464d5",
+    ".github/workflows/server-ci.yml": "57e8e615119cec407b72308952999f793827293b5009852d1e64efa76df91006"
+  },
+  "monitoring_boundary": "PR statusCheckRollup omits this parse-failed workflow;inspect workflow runs too. Missing artifact check runs are not success.",
+  "limits": [
+    "Actual new-head GitHub validation and Node22Windows packaging still required",
+    "Other34bworkflows continue independently;no blind rerun requested"
+  ]
+}

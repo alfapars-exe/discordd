@@ -18,7 +18,8 @@ class RetentionTests(unittest.TestCase):
         now = dt.datetime.now(dt.timezone.utc)
         hourly = "hourly/" + now.strftime("%Y%m%dT%H%M%SZ") + ".dump.age"
         daily = "daily/" + now.strftime("%Y%m%d") + ".dump.age"
-        paths = [hourly, daily, "hourly/20200101T000000Z.dump.age", "uploads/20200101.dump.age", "daily/notes.txt"]
+        paths = [hourly, daily, "hourly/20200101T000000Z.dump.age", "uploads/20200101.dump.age", "daily/notes.txt",
+                 "daily/20260231.dump.age", "hourly/20261012T296100Z.dump.age"]
         rows = [{"type": "file", "path": name, "size": 50} for name in paths]
         with patch("subprocess.check_output", return_value=json.dumps(rows).encode()), patch("subprocess.run") as remove:
             with patch("sys.argv", [SCRIPT, hourly, daily]):

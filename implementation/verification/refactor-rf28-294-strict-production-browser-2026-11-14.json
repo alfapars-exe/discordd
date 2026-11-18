@@ -1,0 +1,138 @@
+{
+  "source": "294642ef19383507980d85b145f62a2bb379de7f",
+  "run": 43574885488,
+  "job": 132386987448,
+  "status": "completed",
+  "conclusion": "success",
+  "steps": [
+    {
+      "name": "Set up job",
+      "conclusion": "success",
+      "started_at": "2026-11-14T08:15:22Z",
+      "completed_at": "2026-11-14T08:15:23Z"
+    },
+    {
+      "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+      "conclusion": "success",
+      "started_at": "2026-11-14T08:15:23Z",
+      "completed_at": "2026-11-14T08:15:29Z"
+    },
+    {
+      "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+      "conclusion": "success",
+      "started_at": "2026-11-14T08:15:29Z",
+      "completed_at": "2026-11-14T08:15:31Z"
+    },
+    {
+      "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+      "conclusion": "success",
+      "started_at": "2026-11-14T08:15:31Z",
+      "completed_at": "2026-11-14T08:15:35Z"
+    },
+    {
+      "name": "Install client deps",
+      "conclusion": "success",
+      "started_at": "2026-11-14T08:15:35Z",
+      "completed_at": "2026-11-14T08:15:48Z"
+    },
+    {
+      "name": "Install e2e deps",
+      "conclusion": "success",
+      "started_at": "2026-11-14T08:15:48Z",
+      "completed_at": "2026-11-14T08:15:49Z"
+    },
+    {
+      "name": "Verify disposable E2E isolation guards",
+      "conclusion": "success",
+      "started_at": "2026-11-14T08:15:49Z",
+      "completed_at": "2026-11-14T08:15:53Z"
+    },
+    {
+      "name": "Install Playwright Chromium and WebKit",
+      "conclusion": "success",
+      "started_at": "2026-11-14T08:15:53Z",
+      "completed_at": "2026-11-14T08:16:31Z"
+    },
+    {
+      "name": "Start isolated PostgreSQL with mutual TLS",
+      "conclusion": "success",
+      "started_at": "2026-11-14T08:16:31Z",
+      "completed_at": "2026-11-14T08:16:42Z"
+    },
+    {
+      "name": "Chromium production application suite",
+      "conclusion": "success",
+      "started_at": "2026-11-14T08:16:42Z",
+      "completed_at": "2026-11-14T08:20:19Z"
+    },
+    {
+      "name": "Recover encrypted history in a fresh production database",
+      "conclusion": "success",
+      "started_at": "2026-11-14T08:20:19Z",
+      "completed_at": "2026-11-14T08:21:30Z"
+    },
+    {
+      "name": "Verify account preference isolation in a fresh production database",
+      "conclusion": "success",
+      "started_at": "2026-11-14T08:21:30Z",
+      "completed_at": "2026-11-14T08:22:33Z"
+    },
+    {
+      "name": "WebKit production client smoke",
+      "conclusion": "success",
+      "started_at": "2026-11-14T08:22:33Z",
+      "completed_at": "2026-11-14T08:23:19Z"
+    },
+    {
+      "name": "Recover account from delivered email in a fresh database",
+      "conclusion": "success",
+      "started_at": "2026-11-14T08:23:19Z",
+      "completed_at": "2026-11-14T08:23:41Z"
+    },
+    {
+      "name": "Stop isolated PostgreSQL",
+      "conclusion": "success",
+      "started_at": "2026-11-14T08:23:41Z",
+      "completed_at": "2026-11-14T08:23:42Z"
+    },
+    {
+      "name": "Upload browser report and retry evidence",
+      "conclusion": "success",
+      "started_at": "2026-11-14T08:23:42Z",
+      "completed_at": "2026-11-14T08:23:43Z"
+    },
+    {
+      "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+      "conclusion": "success",
+      "started_at": "2026-11-14T08:23:43Z",
+      "completed_at": "2026-11-14T08:23:43Z"
+    },
+    {
+      "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+      "conclusion": "success",
+      "started_at": "2026-11-14T08:23:43Z",
+      "completed_at": "2026-11-14T08:23:43Z"
+    },
+    {
+      "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+      "conclusion": "success",
+      "started_at": "2026-11-14T08:23:43Z",
+      "completed_at": "2026-11-14T08:23:43Z"
+    },
+    {
+      "name": "Complete job",
+      "conclusion": "success",
+      "started_at": "2026-11-14T08:23:44Z",
+      "completed_at": "2026-11-14T08:23:44Z"
+    }
+  ],
+  "summary_lines": [
+    "16 passed (3.6m)",
+    "3 passed (1.2m)",
+    "2 passed (1.0m)",
+    "1 passed (45.3s)",
+    "2 passed (22.0s)"
+  ],
+  "flaky_policy": "failOnFlakyTests enabled for CI, configuration guarded by real CLI discovery test",
+  "limits": "Browser job proof for294 only; overall Server CI still finishing and later email/auth changes need new CI. No physical-media/provider publication proof."
+}

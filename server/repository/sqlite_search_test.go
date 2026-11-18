@@ -12,6 +12,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -80,5 +81,75 @@ func TestSearchRepo_EmptyAllowedChannelIDs_ReturnsEmptyWithoutQuerying(t *testin
 	}
 	if res.TotalCount != 0 || len(res.Messages) != 0 {
 		t.Fatalf("expected empty result for an empty (non-nil) allow-list, got %+v", res)
+	}
+}
+
+// Equal relevance and timestamps require an explicit ID tie break so offset
+// pages have a stable boundary on both supported database backends.
+func TestSearchRepo_EqualRankTimestampPagesHaveStableOrder(t *testing.T) {
+	db := newTestDB(t)
+	seedMessageWorld(t, db)
+	ctx := context.Background()
+	for _, id := range []string{"search-a", "search-b", "search-c", "search-hidden"} {
+		channel := msgChannel
+		if id == "search-hidden" {
+			channel = msgOtherChannel
+		}
+		if _, err := db.Conn.ExecContext(ctx, `INSERT INTO messages(id,channel_id,user_id,content,created_at) VALUES(?,?,?,?,?)`, id, channel, msgAuthor, "pagingfixture", "2026-01-01 00:00:00.123456"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	search := NewSQLiteSearchRepo(db.Conn)
+	// The non-existent SQL-looking channel value must remain a bound value.
+	allowed := []string{msgChannel, "' OR 1=1 --"}
+	for offset, want := range []string{"search-c", "search-b", "search-a", ""} {
+		result, err := search.Search(ctx, "pagingfixture", "srv-1", nil, allowed, 1, offset)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.TotalCount != 3 {
+			t.Fatalf("offset %d: count %d, want 3", offset, result.TotalCount)
+		}
+		if want == "" {
+			if len(result.Messages) != 0 {
+				t.Fatalf("offset %d: expected empty page", offset)
+			}
+			continue
+		}
+		if len(result.Messages) != 1 || result.Messages[0].ID != want {
+			t.Fatalf("offset %d: got %+v, want %s", offset, result.Messages, want)
+		}
+	}
+}
+
+func TestSearchRepo_SQLiteRelevancePrecedesTimestampTieBreak(t *testing.T) {
+	// This contract belongs to FTS5; PostgreSQL intentionally uses a different
+	// search engine and must not be claimed to have equivalent relevance scores.
+	db, _ := newSQLiteTestDBWithPath(t)
+	seedMessageWorld(t, db)
+	ctx := context.Background()
+	for _, row := range []struct{ id, content, at string }{
+		{"rank-older", "rankfixture", "2026-01-01 00:00:00"},
+		{"rank-newer", "rankfixture " + strings.Repeat("filler ", 100), "2026-02-01 00:00:00"},
+	} {
+		if _, err := db.Conn.ExecContext(ctx, `INSERT INTO messages(id,channel_id,user_id,content,created_at) VALUES(?,?,?,?,?)`, row.id, msgChannel, msgAuthor, row.content, row.at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var olderRank, newerRank float64
+	for id, destination := range map[string]*float64{"rank-older": &olderRank, "rank-newer": &newerRank} {
+		if err := db.Conn.QueryRowContext(ctx, `SELECT fts.rank FROM messages_fts fts JOIN messages m ON m.rowid=fts.rowid WHERE messages_fts MATCH ? AND m.id=?`, sanitizeFTSQuery("rankfixture"), id).Scan(destination); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if olderRank >= newerRank {
+		t.Fatalf("fixture must give the older hit better relevance: older=%g newer=%g", olderRank, newerRank)
+	}
+	result, err := NewSQLiteSearchRepo(db.Conn).Search(ctx, "rankfixture", "srv-1", nil, []string{msgChannel}, 1, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.TotalCount != 2 || len(result.Messages) != 1 || result.Messages[0].ID != "rank-older" {
+		t.Fatalf("timestamp displaced primary relevance: %+v", result)
 	}
 }

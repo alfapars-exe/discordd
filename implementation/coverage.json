@@ -1148,8 +1148,8 @@
         "Run client/backend/Electron checks plus Windows installer and Docker builds; archive exact outcomes and unresolved failures."
       ],
       "code": ["package.json", ".github/workflows/build-desktop.yml", "native/build.bat", "Dockerfile", "server/Dockerfile", ".dockerignore", "server/.dockerignore", "server/pkg/logx/fatal.go", "server/main.go", "server/bootstrap.go", "server/startup_repair.go"],
-      "evidence": ["implementation/verification/p0-windows-docker-build-2026-10-24.json", "implementation/verification/p0-fatal-startup-logging-2026-10-24.json"],
-      "remaining_acceptance": ["Signed installer and isolated installed-Windows startup/install/update/rollback", "Live external service acceptance and fresh artifact rebuild after remaining P0-P11 implementation"]
+      "evidence": ["implementation/verification/p0-windows-docker-build-2026-10-24.json", "implementation/verification/p0-fatal-startup-logging-2026-10-24.json", "implementation/verification/p0-windows-upgrade-profile-2026-11-12.json"],
+      "remaining_acceptance": ["Signed final installer and rollback verification", "Live external service acceptance and fresh artifact rebuild after remaining P0-P11 implementation"]
     },
     {
       "id": "p0.real-device-gate",
@@ -6766,7 +6766,7 @@
       "id": "p9.call-reconnect",
       "title": "Call reconnect and navigation",
       "phase": "P9",
-      "status": "missing",
+      "status": "implemented_unverified",
       "sources": [
         "R28",
         "user-plan"
@@ -6780,6 +6780,9 @@
       "acceptance": [
         "Two clients reconnect after interruption while preserving active destination, device settings and current-call binding."
       ],
+      "remaining_acceptance": [
+        "Repeat the verified two-browser interruption scenario on installed Windows clients with navigation and selected device settings."
+      ],
       "code": [
         "client/src/stores/groupCallStore.ts",
         "client/src/components/dm/GroupCallProvider.tsx",
@@ -6787,6 +6790,7 @@
         "client/src/components/dm/GroupCallProvider.admission.test.tsx"
       ],
       "evidence": [
+        "implementation/verification/p9-web-group-reconnect-2026-11-12.json",
         "implementation/verification/p9-persistent-group-call-2026-10-25.json",
         "implementation/verification/p9-group-media-browser-2026-10-25.json",
         "implementation/verification/p9-encrypted-reconnect-electron-112d1e8b-2026-10-26.json"

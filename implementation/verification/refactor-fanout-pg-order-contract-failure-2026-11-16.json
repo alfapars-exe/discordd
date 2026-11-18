@@ -1,0 +1,80 @@
+{
+  "backendCommit": "88892ed1",
+  "producerCommit": "7ab3c3c0",
+  "verifierCommit": "7b348fd6",
+  "result": "NOT ACCEPTED: wrong PostgreSQL verifier order",
+  "observedCounters": {
+    "sent": 5800,
+    "received": 116000,
+    "receivers": 20,
+    "duplicates": 0,
+    "invalid": 0
+  },
+  "failurePhases": [
+    "workload"
+  ],
+  "error": "history_order_not_ascending",
+  "cause": "First correction checked SQLite tuple ordering but missed postgresMessageRepo override, whose durable source_sequence order can contain timestamp inversions.",
+  "savedFirstPage": {
+    "rows": 100,
+    "firstSourceSequence": 5701,
+    "lastSourceSequence": 5800,
+    "timestampInversions": [
+      {
+        "previousSequence": 5718,
+        "sequence": 5719,
+        "previousCreatedAt": "2026-11-16T08:34:54.379002Z",
+        "createdAt": "2026-11-16T08:34:54.378869Z"
+      },
+      {
+        "previousSequence": 5729,
+        "sequence": 5730,
+        "previousCreatedAt": "2026-11-16T08:34:55.38829Z",
+        "createdAt": "2026-11-16T08:34:55.386156Z"
+      },
+      {
+        "previousSequence": 5738,
+        "sequence": 5739,
+        "previousCreatedAt": "2026-11-16T08:34:56.379251Z",
+        "createdAt": "2026-11-16T08:34:56.379085Z"
+      },
+      {
+        "previousSequence": 5770,
+        "sequence": 5771,
+        "previousCreatedAt": "2026-11-16T08:34:59.869637Z",
+        "createdAt": "2026-11-16T08:34:59.869528Z"
+      },
+      {
+        "previousSequence": 5773,
+        "sequence": 5774,
+        "previousCreatedAt": "2026-11-16T08:35:00.358198Z",
+        "createdAt": "2026-11-16T08:35:00.358172Z"
+      },
+      {
+        "previousSequence": 5775,
+        "sequence": 5776,
+        "previousCreatedAt": "2026-11-16T08:35:00.377131Z",
+        "createdAt": "2026-11-16T08:35:00.375257Z"
+      },
+      {
+        "previousSequence": 5783,
+        "sequence": 5784,
+        "previousCreatedAt": "2026-11-16T08:35:01.859771Z",
+        "createdAt": "2026-11-16T08:35:01.859762Z"
+      }
+    ]
+  },
+  "cleanup": {
+    "databaseDropped": true,
+    "observerExit": 0,
+    "observerTerminal": "Owned container stopped or removed"
+  },
+  "next": "Explicit PostgreSQL source_sequence order by default; explicit SQLite created_at_id mode; no automatic fallback; real rerun required",
+  "hashes": {
+    "G:\\hichat-refactor-20261116-anoknpqz\\hichat-pg-tls-test-0cd525baa5794ea393def5c4c92bad61\\capacity-report.json": "a3d67a1cd204a16cf0d8531b49b27461f71d59f37a7d9fc4f1530e88fb7ad2c6",
+    "G:\\hichat-refactor-20261116-anoknpqz\\hichat-pg-tls-test-0cd525baa5794ea393def5c4c92bad61\\capacity-k6-summary.json": "e4dc12f689109833ce7168c25346326620bfee3d4cb0c1a9b0a2957427a01434",
+    "G:\\hichat-refactor-20261116-anoknpqz\\hichat-pg-tls-test-0cd525baa5794ea393def5c4c92bad61\\history-pages\\1.json": "2b37ce22578f8147f0ae2ca2018c42fd0edb694af268114b3071c12731b67cf9",
+    "G:\\hichat-refactor-20261116-anoknpqz\\runtime-telemetry-observer-rest.json": "7058e330805d67f43fb42d066a7385fff3748f8af47e3fa7b00b13522ef9ffec",
+    "G:\\hichat-refactor-20261116-anoknpqz\\launch-rest.log": "28732e87be6c2724fc2fa5a9ccb4d78b6745473eae7dac51c300187b0b7fd765"
+  }
+}

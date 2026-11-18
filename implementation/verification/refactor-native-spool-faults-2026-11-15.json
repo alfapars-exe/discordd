@@ -1,0 +1,352 @@
+{
+  "sourceCommit": "21744ef88fad4054c5ad0ebb5ea2140faa1a2daa",
+  "date": "2026-11-15",
+  "runtime": "Runtime v26.13.1 win32 Chromium 156.0.8078.4",
+  "results": [
+    {
+      "mode": "native-deletion-spool",
+      "uniqueIds": 1001,
+      "maxBatch": 128,
+      "cancelledWithoutLoss": true,
+      "consumerRetry": true,
+      "quotaNotified": true,
+      "transactionAbortNotified": true,
+      "resetFenced": true,
+      "boundedQueuedWriters": 16,
+      "backpressureNotified": true,
+      "resetMetadataCleared": true,
+      "staleConsumerRejected": true,
+      "successorPreserved": true,
+      "retiredGenerationRejected": true,
+      "retiredOwnerRejected": true
+    },
+    {
+      "mode": "accepted-deletion-drain",
+      "results": [
+        {
+          "kind": "channel",
+          "heldBeforeCleanup": true,
+          "ids": [
+            "channel-3",
+            "channel-1"
+          ],
+          "total": 2
+        },
+        {
+          "kind": "dm",
+          "heldBeforeCleanup": true,
+          "ids": [
+            "dm-3",
+            "dm-1"
+          ],
+          "total": 2
+        }
+      ],
+      "cancelled": true,
+      "retiredOwnerRejected": true,
+      "failedEvictionHiddenAfterReopen": true,
+      "retryCommitted": true,
+      "journalWriteDuringCoherentRead": true,
+      "queuedEvictionReleased": true
+    },
+    {
+      "mode": "channel",
+      "records": 1201,
+      "exactPages": 15,
+      "failureWrites": 0,
+      "atomicRemovalAndCancellation": true,
+      "indexDisposed": true
+    },
+    {
+      "mode": "dm",
+      "records": 1201,
+      "exactPages": 15,
+      "failureWrites": 0,
+      "atomicRemovalAndCancellation": true,
+      "indexDisposed": true
+    },
+    {
+      "mode": "mixed",
+      "records": 1201,
+      "exactPages": 15,
+      "failureWrites": 0,
+      "atomicRemovalAndCancellation": true,
+      "indexDisposed": true
+    },
+    {
+      "mode": "quota",
+      "records": 1201,
+      "exactPages": 15,
+      "failureName": "QuotaExceededError",
+      "failureWrites": 300,
+      "writerReleased": true,
+      "atomicRemovalAndCancellation": true,
+      "indexDisposed": true
+    },
+    {
+      "mode": "cancel",
+      "records": 1201,
+      "exactPages": 15,
+      "failureName": "AbortError",
+      "failureWrites": 301,
+      "writerReleased": true,
+      "atomicRemovalAndCancellation": true,
+      "indexDisposed": true
+    }
+  ],
+  "log": "TEMP/hichat-native-spool-fault-matrix-final.log",
+  "syntaxChecks": "node --check PASS for both changed MJS modules",
+  "scope": "Native Chromium/IndexedDB API failure injection, real queued transaction backpressure, owner/generation/reset disposal and acknowledged batch contracts. Controlled fixture; no real account DBs or physical quota exhaustion.",
+  "remaining": [
+    "New-head CI after push",
+    "Final repeated latency comparison and whole producer pipeline/native/physical budgets",
+    "Project RF01-RF30 acceptance"
+  ],
+  "originalImmutableScan": {
+    "sourceCommit": "21744ef8",
+    "blockingMatches": 0,
+    "reviewedSourceRecords": 51,
+    "reviewLines": 478,
+    "log": "TEMP/hichat-native-spool-matrix-scan.log"
+  },
+  "followup": {
+    "sourceCommit": "3ba4e14b",
+    "regressions": [
+      {
+        "source": "a9351514",
+        "baseline": "c95f19e2 (product41c770e5)",
+        "failed": 2,
+        "log": "TEMP/hichat-spool-empty-read-red.log",
+        "behavior": "Redundant empty reads and deletion received during empty read missing from current drain"
+      },
+      {
+        "source": "8fd6440a",
+        "baseline": "f64888d8 intermediate candidate",
+        "failed": 3,
+        "log": "TEMP/hichat-spool-fastpath-boundaries-red.log",
+        "behavior": "New no-read fast path needed post-flush abort/owner/generation recheck; caught before push"
+      }
+    ],
+    "targeted": "4files56passed4.25s",
+    "nativeResults": [
+      {
+        "mode": "native-deletion-spool",
+        "uniqueIds": 1001,
+        "maxBatch": 128,
+        "cancelledWithoutLoss": true,
+        "settledEmptyReads": 0,
+        "settledAbortRejected": true,
+        "emptyReadRaceReconciled": true,
+        "consumerRetry": true,
+        "quotaNotified": true,
+        "transactionAbortNotified": true,
+        "resetFenced": true,
+        "boundedQueuedWriters": 16,
+        "backpressureNotified": true,
+        "resetMetadataCleared": true,
+        "staleConsumerRejected": true,
+        "successorPreserved": true,
+        "retiredGenerationRejected": true,
+        "retiredOwnerRejected": true
+      },
+      {
+        "mode": "accepted-deletion-drain",
+        "results": [
+          {
+            "kind": "channel",
+            "heldBeforeCleanup": true,
+            "ids": [
+              "channel-3",
+              "channel-1"
+            ],
+            "total": 2
+          },
+          {
+            "kind": "dm",
+            "heldBeforeCleanup": true,
+            "ids": [
+              "dm-3",
+              "dm-1"
+            ],
+            "total": 2
+          }
+        ],
+        "cancelled": true,
+        "retiredOwnerRejected": true,
+        "failedEvictionHiddenAfterReopen": true,
+        "retryCommitted": true,
+        "journalWriteDuringCoherentRead": true,
+        "queuedEvictionReleased": true
+      },
+      {
+        "mode": "channel",
+        "records": 1201,
+        "exactPages": 15,
+        "failureWrites": 0,
+        "atomicRemovalAndCancellation": true,
+        "indexDisposed": true
+      },
+      {
+        "mode": "dm",
+        "records": 1201,
+        "exactPages": 15,
+        "failureWrites": 0,
+        "atomicRemovalAndCancellation": true,
+        "indexDisposed": true
+      },
+      {
+        "mode": "mixed",
+        "records": 1201,
+        "exactPages": 15,
+        "failureWrites": 0,
+        "atomicRemovalAndCancellation": true,
+        "indexDisposed": true
+      },
+      {
+        "mode": "quota",
+        "records": 1201,
+        "exactPages": 15,
+        "failureName": "QuotaExceededError",
+        "failureWrites": 300,
+        "writerReleased": true,
+        "atomicRemovalAndCancellation": true,
+        "indexDisposed": true
+      },
+      {
+        "mode": "cancel",
+        "records": 1201,
+        "exactPages": 15,
+        "failureName": "AbortError",
+        "failureWrites": 301,
+        "writerReleased": true,
+        "atomicRemovalAndCancellation": true,
+        "indexDisposed": true
+      }
+    ],
+    "logs": [
+      "TEMP/hichat-spool-fastpath-boundaries-green.log",
+      "TEMP/hichat-spool-fastpath-native-final.log"
+    ],
+    "finalGates": "PASS:coverage/build/lint/native7modes/50kbudget/immutable expanded self-scan. Prior7cf2dfc7CI36/36SUCCESS archived.",
+    "build": "PASS, Vite2.99s",
+    "changedFilesLint": "PASS",
+    "nativeBudget": {
+      "log": "TEMP/hichat-spool-fastpath-final-budget.log",
+      "results": [
+        {
+          "variant": "after",
+          "kind": "channel",
+          "pendingSearchFrontier": [
+            {
+              "events": 1000,
+              "retainedGrowthBytes": 9268
+            },
+            {
+              "events": 5000,
+              "retainedGrowthBytes": 14648
+            },
+            {
+              "events": 10000,
+              "retainedGrowthBytes": 63216
+            },
+            {
+              "events": 50000,
+              "retainedGrowthBytes": 52000
+            }
+          ],
+          "releaseToObservedResultsMs": 8411.09999999404,
+          "settledHeapBytes": 3340244,
+          "disposedHeapBytes": 3322524,
+          "matches": 267,
+          "correctPage": true,
+          "indexDisposalDrained": true,
+          "scope": "Single diagnostic run of actual production React panel/native IndexedDB;ready snapshot handoff deliberately gated before adoption;50000distinct missing-ID store events;post-GC JS heap deltas while gated;release-to-observed DOM includes Playwright polling,excludes later assertions/disposal;controlled providers,not full WS/cache writer pipeline or a physical memory bound."
+        },
+        {
+          "variant": "after",
+          "kind": "dm",
+          "pendingSearchFrontier": [
+            {
+              "events": 1000,
+              "retainedGrowthBytes": 20772
+            },
+            {
+              "events": 5000,
+              "retainedGrowthBytes": 23068
+            },
+            {
+              "events": 10000,
+              "retainedGrowthBytes": 34916
+            },
+            {
+              "events": 50000,
+              "retainedGrowthBytes": 61148
+            }
+          ],
+          "releaseToObservedResultsMs": 8908.59999999404,
+          "settledHeapBytes": 3622176,
+          "disposedHeapBytes": 3534352,
+          "matches": 267,
+          "correctPage": true,
+          "indexDisposalDrained": true,
+          "scope": "Single diagnostic run of actual production React panel/native IndexedDB;ready snapshot handoff deliberately gated before adoption;50000distinct missing-ID store events;post-GC JS heap deltas while gated;release-to-observed DOM includes Playwright polling,excludes later assertions/disposal;controlled providers,not full WS/cache writer pipeline or a physical memory bound."
+        }
+      ],
+      "scope": "Single post-GC JS retained-memory diagnostic;not physical/native peak or full pipeline."
+    },
+    "coverage": {
+      "sourceCommit": "3ba4e14b",
+      "total": {
+        "lines": {
+          "total": 38501,
+          "covered": 26502,
+          "skipped": 0,
+          "pct": 68.83
+        },
+        "statements": {
+          "total": 52746,
+          "covered": 35755,
+          "skipped": 0,
+          "pct": 67.78
+        },
+        "functions": {
+          "total": 12318,
+          "covered": 7632,
+          "skipped": 0,
+          "pct": 61.95
+        },
+        "branches": {
+          "total": 39973,
+          "covered": 25921,
+          "skipped": 0,
+          "pct": 64.84
+        },
+        "branchesTrue": {
+          "total": 0,
+          "covered": 0,
+          "skipped": 0,
+          "pct": 100
+        }
+      },
+      "log": "TEMP/hichat-spool-fastpath-final-coverage.log",
+      "files": 495,
+      "passed": 5310,
+      "skipped": 1,
+      "seconds": 124.75
+    },
+    "finalImmutableScan": {
+      "sourceCommit": "3ba4e14b",
+      "exitCode": 0,
+      "blockingMatches": 0,
+      "reviewedSourceRecords": 51,
+      "reviewLines": 478,
+      "log": "TEMP/hichat-spool-fastpath-final-scan.log"
+    }
+  },
+  "priorCI": {
+    "sourceCommit": "7cf2dfc71542af3392278cb882e0b773ab694edc",
+    "checks": 36,
+    "success": 36,
+    "archive": "refactor-7cf-terminal-ci-2026-11-15.json"
+  }
+}

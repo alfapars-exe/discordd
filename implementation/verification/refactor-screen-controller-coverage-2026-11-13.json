@@ -1,0 +1,81 @@
+{
+  "sourceCommit": "1ddcbc7db4c4c56eaa5ed571c9622a8785c61b29",
+  "command": "npx vitest run --coverage",
+  "exitCode": 0,
+  "filesPassed": 474,
+  "testsPassed": 4782,
+  "testsSkipped": 1,
+  "unhandledErrors": 0,
+  "durationSeconds": 102.77,
+  "total": {
+    "lines": {
+      "total": 37417,
+      "covered": 25257,
+      "skipped": 0,
+      "pct": 67.5
+    },
+    "statements": {
+      "total": 51061,
+      "covered": 33984,
+      "skipped": 0,
+      "pct": 66.55
+    },
+    "functions": {
+      "total": 11973,
+      "covered": 7295,
+      "skipped": 0,
+      "pct": 60.92
+    },
+    "branches": {
+      "total": 39048,
+      "covered": 24993,
+      "skipped": 0,
+      "pct": 64
+    },
+    "branchesTrue": {
+      "total": 0,
+      "covered": 0,
+      "skipped": 0,
+      "pct": 100
+    }
+  },
+  "modules": [
+    {
+      "file": "client/src/hooks/useScreenShareToggle.ts",
+      "statements": 75.09,
+      "branches": 51.83,
+      "functions": 82.43,
+      "lines": 79.82
+    },
+    {
+      "file": "client/src/webrtc/desktopScreenShareController.ts",
+      "statements": 80.55,
+      "branches": 76.08,
+      "functions": 55.55,
+      "lines": 96.29
+    },
+    {
+      "file": "client/src/webrtc/nativeScreenShareController.ts",
+      "statements": 100,
+      "branches": 100,
+      "functions": 100,
+      "lines": 100
+    },
+    {
+      "file": "client/src/webrtc/screenShareLifecycleController.ts",
+      "statements": 100,
+      "branches": 100,
+      "functions": 100,
+      "lines": 100
+    },
+    {
+      "file": "client/src/webrtc/screenShareRestartController.ts",
+      "statements": 100,
+      "branches": 100,
+      "functions": 100,
+      "lines": 100
+    }
+  ],
+  "log": "TEMP/hichat-client-coverage-after-screen-controllers.log",
+  "limits": "Unit/integration coverage does not prove physical audio, native capture or deployment acceptance"
+}

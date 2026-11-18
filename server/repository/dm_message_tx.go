@@ -18,7 +18,7 @@ type DMTxRepos struct {
 	Preferences     PreferencesRepository
 	Servers         ServerRepository
 	ReadState       func(context.Context, string, string) (*string, int, error)
-	DM              DMRepository
+	DM              DMRequestStore
 	DMRead          DMReadRepository
 	Notification    NotificationRepository
 }

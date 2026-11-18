@@ -1,0 +1,167 @@
+{
+  "source": "660773c3c7565db5569d2f58dd26b6d45b7a09d8",
+  "node": "v26.13.1",
+  "tests": {
+    "filesPassed": 476,
+    "passed": 4824,
+    "skipped": 1,
+    "durationSeconds": 106.83,
+    "exitCode": 0,
+    "skipReason": "GroupDMChat long-history benchmark requires HICHAT_GROUP_BENCHMARK."
+  },
+  "coverage": {
+    "lines": {
+      "total": 37414,
+      "covered": 25269,
+      "skipped": 0,
+      "pct": 67.53
+    },
+    "statements": {
+      "total": 51071,
+      "covered": 34013,
+      "skipped": 0,
+      "pct": 66.59
+    },
+    "functions": {
+      "total": 11983,
+      "covered": 7311,
+      "skipped": 0,
+      "pct": 61.01
+    },
+    "branches": {
+      "total": 39058,
+      "covered": 25014,
+      "skipped": 0,
+      "pct": 64.04
+    },
+    "branchesTrue": {
+      "total": 0,
+      "covered": 0,
+      "skipped": 0,
+      "pct": 100
+    }
+  },
+  "modules": {
+    "src/components/settings/settingsWorkspaceContext.ts": {
+      "lines": {
+        "total": 7,
+        "covered": 7,
+        "skipped": 0,
+        "pct": 100
+      },
+      "functions": {
+        "total": 3,
+        "covered": 3,
+        "skipped": 0,
+        "pct": 100
+      },
+      "statements": {
+        "total": 8,
+        "covered": 8,
+        "skipped": 0,
+        "pct": 100
+      },
+      "branches": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "src/hooks/useSettingsWorkspace.ts": {
+      "lines": {
+        "total": 136,
+        "covered": 136,
+        "skipped": 0,
+        "pct": 100
+      },
+      "functions": {
+        "total": 36,
+        "covered": 36,
+        "skipped": 0,
+        "pct": 100
+      },
+      "statements": {
+        "total": 176,
+        "covered": 166,
+        "skipped": 0,
+        "pct": 94.31
+      },
+      "branches": {
+        "total": 119,
+        "covered": 100,
+        "skipped": 0,
+        "pct": 84.03
+      }
+    },
+    "src/hooks/useUpdateChecker.ts": {
+      "lines": {
+        "total": 24,
+        "covered": 24,
+        "skipped": 0,
+        "pct": 100
+      },
+      "functions": {
+        "total": 13,
+        "covered": 13,
+        "skipped": 0,
+        "pct": 100
+      },
+      "statements": {
+        "total": 36,
+        "covered": 36,
+        "skipped": 0,
+        "pct": 100
+      },
+      "branches": {
+        "total": 8,
+        "covered": 8,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "src/utils/updateCheckerState.ts": {
+      "lines": {
+        "total": 17,
+        "covered": 17,
+        "skipped": 0,
+        "pct": 100
+      },
+      "functions": {
+        "total": 4,
+        "covered": 4,
+        "skipped": 0,
+        "pct": 100
+      },
+      "statements": {
+        "total": 21,
+        "covered": 21,
+        "skipped": 0,
+        "pct": 100
+      },
+      "branches": {
+        "total": 18,
+        "covered": 18,
+        "skipped": 0,
+        "pct": 100
+      }
+    }
+  },
+  "checks": {
+    "coverageExitCode": 0,
+    "productionBuildExitCode": 0,
+    "lintExitCode": 0,
+    "lintErrors": 0,
+    "lintWarnings": 8,
+    "unhandledErrorLines": 0
+  },
+  "logs": [
+    "hichat-draft-guard-full-coverage.log",
+    "hichat-draft-guard-integrated-build.log",
+    "hichat-draft-guard-integrated-lint.log"
+  ],
+  "limits": [
+    "Not current PR CI, deployed provider, installed client or physical-device acceptance.",
+    "Existing production E2E receipt is source 4dae7d7f; it predates the draft guard/shutdown changes."
+  ]
+}

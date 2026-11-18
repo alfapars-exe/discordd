@@ -10,11 +10,13 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/email"
+	"github.com/argeinfina/hichat/pkg/logx"
 	"github.com/argeinfina/hichat/services"
 )
 
@@ -35,10 +37,17 @@ type DiagnosticsHandler struct {
 	appLogger services.AppLogService
 	maxSize   int64
 	emailSem  chan struct{}
+	mu        sync.Mutex
+	stopped   bool
+	lifecycle context.Context
+	cancel    context.CancelFunc
+	workers   sync.WaitGroup
 }
 
 func NewDiagnosticsHandler(emailSender email.EmailSender, reportTo string, appLogger services.AppLogService, maxSize int64) *DiagnosticsHandler {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &DiagnosticsHandler{
+		lifecycle: ctx, cancel: cancel,
 		email:     emailSender,
 		reportTo:  reportTo,
 		appLogger: appLogger,
@@ -105,33 +114,52 @@ func (h *DiagnosticsHandler) Report(w http.ResponseWriter, r *http.Request) {
 	// Concurrency is bounded by emailSem; when all slots are busy we skip the
 	// email instead of piling up goroutines that each pin the full bundle —
 	// the feedback ticket the client also files is the durable copy.
+	h.queueEmail(r.Context(), user, description, filename, data)
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// Stop closes email admission, cancels accepted sends and joins their logging.
+// Call after HTTP drain and before app-log shutdown.
+func (h *DiagnosticsHandler) Stop() {
+	h.mu.Lock()
+	h.stopped = true
+	h.cancel()
+	h.mu.Unlock()
+	h.workers.Wait()
+}
+
+func (h *DiagnosticsHandler) queueEmail(requestCtx context.Context, user *models.User, description, filename string, data []byte) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.stopped {
+		return
+	}
 	if h.email != nil && h.reportTo != "" {
 		uid := user.ID
 		reporter := user.Username
 		select {
 		case h.emailSem <- struct{}{}:
-			go func() { // #nosec G118 -- deliberately detached from r.Context(): the handler responds 204 immediately (see comment above) without waiting on this goroutine, so r.Context() would already be canceled by the time SendDiagnosticsReport runs; context.Background()+its own timeout is correct for a fire-and-forget send
-				defer func() { <-h.emailSem }()
-				ctx, cancel := context.WithTimeout(context.Background(), diagnosticsEmailTimeout)
-				defer cancel()
-				if sendErr := h.email.SendDiagnosticsReport(ctx, h.reportTo, reporter, description, filename, data); sendErr != nil {
-					// ctx here is the goroutine's own Background-derived timeout context
-					// (see the deliberately-detached-from-r.Context() note on the line
-					// starting this goroutine), not r.Context(), so this never carries the
-					// original request's correlation id — same outcome as passing
-					// context.Background() directly, just reusing the var already in scope.
-					h.appLogger.Log(ctx, models.LogLevelError, models.LogCategoryGeneral, &uid, nil,
-						"diagnostics_email_failed", map[string]string{"error": pkg.ErrText(sendErr)})
-				} else {
-					h.appLogger.Log(ctx, models.LogLevelInfo, models.LogCategoryGeneral, &uid, nil,
-						"diagnostics_email_sent", map[string]string{"to": h.reportTo, "bytes": strconv.Itoa(len(data))})
-				}
+			h.workers.Add(1)
+			go func() {
+				defer h.workers.Done()
+				logx.Run("diagnostics.email", func() {
+					defer func() { <-h.emailSem }()
+					ctx, cancel := context.WithTimeout(h.lifecycle, diagnosticsEmailTimeout)
+					defer cancel()
+					if sendErr := h.email.SendDiagnosticsReport(ctx, h.reportTo, reporter, description, filename, data); sendErr != nil {
+						h.appLogger.Log(ctx, models.LogLevelError, models.LogCategoryGeneral, &uid, nil,
+							"diagnostics_email_failed", map[string]string{"error": pkg.ErrText(sendErr)})
+					} else {
+						h.appLogger.Log(ctx, models.LogLevelInfo, models.LogCategoryGeneral, &uid, nil,
+							"diagnostics_email_sent", map[string]string{"to": h.reportTo, "bytes": strconv.Itoa(len(data))})
+					}
+				})
 			}()
 		default:
-			h.appLogger.Log(r.Context(), models.LogLevelWarn, models.LogCategoryGeneral, &uid, nil,
+			h.appLogger.Log(requestCtx, models.LogLevelWarn, models.LogCategoryGeneral, &uid, nil,
 				"diagnostics_email_skipped_backpressure", map[string]string{"bytes": strconv.Itoa(len(data))})
 		}
 	}
 
-	w.WriteHeader(http.StatusNoContent)
 }

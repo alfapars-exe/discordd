@@ -1,0 +1,426 @@
+{
+  "date": "2026-11-14",
+  "head": "3a16b9108100f7c6b3a83e8f42c6870e22d76cbb",
+  "scope": "Canonical task-panic isolation exact-head terminal CI",
+  "pr": {
+    "url": "https://github.com/alfapars-exe/discordd/pull/298",
+    "state": "OPEN",
+    "isDraft": true
+  },
+  "checks": [
+    {
+      "name": "native (ubuntu-latest)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852570/job/132237942494"
+    },
+    {
+      "name": "package (ubuntu-latest)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852612/job/132237943712"
+    },
+    {
+      "name": "Go base tests & build",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237944091"
+    },
+    {
+      "name": "native (macos-latest)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852570/job/132237942856"
+    },
+    {
+      "name": "package (windows-latest)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852612/job/132237943167"
+    },
+    {
+      "name": "Go tests (./repository shard 0/8)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237944408"
+    },
+    {
+      "name": "Go tests (./repository shard 1/8)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237944421"
+    },
+    {
+      "name": "Go tests (./repository shard 2/8)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237944394"
+    },
+    {
+      "name": "Go tests (./repository shard 3/8)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237944437"
+    },
+    {
+      "name": "Go tests (./repository shard 4/8)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237944407"
+    },
+    {
+      "name": "Go tests (./repository shard 5/8)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237944693"
+    },
+    {
+      "name": "Go tests (./repository shard 6/8)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237944410"
+    },
+    {
+      "name": "Go tests (./repository shard 7/8)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237944504"
+    },
+    {
+      "name": "Go tests (./services shard 0/8)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237944432"
+    },
+    {
+      "name": "Go tests (./services shard 1/8)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237944714"
+    },
+    {
+      "name": "Go tests (./services shard 2/8)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237944397"
+    },
+    {
+      "name": "Go tests (./services shard 3/8)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237944559"
+    },
+    {
+      "name": "Go tests (./services shard 4/8)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237944541"
+    },
+    {
+      "name": "Go tests (./services shard 5/8)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237944435"
+    },
+    {
+      "name": "Go tests (./services shard 6/8)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237944533"
+    },
+    {
+      "name": "Go tests (./services shard 7/8)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237944552"
+    },
+    {
+      "name": "PostgreSQL repository and migration contracts",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237944066"
+    },
+    {
+      "name": "PostgreSQL client certificate reconnect",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237943987"
+    },
+    {
+      "name": "golangci-lint",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237944250"
+    },
+    {
+      "name": "Security scan",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237943982"
+    },
+    {
+      "name": "Client lint, type, test & build",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237943675"
+    },
+    {
+      "name": "npm audit (.)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237944154"
+    },
+    {
+      "name": "npm audit (client)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237944028"
+    },
+    {
+      "name": "npm audit (e2e)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237944149"
+    },
+    {
+      "name": "Playwright E2E",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237944211"
+    },
+    {
+      "name": "Electron main-process tests",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237943956"
+    },
+    {
+      "name": "Prod image build (HF Dockerfile)",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237944412"
+    },
+    {
+      "name": "Migration filename hygiene",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132237944173"
+    },
+    {
+      "name": "Combined Go statement coverage",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132243273822"
+    },
+    {
+      "name": "Go test & build",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690/job/132243458102"
+    },
+    {
+      "name": "SonarCloud Code Analysis",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://sonarcloud.io/dashboard?id=alfapars-exe_discordd&pullRequest=298"
+    }
+  ],
+  "server_ci": {
+    "id": 43527852690,
+    "url": "https://github.com/alfapars-exe/discordd/actions/runs/43527852690",
+    "status": "completed",
+    "conclusion": "success",
+    "jobs": [
+      {
+        "name": "Client lint, type, test & build",
+        "databaseId": 132237943675,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Electron main-process tests",
+        "databaseId": 132237943956,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Security scan",
+        "databaseId": 132237943982,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "PostgreSQL client certificate reconnect",
+        "databaseId": 132237943987,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "npm audit (client)",
+        "databaseId": 132237944028,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "PostgreSQL repository and migration contracts",
+        "databaseId": 132237944066,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Go base tests & build",
+        "databaseId": 132237944091,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "npm audit (e2e)",
+        "databaseId": 132237944149,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "npm audit (.)",
+        "databaseId": 132237944154,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Migration filename hygiene",
+        "databaseId": 132237944173,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Playwright E2E",
+        "databaseId": 132237944211,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "golangci-lint",
+        "databaseId": 132237944250,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Go tests (./repository shard 2/8)",
+        "databaseId": 132237944394,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Go tests (./services shard 2/8)",
+        "databaseId": 132237944397,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Go tests (./repository shard 4/8)",
+        "databaseId": 132237944407,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Go tests (./repository shard 0/8)",
+        "databaseId": 132237944408,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Go tests (./repository shard 6/8)",
+        "databaseId": 132237944410,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Prod image build (HF Dockerfile)",
+        "databaseId": 132237944412,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Go tests (./repository shard 1/8)",
+        "databaseId": 132237944421,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Go tests (./services shard 0/8)",
+        "databaseId": 132237944432,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Go tests (./services shard 5/8)",
+        "databaseId": 132237944435,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Go tests (./repository shard 3/8)",
+        "databaseId": 132237944437,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Go tests (./repository shard 7/8)",
+        "databaseId": 132237944504,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Go tests (./services shard 6/8)",
+        "databaseId": 132237944533,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Go tests (./services shard 4/8)",
+        "databaseId": 132237944541,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Go tests (./services shard 7/8)",
+        "databaseId": 132237944552,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Go tests (./services shard 3/8)",
+        "databaseId": 132237944559,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Go tests (./repository shard 5/8)",
+        "databaseId": 132237944693,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Go tests (./services shard 1/8)",
+        "databaseId": 132237944714,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Combined Go statement coverage",
+        "databaseId": 132243273822,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Go test & build",
+        "databaseId": 132243458102,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  "limitations": [
+    "New active process test not in this source.",
+    "No merge/release/physical media acceptance."
+  ]
+}

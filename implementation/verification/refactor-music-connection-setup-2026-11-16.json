@@ -1,0 +1,40 @@
+{
+  "scope": "Separate room frame-encryptor preparation and bot JWT creation. Preserve original access rechecks, lookup/decrypt order, room join/publish, stopping ownership and cleanup.",
+  "characterizationCommit": "6acbe308",
+  "baseline": {
+    "passedIncludingSubtests": 29,
+    "failed": 0,
+    "skipped": 0,
+    "logSha256": "034f88aaabfcc8abc7418ced6bcfa600d6a012bf097348713dfcf088c4d867b8"
+  },
+  "sameTestsCandidate": {
+    "passedIncludingSubtests": 29,
+    "failed": 0,
+    "skipped": 0,
+    "logSha256": "9897a0fb9e4bc69dbb60253d240be4a70779ef778dfe2ce1e53ad5a18586d006"
+  },
+  "finalWithSignedGrantAndOpusRoundTripTests": {
+    "passedIncludingSubtests": 31,
+    "failed": 0,
+    "skipped": 0,
+    "logSha256": "c35cacabe3cb6acc21a8a00d462be1b5b7d975c6f6a81ed13ad7d76521199d75"
+  },
+  "parity": {
+    "beforeCommit": "6acbe308",
+    "method": "Inline both setup helpers, restore moved imports and original error return forms; compare gofmt of the complete pipeline file",
+    "wholeFileParity": true,
+    "helpers": 2,
+    "roomKeyInstanceCredentialJWTRecheckJoinPublishOrderPreserved": true
+  },
+  "toolchain": "Go1.26.11 linux/amd64 CGO1 race, read-only source/modules and tmpfs compiler",
+  "vet": "PASS: go vet -mod=readonly -p=2 ./services",
+  "nonAcceptedRuns": [
+    "Broad ^TestMusic run exceeded its 120s package timeout; worker integration consumed97.44s before descendant cancellation test started near deadline. No accepted full-music baseline. Cancellation passed in both focused runs.",
+    "Initial added JWT assertion used wrong Verify return type; corrected before accepted final run."
+  ],
+  "limitations": [
+    "No real LiveKit room/provider/audio/device acceptance",
+    "New source full CI/Sonar/source scan pending",
+    "General refactor, historical panel root cause and extended fanout profile remain open"
+  ]
+}

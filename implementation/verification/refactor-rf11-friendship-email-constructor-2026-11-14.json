@@ -1,0 +1,32 @@
+{
+  "source_parent": "fdcd2ac0",
+  "scope": "RF11 friendship social-email queue constructor wiring",
+  "before": {
+    "test": "TestFriendshipConstructorRequiresExplicitEmailQueue",
+    "exit": 1,
+    "reason": "constructor position5 was optional policy slice; email queue required later setter"
+  },
+  "change": "Constructor now takes explicit EmailEnqueuer before existing optional policies. Production passes already-created email delivery service; setter removed. Email fixtures inject queue at construction, including policy denial and happy/failure paths. Nil remains explicit for isolated no-email fixtures.",
+  "validation": [
+    {
+      "command": "go test ./services ./handlers . -run 'TestFriendship|TestFriendRequest|TestRequestNotification|Test.*Wiring|TestServiceInitialization' -count=1 -timeout=3m",
+      "exit": 0,
+      "services_seconds": 0.633,
+      "handlers_seconds": 0.502,
+      "root_seconds": 0.74
+    },
+    {
+      "command": "go build ./...",
+      "exit": 0
+    },
+    {
+      "command": "go vet ./services ./handlers .",
+      "exit": 0
+    }
+  ],
+  "limits": [
+    "No policy, email category, dedupe identity or wire-field changes",
+    "Windows Go1.27.4 CGO0; current-source Linux race and provider profile pending",
+    "DM auto-accept cyclic dependency still deliberately separate; RF11 not complete"
+  ]
+}

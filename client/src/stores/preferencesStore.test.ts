@@ -13,6 +13,7 @@ vi.mock("./sidebarStore", () => ({ useSidebarStore: { getState: () => ({ applyFr
 vi.mock("./voiceStore", () => ({ useVoiceStore: { getState: () => ({ applyFromServer: mocks.voice, resetAccountPreferences: mocks.resets[2] }) } }));
 vi.mock("./accessibilityStore", () => ({ useAccessibilityStore: { getState: () => ({ applyFromServer: mocks.accessibility, resetAccountPreferences: mocks.resets[3] }) } }));
 import { usePreferencesStore } from "./preferencesStore";
+import { bindPreferencePresenter } from "./preferencePresenter";
 
 type Response = APIResponse<UserPreferencesResponse>;
 function ok(data: Record<string, unknown> = {}, user_id = "alice"): Response {
@@ -49,6 +50,508 @@ describe("account-scoped preference synchronization", () => {
     state().reset();
     await settle();
     vi.useRealTimers();
+  });
+
+
+  it.each([false,true])("does not replay an acknowledged PATCH after presentation fails (newer pending=%s)", async newer => {
+    await ready();
+    const {applyAccountPreferences}=await import("./applyAccountPreferences");
+    let reject!: (error:Error)=>void;
+    bindPreferencePresenter(()=>new Promise((_resolve,fail)=>{reject=fail;}));
+    try {
+      state().set({theme:"accepted"});
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(mocks.update).toHaveBeenCalledTimes(1);
+      if(newer)state().set({appearance:{uiScale:130}});
+      reject(new Error("local presenter unavailable"));await settle();
+      expect(state().syncError).toBe("preferences_apply_failed");
+      expect(state().hasPendingChanges).toBe(newer);
+      expect(localStorage.getItem(pendingKey)).toBe(newer?JSON.stringify({appearance:{uiScale:130}}):null);
+      expect(JSON.parse(localStorage.getItem(snapshotKey)!)).toEqual({theme:"accepted"});
+      bindPreferencePresenter(async()=>applyAccountPreferences);
+      await state().retrySync();
+      expect(mocks.update).toHaveBeenCalledTimes(newer?2:1);
+      if(newer)expect(mocks.update.mock.calls[1][0]).toEqual({appearance:{uiScale:130}});
+      expect(mocks.theme).toHaveBeenLastCalledWith("accepted");
+      expect(state().syncStatus).toBe("saved");
+      expect(state().hasPendingChanges).toBe(false);
+    }finally{bindPreferencePresenter(async()=>applyAccountPreferences);}
+  });
+  it("keeps acknowledged edits out of the queue when local presentation retry also fails", async()=>{
+    await ready();
+    const {applyAccountPreferences}=await import("./applyAccountPreferences");
+    const failed=deferred<typeof applyAccountPreferences>();
+    bindPreferencePresenter(()=>failed.promise);
+    try {
+      state().set({theme:"accepted"});await vi.advanceTimersByTimeAsync(1000);
+      state().set({appearance:{uiScale:130}});
+      failed.reject(new Error("local presenter still unavailable"));await settle();
+      await state().retrySync();
+      expect(mocks.update).toHaveBeenCalledTimes(1);
+      expect(state().syncError).toBe("preferences_apply_failed");
+      expect(state().hasPendingChanges).toBe(true);
+      expect(JSON.parse(localStorage.getItem(pendingKey)!)).toEqual({appearance:{uiScale:130}});
+      bindPreferencePresenter(async()=>applyAccountPreferences);
+      await state().retrySync();
+      expect(mocks.update).toHaveBeenCalledTimes(2);
+      expect(mocks.update.mock.calls[1][0]).toEqual({appearance:{uiScale:130}});
+    }finally{bindPreferencePresenter(async()=>applyAccountPreferences);}
+  });
+
+  it("fences a pending presentation retry when the account changes",async()=>{
+    await ready();
+    const {applyAccountPreferences}=await import("./applyAccountPreferences");
+    bindPreferencePresenter(async()=>{throw new Error("local presenter unavailable");});
+    const loader=deferred<typeof applyAccountPreferences>();
+    try {
+      state().set({theme:"alice-accepted"});await vi.advanceTimersByTimeAsync(1000);
+      expect(state().syncError).toBe("preferences_apply_failed");
+      bindPreferencePresenter(()=>loader.promise);
+      const retry=state().retrySync();
+      state().bindAccount("bob");state().set({theme:"bob-pending"});
+      loader.resolve(applyAccountPreferences);await retry;await settle();
+      expect(state().accountId).toBe("bob");
+      expect(state().data).toEqual({theme:"bob-pending"});
+      expect(state().syncStatus).toBe("pending");
+      expect(state().hasPendingChanges).toBe(true);
+      expect(mocks.update).toHaveBeenCalledTimes(1);
+      expect(mocks.theme).not.toHaveBeenCalledWith("alice-accepted");
+    }finally{loader.resolve(applyAccountPreferences);bindPreferencePresenter(async()=>applyAccountPreferences);}
+  });
+
+  it.each([
+    { boundary: "owner", publication: "sync", owner: "bob", backend: undefined },
+    { boundary: "backend", publication: "sync", owner: "alice", backend: "https://two.example" },
+    { boundary: "owner", publication: "microtask", owner: "bob", backend: undefined },
+    { boundary: "backend", publication: "microtask", owner: "alice", backend: "https://two.example" },
+  ] as const)("retires a presentation retry after $boundary replacement during $publication publication", async ({ publication, owner, backend }) => {
+    await ready();
+    const { applyAccountPreferences } = await import("./applyAccountPreferences");
+    bindPreferencePresenter(async () => { throw new Error("presentation unavailable"); });
+    let stop = () => {};
+    try {
+      state().set({ theme: "alice-accepted" });
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(state().syncError).toBe("preferences_apply_failed");
+      bindPreferencePresenter(async () => applyAccountPreferences);
+      mocks.get.mockClear();
+      stop = usePreferencesStore.subscribe(next => {
+        if (next.syncStatus !== "saved") return;
+        stop();
+        const replace = () => {
+          state().bindAccount(owner, backend);
+          state().set({ theme: "replacement-pending" });
+        };
+        if (publication === "sync") replace();
+        else void Promise.resolve().then(replace);
+      });
+      await state().retrySync();
+      await settle();
+      expect(mocks.get).not.toHaveBeenCalled();
+      expect(mocks.update).toHaveBeenCalledTimes(1);
+      expect(state().accountId).toBe(owner);
+      expect(state().data).toEqual({ theme: "replacement-pending" });
+      expect(state().isLoaded).toBe(false);
+      expect(state().syncStatus).toBe("pending");
+    } finally { stop(); bindPreferencePresenter(async () => applyAccountPreferences); }
+  });
+
+  it.each(["loader","application"] as const)("recovers failed initial preference presentation without rebinding (%s)",async phase=>{
+    const {applyAccountPreferences}=await import("./applyAccountPreferences");
+    bindPreferencePresenter(async()=>{
+      if(phase==="loader")throw new Error("presenter chunk unavailable");
+      return ()=>{throw new Error("local application unavailable");};
+    });
+    try {
+      state().bindAccount("alice");state().set({theme:"queued-before-load"});
+      await state().fetchAndApply();
+      expect(state().syncError).toBe("preferences_apply_failed");
+      expect(state().isLoaded).toBe(false);
+      await state().retrySync();
+      expect(mocks.get).not.toHaveBeenCalled();expect(mocks.update).not.toHaveBeenCalled();
+      expect(state().hasPendingChanges).toBe(true);
+      expect(JSON.parse(localStorage.getItem(pendingKey)!)).toEqual({theme:"queued-before-load"});
+      bindPreferencePresenter(async()=>applyAccountPreferences);
+      await state().retrySync();
+      expect(mocks.get).toHaveBeenCalledTimes(1);expect(mocks.update).toHaveBeenCalledTimes(1);
+      expect(mocks.update.mock.calls[0][0]).toEqual({theme:"queued-before-load"});
+      expect(state().syncStatus).toBe("saved");expect(state().isLoaded).toBe(true);
+      expect(state().hasPendingChanges).toBe(false);
+      expect(mocks.theme).toHaveBeenLastCalledWith("queued-before-load");
+    }finally{bindPreferencePresenter(async()=>applyAccountPreferences);}
+  });
+
+  it("retries an authoritative GET presentation with the original reset and session-preservation plan",async()=>{
+    await ready({theme:"removed-on-server",voice_settings:{masterVolume:45}});
+    const {applyAccountPreferences}=await import("./applyAccountPreferences");
+    bindPreferencePresenter(async()=>{throw new Error("presenter chunk unavailable");});
+    try {
+      mocks.get.mockResolvedValueOnce(ok({}));await state().fetchAndApply();
+      expect(state().syncError).toBe("preferences_apply_failed");
+      expect(state().data).toEqual({});
+      for(const reset of mocks.resets)reset.mockClear();
+      bindPreferencePresenter(async()=>applyAccountPreferences);
+      await state().retrySync();
+      expect(mocks.resets[0]).toHaveBeenCalledExactlyOnceWith(true,expect.any(Function));
+      expect(mocks.resets[1]).toHaveBeenCalledExactlyOnceWith();
+      expect(mocks.resets[2]).toHaveBeenCalledExactlyOnceWith(true);
+      expect(mocks.resets[3]).toHaveBeenCalledExactlyOnceWith();
+      expect(mocks.get).toHaveBeenCalledTimes(2);expect(mocks.update).not.toHaveBeenCalled();
+      expect(state().syncStatus).toBe("saved");
+    }finally{bindPreferencePresenter(async()=>applyAccountPreferences);}
+  });
+
+  it("stops an old presenter when a destination subscriber synchronously binds another account",async()=>{
+    await ready();
+    mocks.theme.mockImplementationOnce(()=>{
+      state().bindAccount("bob");state().set({appearance:{uiScale:150}});
+    });
+    try {
+      mocks.get.mockResolvedValueOnce(ok({theme:"alice-remote",appearance:{uiScale:130},voice_settings:{masterVolume:45}}));
+      await state().fetchAndApply();await settle();
+      expect(state().accountId).toBe("bob");
+      expect(state().data).toEqual({appearance:{uiScale:150}});
+      expect(state().hasPendingChanges).toBe(true);
+      expect(mocks.appearance).not.toHaveBeenCalledWith({uiScale:130});
+      expect(mocks.voice).not.toHaveBeenCalledWith({masterVolume:45});
+      expect(mocks.appearance).toHaveBeenLastCalledWith({uiScale:150});
+    }finally{mocks.theme.mockReset();}
+  });
+
+  it.each(["current","owner","backend"] as const)("persists a validated PATCH before saved observers can fail or replace scope (%s)",async boundary=>{
+    await ready();
+    const failure=new Error("saved observer failed");let stop=()=>{};
+    stop=usePreferencesStore.subscribe(next=>{
+      if(next.syncStatus!=="saved")return;
+      stop();
+      if(boundary!=="current"){
+        state().bindAccount(boundary==="owner"?"bob":"alice",boundary==="backend"?"https://two.example":undefined);
+        state().set({theme:"replacement-pending"});
+      }
+      throw failure;
+    });
+    try{
+      state().set({theme:"accepted"});await vi.advanceTimersByTimeAsync(1000);
+      expect(JSON.parse(localStorage.getItem(snapshotKey)!)).toEqual({theme:"accepted"});
+      expect(localStorage.getItem(pendingKey)).toBeNull();
+      expect(mocks.update).toHaveBeenCalledTimes(1);
+      if(boundary==="current"){
+        expect(state().syncError).toBe("preferences_apply_failed");
+        await state().retrySync();
+        expect(mocks.update).toHaveBeenCalledTimes(1);
+        expect(state().syncStatus).toBe("saved");
+      }else{
+        expect(state().data).toEqual({theme:"replacement-pending"});
+        expect(state().hasPendingChanges).toBe(true);
+        expect(state().syncError).toBeNull();
+      }
+    }finally{stop();}
+  });
+
+  it("retains an authoritative GET before a loaded observer fails and retries only local application",async()=>{
+    await ready({theme:"old"});
+    mocks.get.mockResolvedValueOnce(ok({theme:"fresh"}));
+    let stop=()=>{};
+    stop=usePreferencesStore.subscribe(next=>{
+      if(next.syncStatus!=="saved"||next.data.theme!=="fresh")return;
+      stop();throw new Error("loaded observer failed");
+    });
+    try{
+      await state().fetchAndApply();
+      expect(JSON.parse(localStorage.getItem(snapshotKey)!)).toEqual({theme:"fresh"});
+      expect(state().syncError).toBe("preferences_apply_failed");
+      await state().retrySync();
+      expect(mocks.get).toHaveBeenCalledTimes(2);
+      expect(mocks.update).not.toHaveBeenCalled();
+      expect(mocks.theme).toHaveBeenLastCalledWith("fresh");
+      expect(state().syncStatus).toBe("saved");
+    }finally{stop();}
+  });
+
+  it("releases a failed saving notification without dispatching or stranding its pending patch",async()=>{
+    await ready();let stop=()=>{};
+    stop=usePreferencesStore.subscribe(next=>{
+      if(next.syncStatus!=="saving")return;
+      stop();throw new Error("saving observer failed");
+    });
+    try{
+      state().set({theme:"pending-before-dispatch"});
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(state().syncError).toBe("preferences_apply_failed");
+      expect(state().hasPendingChanges).toBe(true);
+      expect(JSON.parse(localStorage.getItem(pendingKey)!)).toEqual({theme:"pending-before-dispatch"});
+      expect(mocks.update).not.toHaveBeenCalled();
+      await state().retrySync();
+      expect(mocks.update).toHaveBeenCalledTimes(1);
+      expect(mocks.update.mock.calls[0][0]).toEqual({theme:"pending-before-dispatch"});
+      expect(state().syncStatus).toBe("saved");
+      expect(localStorage.getItem(pendingKey)).toBeNull();
+    }finally{stop();}
+  });
+
+  it("does not assign a retired pre-dispatch writer promise to a replacing account",async()=>{
+    await ready();let stop=()=>{};
+    stop=usePreferencesStore.subscribe(next=>{
+      if(next.syncStatus!=="saving")return;
+      stop();state().bindAccount("bob");state().set({theme:"bob-pending"});
+    });
+    try{
+      state().set({theme:"alice-pending"});await vi.advanceTimersByTimeAsync(1000);
+      expect(mocks.update).not.toHaveBeenCalled();
+      mocks.get.mockResolvedValue(ok({},"bob"));
+      await state().retrySync();
+      expect(mocks.update).toHaveBeenCalledTimes(1);
+      expect(mocks.update.mock.calls[0][0]).toEqual({theme:"bob-pending"});
+      expect(state().accountId).toBe("bob");
+      expect(state().hasPendingChanges).toBe(false);
+      expect(state().syncStatus).toBe("saved");
+    }finally{stop();}
+  });
+
+  it("reserves its writer before saving observers can request another same-account flush",async()=>{
+    await ready();const write=deferred<Response>();
+    mocks.update.mockReturnValueOnce(write.promise);
+    let joined:Promise<void>=Promise.resolve(),stop=()=>{};
+    stop=usePreferencesStore.subscribe(next=>{
+      if(next.syncStatus!=="saving")return;
+      stop();state().set({appearance:{uiScale:130}});joined=state().retrySync();
+    });
+    try{
+      state().set({theme:"first"});await vi.advanceTimersByTimeAsync(1000);
+      expect(mocks.update).toHaveBeenCalledTimes(1);
+      expect(mocks.update.mock.calls[0][0]).toEqual({theme:"first"});
+      write.resolve({success:true});await joined;await settle();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(mocks.update).toHaveBeenCalledTimes(2);
+      expect(mocks.update.mock.calls[1][0]).toEqual({appearance:{uiScale:130}});
+      expect(state().hasPendingChanges).toBe(false);
+    }finally{stop();write.resolve({success:true});}
+  });
+
+  it.each(["fetch","write"] as const)("releases the %s handle when its error notification rejects",async phase=>{
+    if(phase==="write")await ready();else state().bindAccount("alice");
+    state().set({theme:"recoverable"});
+    if(phase==="fetch")mocks.get.mockRejectedValueOnce(new Error("offline"));
+    else mocks.update.mockRejectedValueOnce(new Error("offline"));
+    const failure=new Error("error observer failed");let stop=()=>{};
+    stop=usePreferencesStore.subscribe(next=>{if(next.syncStatus==="error"){stop();throw failure;}});
+    try{
+      await expect(phase==="fetch"?state().fetchAndApply():state().retrySync()).rejects.toBe(failure);
+      expect(JSON.parse(localStorage.getItem(pendingKey)!)).toEqual({theme:"recoverable"});
+      await state().retrySync();
+      expect(state().syncStatus).toBe("saved");
+      expect(state().hasPendingChanges).toBe(false);
+      expect(localStorage.getItem(pendingKey)).toBeNull();
+      expect(mocks.update).toHaveBeenCalledTimes(phase==="write"?2:1);
+    }finally{stop();}
+  });
+  it("observes a detached flush rejection and leaves its persisted patch retryable",async()=>{
+    await ready();mocks.update.mockRejectedValueOnce(new Error("offline"));
+    const diagnostic=vi.spyOn(console,"error").mockImplementation(()=>{});
+    let stop=()=>{};
+    stop=usePreferencesStore.subscribe(next=>{if(next.syncStatus==="error"){stop();throw new Error("private observer detail");}});
+    try{
+      state().set({theme:"recoverable"});await vi.advanceTimersByTimeAsync(1000);
+      expect(diagnostic).toHaveBeenCalledExactlyOnceWith("[preferences] background_flush_failed");
+      expect(JSON.parse(localStorage.getItem(pendingKey)!)).toEqual({theme:"recoverable"});
+      await state().retrySync();expect(state().syncStatus).toBe("saved");
+    }finally{stop();diagnostic.mockRestore();}
+  });
+
+  it.each(["fetch","write"] as const)("keeps replacement-account work intact when retired %s cleanup rejects",async phase=>{
+    if(phase==="write")await ready();else state().bindAccount("alice");
+    state().set({theme:"alice-recoverable"});
+    if(phase==="fetch")mocks.get.mockRejectedValueOnce(new Error("offline"));
+    else mocks.update.mockRejectedValueOnce(new Error("offline"));
+    const failure=new Error("retired observer failed");let stop=()=>{},replacement:Promise<void>=Promise.resolve();
+    stop=usePreferencesStore.subscribe(next=>{
+      if(next.syncStatus!=="error")return;
+      stop();state().bindAccount("bob");state().set({theme:"bob-pending"});
+      mocks.get.mockResolvedValue(ok({},"bob"));replacement=state().retrySync();
+      throw failure;
+    });
+    try{
+      await expect(phase==="fetch"?state().fetchAndApply():state().retrySync()).rejects.toBe(failure);
+      await replacement;
+      expect(state().accountId).toBe("bob");expect(state().syncStatus).toBe("saved");
+      expect(state().data).toEqual({theme:"bob-pending"});expect(state().hasPendingChanges).toBe(false);
+      expect(JSON.parse(localStorage.getItem(pendingKey)!)).toEqual({theme:"alice-recoverable"});
+      expect(mocks.update.mock.calls.at(-1)![0]).toEqual({theme:"bob-pending"});
+    }finally{stop();}
+  });
+
+  it("marks only the importing account when a pending observer replaces its binding",async()=>{
+    localStorage.setItem("mqvi_ui_scale","140");await ready();
+    let stop=()=>{};
+    stop=usePreferencesStore.subscribe(next=>{
+      if(next.syncStatus!=="pending"||(next.data.appearance as {uiScale?:number})?.uiScale!==140)return;
+      stop();state().bindAccount("bob");
+    });
+    try{
+      expect(await state().importLegacyPreferences()).toBe(false);
+      expect(localStorage.getItem(legacyImportKey)).toBe("1");
+      const bobMarker="hichat.preferences.legacy-imported.v1:https%3A%2F%2Fone.example:bob";
+      expect(localStorage.getItem(bobMarker)).toBeNull();
+      mocks.get.mockResolvedValueOnce(ok({},"bob"));await state().fetchAndApply();
+      expect(state().legacyImportAvailable).toBe(true);
+      expect(JSON.parse(localStorage.getItem(pendingKey)!)).toEqual({appearance:{uiScale:140}});
+    }finally{stop();}
+  });
+  it.each(["presenter","observer"] as const)("retains imported queue and offers local retry after %s failure",async phase=>{
+    localStorage.setItem("mqvi_ui_scale","140");await ready();
+    const {applyAccountPreferences}=await import("./applyAccountPreferences");let stop=()=>{};
+    if(phase==="presenter")bindPreferencePresenter(async()=>{throw new Error("presenter unavailable");});
+    else stop=usePreferencesStore.subscribe(next=>{if(next.syncStatus==="pending"){stop();throw new Error("pending observer failed");}});
+    try{
+      await expect(state().importLegacyPreferences()).resolves.toBe(false);
+      expect(localStorage.getItem(legacyImportKey)).toBe("1");
+      expect(JSON.parse(localStorage.getItem(pendingKey)!)).toEqual({appearance:{uiScale:140}});
+      expect(state().syncError).toBe("preferences_apply_failed");
+      expect(state().hasPendingChanges).toBe(true);
+      bindPreferencePresenter(async()=>applyAccountPreferences);await state().retrySync();
+      expect(mocks.update).toHaveBeenCalledTimes(1);
+      expect(mocks.update.mock.calls[0][0]).toEqual({appearance:{uiScale:140}});
+      expect(state().syncStatus).toBe("saved");
+    }finally{stop();bindPreferencePresenter(async()=>applyAccountPreferences);}
+  });
+
+  it("returns a failed import when the refresh it joined rejects,without assigning its backup",async()=>{
+    localStorage.setItem("mqvi_ui_scale","140");await ready();
+    const response=deferred<Response>();mocks.get.mockReturnValueOnce(response.promise);
+    let stop=()=>{};const failure=new Error("refresh error observer failed");
+    stop=usePreferencesStore.subscribe(next=>{if(next.syncStatus==="error"){stop();throw failure;}});
+    try{
+      const refresh=state().fetchAndApply();const rejected=expect(refresh).rejects.toBe(failure);
+      const importing=state().importLegacyPreferences();await settle();
+      response.reject(new Error("offline"));await rejected;
+      await expect(importing).resolves.toBe(false);
+      expect(localStorage.getItem(legacyImportKey)).toBeNull();
+      expect(localStorage.getItem(pendingKey)).toBeNull();
+      expect(state().syncError).toBe("preferences_load_failed");
+    }finally{stop();response.resolve(ok());}
+  });
+  it("does not assign legacy data after a joined refresh reports account mismatch",async()=>{
+    localStorage.setItem("mqvi_ui_scale","140");await ready();
+    const response=deferred<Response>();mocks.get.mockReturnValueOnce(response.promise);
+    const refresh=state().fetchAndApply(),importing=state().importLegacyPreferences();await settle();
+    response.resolve({success:false,code:"PREFERENCES_ACCOUNT_MISMATCH"});
+    await refresh;expect(await importing).toBe(false);
+    expect(state().syncError).toBe("preferences_account_mismatch");
+    expect(state().data).toEqual({});expect(state().hasPendingChanges).toBe(false);
+    expect(localStorage.getItem(legacyImportKey)).toBeNull();expect(localStorage.getItem(pendingKey)).toBeNull();
+  });
+
+  it("does not overwrite a binding selected by a reset observer", async () => {
+    await ready();
+    state().set({ theme: "alice-queued" });
+    let stop = () => {};
+    stop = usePreferencesStore.subscribe(next => {
+      if (next.accountId !== null) return;
+      stop();
+      state().bindAccount("carol");
+      state().set({ theme: "carol-queued" });
+    });
+    try {
+      state().bindAccount("bob");
+      await settle();
+      expect(state().accountId).toBe("carol");
+      expect(state().data).toEqual({ theme: "carol-queued" });
+      expect(JSON.parse(localStorage.getItem(pendingKey)!)).toEqual({ theme: "alice-queued" });
+      expect(mocks.theme).toHaveBeenLastCalledWith("carol-queued");
+    } finally { stop(); }
+  });
+
+  it.each(["owner", "backend"] as const)("prepares only the surviving binding after a bound observer replaces %s", async boundary => {
+    const { applyAccountPreferences } = await import("./applyAccountPreferences");
+    const loading = deferred<typeof applyAccountPreferences>();
+    bindPreferencePresenter(() => loading.promise);
+    let stop = () => {};
+    stop = usePreferencesStore.subscribe(next => {
+      if (next.accountId !== "alice") return;
+      stop();
+      state().bindAccount(boundary === "owner" ? "bob" : "alice", "https://two.example");
+      state().set({ theme: "survivor" });
+    });
+    try {
+      state().bindAccount("alice");
+      loading.resolve(applyAccountPreferences);
+      await settle();
+      for (const reset of mocks.resets) expect(reset).toHaveBeenCalledTimes(1);
+      expect(mocks.theme).toHaveBeenLastCalledWith("survivor");
+      expect(mocks.get).not.toHaveBeenCalled();
+      expect(state().accountId).toBe(boundary === "owner" ? "bob" : "alice");
+    } finally {
+      stop(); loading.resolve(applyAccountPreferences);
+      bindPreferencePresenter(async () => applyAccountPreferences);
+    }
+  });
+
+  it("prepares committed binding data even if its bound observer throws", async () => {
+    const { applyAccountPreferences } = await import("./applyAccountPreferences");
+    bindPreferencePresenter(async () => applyAccountPreferences);
+    localStorage.setItem(snapshotKey, JSON.stringify({ theme: "cached-owner" }));
+    const failure = new Error("bound observer failed");
+    let stop = () => {};
+    stop = usePreferencesStore.subscribe(next => {
+      if (next.accountId === "alice") { stop(); throw failure; }
+    });
+    try {
+      expect(() => state().bindAccount("alice")).toThrow(failure);
+      await settle();
+      for (const reset of mocks.resets) expect(reset).toHaveBeenCalledTimes(1);
+      expect(mocks.theme).toHaveBeenLastCalledWith("cached-owner");
+      expect(state().accountId).toBe("alice");
+      expect(mocks.get).not.toHaveBeenCalled();
+    } finally { stop(); }
+  });
+
+  it("fences an old account while the production presenter is still loading", async () => {
+    const { applyAccountPreferences } = await import("./applyAccountPreferences");
+    const loading = deferred<typeof applyAccountPreferences>();
+    bindPreferencePresenter(() => loading.promise);
+    try {
+      state().bindAccount("alice");
+      state().set({ theme: "alice-pending" });
+      const oldFetch = state().fetchAndApply();
+      state().bindAccount("bob");
+      state().set({ theme: "bob-pending" });
+      loading.resolve(applyAccountPreferences);
+      await oldFetch;
+      await settle();
+      expect(mocks.get).not.toHaveBeenCalled();
+      expect(mocks.theme).not.toHaveBeenCalledWith("alice-pending");
+      expect(mocks.theme).toHaveBeenLastCalledWith("bob-pending");
+      for (const reset of mocks.resets) expect(reset).toHaveBeenCalledTimes(1);
+      expect(state().accountId).toBe("bob");
+      expect(state().data.theme).toBe("bob-pending");
+      expect(state().hasPendingChanges).toBe(true);
+      expect(JSON.parse(localStorage.getItem(pendingKey)!)).toMatchObject({ theme: "alice-pending" });
+    } finally {
+      loading.resolve(applyAccountPreferences);
+      bindPreferencePresenter(async () => applyAccountPreferences);
+    }
+  });
+
+  it.each([true, false])("restores channel message notification choice %s offline without leaking accounts", async value => {
+    await ready({ notifications: { channelMessageNotifications: value } });
+    expect(JSON.parse(localStorage.getItem(snapshotKey)!)).toEqual({ notifications: { channelMessageNotifications: value } });
+    state().reset();
+    state().bindAccount("alice");
+    mocks.get.mockRejectedValueOnce(new Error("offline"));
+    await state().fetchAndApply();
+    expect(state().data.notifications).toEqual({ channelMessageNotifications: value });
+    expect(state().syncError).toBe("preferences_load_failed");
+    state().bindAccount("bob");
+    expect(state().data).toEqual({});
+  });
+
+  it("never queues device-only overlay flags in an account patch", async () => {
+    await ready();
+    state().set({ voice_settings: { masterVolume: 65, voiceOverlayCompatibility: true, voiceOverlayVideo: true, voiceOverlayStreams: true, voiceOverlayWelcome: true, voiceOverlayGoLive: true } });
+    expect(state().data.voice_settings).toEqual({ masterVolume: 65 });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mocks.update).toHaveBeenCalledTimes(1);
+    expect(mocks.update.mock.calls[0][0]).toEqual({ voice_settings: { masterVolume: 65 } });
   });
 
   it("does not send or queue unauthenticated edits", async () => {
@@ -185,7 +688,7 @@ describe("account-scoped preference synchronization", () => {
     expect(mocks.accessibility).toHaveBeenLastCalledWith({ chatFontSize: 22, density: "cozy" });
     expect(mocks.appearance).toHaveBeenLastCalledWith({ uiScale: 120 });
     for (const reset of mocks.resets) expect(reset).toHaveBeenCalledTimes(2);
-    expect(mocks.resets[0]).toHaveBeenLastCalledWith(true);
+    expect(mocks.resets[0]).toHaveBeenLastCalledWith(true,expect.any(Function));
     expect(mocks.resets[2]).toHaveBeenLastCalledWith(true);
   });
 
@@ -536,12 +1039,12 @@ describe("account-scoped preference synchronization", () => {
     await state().fetchAndApply();
     expect(state().data).toEqual({ appearance: { neonEnabled: true } });
     expect(JSON.parse(localStorage.getItem(snapshotKey)!)).toEqual({ appearance: { neonEnabled: true } });
-    expect(mocks.resets[0]).toHaveBeenLastCalledWith(true);
+    expect(mocks.resets[0]).toHaveBeenLastCalledWith(true,expect.any(Function));
     expect(mocks.resets[2]).toHaveBeenLastCalledWith(true);
     state().reset();
     state().bindAccount("alice");
     await settle();
-    expect(mocks.resets[0]).toHaveBeenLastCalledWith();
+    expect(mocks.resets[0]).toHaveBeenLastCalledWith(false,expect.any(Function));
     expect(mocks.resets[2]).toHaveBeenLastCalledWith();
   });
 

@@ -1,0 +1,105 @@
+{
+  "sourceCommit": "590d004c080f29a48e8d63e6b98a4912fc101937",
+  "scope": "Actual 620s validation of extracted controller async phase boundaries; bounded delivery/persistence/isolation proof, not full measurement or RF acceptance.",
+  "go": "go version go1.27.4 windows/amd64",
+  "k6": "k6.exe v2.4.0 (commit/dd9395906d, go1.26.11, windows/amd64)",
+  "checks": {
+    "passed": 5940,
+    "failed": 0
+  },
+  "messages": 5800,
+  "healthyDeliveries": 116000,
+  "healthyReceivers": 20,
+  "historyPages": 58,
+  "receiverDigestsMatched": 20,
+  "senderAcknowledgementsMatched": 5800,
+  "digest": "933b820dc5f18c2c24819dc6d4cfa0c546ab9782bebcde98364d0d32806f1e29",
+  "sourceFilesMatched": 1608,
+  "slowPeer": {
+    "exitCode": 0,
+    "events": [
+      {
+        "event": "connected",
+        "at": "2026-11-16T12:19:29.5840931Z",
+        "keepalive_pairs": 0,
+        "elapsed_ms": 0,
+        "receive_buffer_requested_bytes": 1024,
+        "post_upgrade_reader": false
+      },
+      {
+        "event": "finished",
+        "at": "2026-11-16T12:20:29.5842671Z",
+        "reason": "write_failed",
+        "keepalive_pairs": 4,
+        "elapsed_ms": 60000,
+        "receive_buffer_requested_bytes": 1024,
+        "post_upgrade_reader": false
+      }
+    ],
+    "stderrPresent": false,
+    "isolation": {
+      "peakAt": "2026-11-16T12:19:42.621Z",
+      "retiredAt": "2026-11-16T12:20:25.678Z",
+      "healthySamplesAfterProbeExit": 245,
+      "requestedReceiveBufferBytes": 1024
+    },
+    "readableAfterRetirement": true
+  },
+  "resources": {
+    "baseline": {
+      "samples": 3,
+      "goroutinesMedian": 51,
+      "heapAllocMedianBytes": 6961048,
+      "rssMedianBytes": 40804352
+    },
+    "load": {
+      "samples": 276,
+      "goroutinesMedian": 111.0,
+      "heapAllocMedianBytes": 8731204.0,
+      "rssMedianBytes": 54050816.0
+    },
+    "recovery": {
+      "samples": 6,
+      "goroutinesMedian": 51.0,
+      "heapAllocMedianBytes": 7122736.0,
+      "rssMedianBytes": 53231616.0
+    }
+  },
+  "telemetry": {
+    "buckets": 11,
+    "http5xx": 0,
+    "observerQueryFailures": 1,
+    "failureCauseRecorded": false,
+    "lastObservedAt": "2026-11-16T12:30:26.971Z",
+    "finishedAt": "2026-11-16T12:30:37.240Z",
+    "poolMaxOpen": 4,
+    "finalCumulativeWaitCount": 38238
+  },
+  "cleanup": {
+    "launcherExitCode": 0,
+    "observerExitCode": 0,
+    "databaseDropped": true,
+    "allOwnedChildrenJoined": true,
+    "ownedProcessesAbsentObserved": true,
+    "fullContainerAndImageIDsAbsentVerified": true,
+    "privateCredentialsAndDescriptorAbsent": true,
+    "launcherFailures": []
+  },
+  "controllerSonarSourceProof": {
+    "sourceCommit": "590d004c080f29a48e8d63e6b98a4912fc101937",
+    "path": "loadtest/local-fanout-runner.mjs",
+    "matchedLines": 670,
+    "normalizedSourceSha256": "ef25124a1f2d22560fc3e81c3b606c71800c44a4b280cff5bcc9c7dc42ad12a4",
+    "scope": "Source-bound absence of open S3776 in this controller was separately queried; not full project debt closure."
+  },
+  "scopeOfSonarClosure": "No open javascript:S3776 issue in this source-matched controller; history35 and other files remain open.",
+  "reportSha256": "94170a5f6a0db1ed057476882bf8f4223d3d13a57d1ffe0d4a42520e04103c9e",
+  "auditResultSha256": "c9a5087956022bdcff3f67d74e59bd7d154fdc066d8595c0cd4c53bffb7caa01",
+  "artifactRoot": "G:\\hichat-refactor-20261116-anoknpqz\\portable-fixture-checks\\local-fanout-2935756af2f14cf1bdbdd9aacfb2e326",
+  "limits": [
+    "Observer recorded one query failure without cause/timestamp details; no zero-observer-error acceptance or unsupported teardown-cause attribution",
+    "All main application samples passed positive TLS/client-certificate checks; observer failure is not evidence of application transport failure",
+    "Current history validator and Go test-helper refactors are newer and not included in this runtime source",
+    "No capacity/SLA, variance, churn/long-soak, query/pool budget, native/physical/media/deployment or general RF closure"
+  ]
+}

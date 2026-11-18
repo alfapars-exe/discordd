@@ -1,0 +1,55 @@
+{
+  "backendCommit": "88892ed159c41726c3092955c9b0cd23cbbb547d",
+  "loadCommit": "7ab3c3c00cfc98aa30825283e1d8eab913870115",
+  "result": "NOT ACCEPTED: independent HTTP history reconciliation failed",
+  "workload": {
+    "users": 20,
+    "messagesPerSender": 290,
+    "holdSeconds": 620,
+    "sent": 5800,
+    "received": 116000,
+    "receivers": 20,
+    "duplicates": 0,
+    "invalid": 0
+  },
+  "session": {
+    "exitCode": 0,
+    "handshakes": 20,
+    "completed": 20,
+    "heartbeatAcks": 400
+  },
+  "failure": {
+    "code": "history_order_not_descending",
+    "phases": [
+      "workload"
+    ],
+    "cause": "Verifier assumed descending positive source_sequence. Actual GetByChannelID REST contract is ascending (created_at,id) per page, reversing repository DESC; older-page cursor must be first row.",
+    "persistedHistory": "Not independently reconciled; database dropped by owned cleanup. Delivery-only evidence is not full profile acceptance."
+  },
+  "sourceParity": {
+    "serverFiles": 1579,
+    "loadFiles": 9,
+    "mismatches": 0
+  },
+  "environment": {
+    "go": "go version go1.27.4 windows/amd64",
+    "k6": "k6.exe v2.4.0 (commit/dd9395906d, go1.26.11, windows/amd64)",
+    "storage": "New build/cache/evidence on fixed NTFS G; PostgreSQL remained Docker storage; no capacity/SLA/storage comparison",
+    "CFreeBytesAfter": 2029694976
+  },
+  "cleanup": {
+    "databaseDropped": true,
+    "ownedContainerAbsent": true,
+    "ownedImageAbsent": true,
+    "ownedBackendProcessesRemaining": 0,
+    "observer": "Captured buckets preserved; terminal1 after expected container removal because no-such-object match was case-sensitive. Fix prepared for next run; not a workload failure."
+  },
+  "telemetryBuckets": 10,
+  "hashes": {
+    "G:\\hichat-refactor-20261116-anoknpqz\\hichat-pg-tls-test-eab5f8a4f4a24f6f932ebf6f05929762\\capacity-report.json": "6a488946006e5e2497769ac0873a915aaa6fc59b45124cf50865cdccd8c5a626",
+    "G:\\hichat-refactor-20261116-anoknpqz\\hichat-pg-tls-test-eab5f8a4f4a24f6f932ebf6f05929762\\capacity-k6-summary.json": "87de58314ca7d2e4e97fc2343629346efced7317c4e34d9d6d01a4105c511fb7",
+    "G:\\hichat-refactor-20261116-anoknpqz\\hichat-pg-tls-test-eab5f8a4f4a24f6f932ebf6f05929762\\capacity-k6.log": "d91100411663a560ea632edc14f0c96f2f61952cd0ba8c37ae9ccee92c72cc3d",
+    "G:\\hichat-refactor-20261116-anoknpqz\\runtime-telemetry-observer.json": "fad536dcf1aedc28fdef06484ee4f7412cfb324985aed604b89e8114ad06e2c9",
+    "G:\\hichat-refactor-20261116-anoknpqz\\launch.log": "5a8dae0aefe3ce5cd70d110e8f5d4e37205fb1e3ccaa5bf76d5be804c75d6cbd"
+  }
+}

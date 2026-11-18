@@ -1,0 +1,245 @@
+{
+  "date": "2026-11-15",
+  "productSource": "ba5acc03b8a8c293dbc2f04eccf7ce68df608861",
+  "harnessSha256": "2a77fef669d2f7599721746c7bd22a6ef0a7911e183d5b8dfc0595952429e670",
+  "runtime": {
+    "node": "v26.13.1",
+    "chromium": "156.0.8078.4"
+  },
+  "results": [
+    {
+      "kind": "channel",
+      "cancel": false,
+      "size": 10000,
+      "repetitions": 9,
+      "injectedConsumerDelayMs": 75,
+      "writerWaitMedianMs": 343.09999999403954,
+      "releaseToWriteMedianMs": 267.90000000596046,
+      "samples": [
+        {
+          "scanAndWriteMs": 358.5,
+          "writerWaitMs": 353.09999999403954,
+          "releaseToWriteMs": 277.90000000596046
+        },
+        {
+          "scanAndWriteMs": 347.2000000178814,
+          "writerWaitMs": 343.7000000178814,
+          "releaseToWriteMs": 268.5
+        },
+        {
+          "scanAndWriteMs": 360.59999999403954,
+          "writerWaitMs": 340,
+          "releaseToWriteMs": 264.7000000178814
+        },
+        {
+          "scanAndWriteMs": 371.09999999403954,
+          "writerWaitMs": 367.39999997615814,
+          "releaseToWriteMs": 292.19999998807907
+        },
+        {
+          "scanAndWriteMs": 359.90000000596046,
+          "writerWaitMs": 341.30000001192093,
+          "releaseToWriteMs": 265.90000000596046
+        },
+        {
+          "scanAndWriteMs": 352,
+          "writerWaitMs": 336.7999999821186,
+          "releaseToWriteMs": 261.40000000596046
+        },
+        {
+          "scanAndWriteMs": 365.40000000596046,
+          "writerWaitMs": 349,
+          "releaseToWriteMs": 273.59999999403954
+        },
+        {
+          "scanAndWriteMs": 350.5,
+          "writerWaitMs": 343.09999999403954,
+          "releaseToWriteMs": 267.90000000596046
+        },
+        {
+          "scanAndWriteMs": 344.09999999403954,
+          "writerWaitMs": 335.90000000596046,
+          "releaseToWriteMs": 260.59999999403954
+        }
+      ],
+      "scope": "Native Chromium IndexedDB coherent scan, stalled metadata consumer and one source-cache edit. No WebSocket/network/decryption or full React panel load; not a live-receive capacity pass."
+    },
+    {
+      "kind": "channel",
+      "cancel": true,
+      "size": 10000,
+      "repetitions": 9,
+      "injectedConsumerDelayMs": 75,
+      "writerWaitMedianMs": 75.80000001192093,
+      "releaseToWriteMedianMs": 0.5,
+      "samples": [
+        {
+          "scanAndWriteMs": 84.5,
+          "writerWaitMs": 75.59999999403954,
+          "releaseToWriteMs": 0.5
+        },
+        {
+          "scanAndWriteMs": 94.5,
+          "writerWaitMs": 76.09999999403954,
+          "releaseToWriteMs": 0.5
+        },
+        {
+          "scanAndWriteMs": 91.5,
+          "writerWaitMs": 75.69999998807907,
+          "releaseToWriteMs": 0.4000000059604645
+        },
+        {
+          "scanAndWriteMs": 94.40000000596046,
+          "writerWaitMs": 75.80000001192093,
+          "releaseToWriteMs": 0.4000000059604645
+        },
+        {
+          "scanAndWriteMs": 93.80000001192093,
+          "writerWaitMs": 75.90000000596046,
+          "releaseToWriteMs": 0.4000000059604645
+        },
+        {
+          "scanAndWriteMs": 93.5,
+          "writerWaitMs": 75.80000001192093,
+          "releaseToWriteMs": 0.5
+        },
+        {
+          "scanAndWriteMs": 93.69999998807907,
+          "writerWaitMs": 76,
+          "releaseToWriteMs": 0.5999999940395355
+        },
+        {
+          "scanAndWriteMs": 86.40000000596046,
+          "writerWaitMs": 75.59999999403954,
+          "releaseToWriteMs": 0.4000000059604645
+        },
+        {
+          "scanAndWriteMs": 95.40000000596046,
+          "writerWaitMs": 75.80000001192093,
+          "releaseToWriteMs": 0.5
+        }
+      ],
+      "scope": "Native Chromium IndexedDB coherent scan, stalled metadata consumer and one source-cache edit. No WebSocket/network/decryption or full React panel load; not a live-receive capacity pass."
+    },
+    {
+      "kind": "dm",
+      "cancel": false,
+      "size": 10000,
+      "repetitions": 9,
+      "injectedConsumerDelayMs": 75,
+      "writerWaitMedianMs": 343.59999999403954,
+      "releaseToWriteMedianMs": 268.19999998807907,
+      "samples": [
+        {
+          "scanAndWriteMs": 365.80000001192093,
+          "writerWaitMs": 348.90000000596046,
+          "releaseToWriteMs": 273.5
+        },
+        {
+          "scanAndWriteMs": 359.69999998807907,
+          "writerWaitMs": 345.09999999403954,
+          "releaseToWriteMs": 269.7999999821186
+        },
+        {
+          "scanAndWriteMs": 358.19999998807907,
+          "writerWaitMs": 349.5,
+          "releaseToWriteMs": 274.39999997615814
+        },
+        {
+          "scanAndWriteMs": 359.19999998807907,
+          "writerWaitMs": 343.59999999403954,
+          "releaseToWriteMs": 268.19999998807907
+        },
+        {
+          "scanAndWriteMs": 351.90000000596046,
+          "writerWaitMs": 343.40000000596046,
+          "releaseToWriteMs": 268.10000002384186
+        },
+        {
+          "scanAndWriteMs": 351.69999998807907,
+          "writerWaitMs": 336.39999997615814,
+          "releaseToWriteMs": 261
+        },
+        {
+          "scanAndWriteMs": 352,
+          "writerWaitMs": 344.2000000178814,
+          "releaseToWriteMs": 269
+        },
+        {
+          "scanAndWriteMs": 345.69999998807907,
+          "writerWaitMs": 336.90000000596046,
+          "releaseToWriteMs": 261.69999998807907
+        },
+        {
+          "scanAndWriteMs": 313.90000000596046,
+          "writerWaitMs": 296.7000000178814,
+          "releaseToWriteMs": 221.30000001192093
+        }
+      ],
+      "scope": "Native Chromium IndexedDB coherent scan, stalled metadata consumer and one source-cache edit. No WebSocket/network/decryption or full React panel load; not a live-receive capacity pass."
+    },
+    {
+      "kind": "dm",
+      "cancel": true,
+      "size": 10000,
+      "repetitions": 9,
+      "injectedConsumerDelayMs": 75,
+      "writerWaitMedianMs": 75.7000000178814,
+      "releaseToWriteMedianMs": 0.4000000059604645,
+      "samples": [
+        {
+          "scanAndWriteMs": 91.5,
+          "writerWaitMs": 75.69999998807907,
+          "releaseToWriteMs": 0.4000000059604645
+        },
+        {
+          "scanAndWriteMs": 93.90000000596046,
+          "writerWaitMs": 75.7999999821186,
+          "releaseToWriteMs": 0.29999998211860657
+        },
+        {
+          "scanAndWriteMs": 85.59999999403954,
+          "writerWaitMs": 75.7000000178814,
+          "releaseToWriteMs": 0.5
+        },
+        {
+          "scanAndWriteMs": 85.80000001192093,
+          "writerWaitMs": 75.69999998807907,
+          "releaseToWriteMs": 0.4000000059604645
+        },
+        {
+          "scanAndWriteMs": 101.80000001192093,
+          "writerWaitMs": 92.60000002384186,
+          "releaseToWriteMs": 9.5
+        },
+        {
+          "scanAndWriteMs": 92.7999999821186,
+          "writerWaitMs": 75.90000000596046,
+          "releaseToWriteMs": 0.5
+        },
+        {
+          "scanAndWriteMs": 92.10000002384186,
+          "writerWaitMs": 75.80000001192093,
+          "releaseToWriteMs": 0.4000000059604645
+        },
+        {
+          "scanAndWriteMs": 86.5,
+          "writerWaitMs": 75.59999999403954,
+          "releaseToWriteMs": 0.3999999761581421
+        },
+        {
+          "scanAndWriteMs": 84.7000000178814,
+          "writerWaitMs": 75.59999999403954,
+          "releaseToWriteMs": 0.5
+        }
+      ],
+      "scope": "Native Chromium IndexedDB coherent scan, stalled metadata consumer and one source-cache edit. No WebSocket/network/decryption or full React panel load; not a live-receive capacity pass."
+    }
+  ],
+  "conclusion": "Cancellation releases the blocked cache writer; coherent active scans still delay source-cache edits. No accepted live-receive budget is claimed.",
+  "limits": [
+    "Vite-transformed source, native Chromium IndexedDB; not production React bundle",
+    "10k records, one artificial stalled consumer and one writer, one warmup plus nine samples",
+    "No network/WebSocket/decryption or physical/native platform acceptance"
+  ]
+}

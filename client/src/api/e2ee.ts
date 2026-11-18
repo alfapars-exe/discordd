@@ -89,8 +89,8 @@ export function listUserDevices(userId: string) {
 }
 
 /** Fetch prekey bundles for all of a user's devices (for X3DH). GET /api/users/{userId}/prekey-bundles */
-export function fetchPreKeyBundles(userId: string) {
-  return apiClient<PreKeyBundleResponse[]>(`/users/${userId}/prekey-bundles`);
+export function fetchPreKeyBundles(userId: string, options?: { isCurrent?: () => boolean; timeoutMs?: number }) {
+  return apiClient<PreKeyBundleResponse[]>(`/users/${userId}/prekey-bundles`, options);
 }
 
 // ──────────────────────────────────

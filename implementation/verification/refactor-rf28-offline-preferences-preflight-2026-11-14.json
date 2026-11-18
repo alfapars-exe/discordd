@@ -1,0 +1,25 @@
+{
+  "verified_base": "8c341d74a7353fe3f272e862c5d4309b9b5f825c",
+  "base_checks": {
+    "success": 36,
+    "failed": 0
+  },
+  "new_matrix_source_hashes": {
+    ".github/workflows/server-ci.yml": "960eb80f53aaf6b79c0138df141628fa4fdd6c1ddd344fb8778d3a10651e1ec6",
+    "e2e/playwright.config.ts": "98e99e3bed1dad883cb4318f2e8d8d50ff5eadb0b45694f734244a85cadacd82",
+    "e2e/package.json": "933d034f0961c0526dc10fd241c797541dfa21b53eb62df898899ec959f267a9",
+    "e2e/scripts/test-playwright-profiles.mjs": "8e17216146f2413e77af7682d2f48e9ae71f3d4c1129fc322b6d4ee454a23cd9",
+    "e2e/tests/preferences-isolation.spec.ts": "90a3959bd59fd10a511f7b682b865cf84065098fd58a1238603c25b1d93d6638",
+    "e2e/tests/channelNoticePreference.helpers.ts": "5957f82a965b4e6ab85e7ff4c16770c41212fd6a8fc8efc3d75f8896fef00678",
+    "e2e/tests/role-visibility.spec.ts": "37986f52dfc2c185693055e6ce5baeb0eeb108e19ab9063b67d3d86fab59d693",
+    "e2e/tests/offline-retry.spec.ts": "8ea5058b1144d9322a2a363697540799ad9611386c8ad79a6123a9ca6492c20f"
+  },
+  "new_scenarios": [
+    "Real browser offline send, retained draft, online retry, exactly one persisted message.",
+    "Isolated-database notification preference changes in two sessions, reloads and A/B/A account switching.",
+    "Role cases each reset their synthetic server and close pages in finally."
+  ],
+  "local_verification": "npm --prefix e2e run test:isolation passed; actual CLI discovery checks normal/crypto/mail/preferences separation and rejects conflicting modes.",
+  "browser_execution_of_new_scenarios": false,
+  "scope": "The captured 8c3 production E2E success is separate; this new matrix requires a fresh full CI."
+}

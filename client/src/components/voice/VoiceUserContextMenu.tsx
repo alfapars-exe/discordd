@@ -1,3 +1,4 @@
+import { VOICE_PEER_VOLUME_RANGE, ownVoicePeerValue, voicePeerVolume } from "../../stores/voicePreferenceMaps";
 /**
  * VoiceUserContextMenu — Right-click menu for voice sidebar users.
  * Rendered via portal to document.body to escape sidebar overflow:hidden.
@@ -132,8 +133,8 @@ function VoiceUserContextMenu({
 
   const [showMoveMenu, setShowMoveMenu] = useState(false);
 
-  const isLocallyMuted = localMutedUsers[userId] ?? false;
-  const currentVolume = userVolumes[userId] ?? 100;
+  const isLocallyMuted = ownVoicePeerValue(localMutedUsers, userId) ?? false;
+  const currentVolume = voicePeerVolume(userVolumes, userId);
   const [preMuteVolume, setPreMuteVolume] = useState(currentVolume || 100);
   const isServerMuted = targetVoiceState?.is_server_muted ?? false;
   const isServerDeafened = targetVoiceState?.is_server_deafened ?? false;
@@ -339,13 +340,13 @@ function VoiceUserContextMenu({
           }
           <input
             type="range"
-            min={0}
-            max={200}
+            min={VOICE_PEER_VOLUME_RANGE[0]}
+            max={VOICE_PEER_VOLUME_RANGE[1]}
             value={currentVolume}
             onChange={handleVolumeChange}
             className="voice-ctx-range"
             style={{
-              background: `linear-gradient(to right, var(--primary) ${(currentVolume / 200) * 100}%, var(--bg-5) ${(currentVolume / 200) * 100}%)`,
+              background: `linear-gradient(to right, var(--primary) ${(currentVolume / VOICE_PEER_VOLUME_RANGE[1]) * 100}%, var(--bg-5) ${(currentVolume / VOICE_PEER_VOLUME_RANGE[1]) * 100}%)`,
             }}
           />
           <span className="voice-ctx-vol-value">{currentVolume}%</span>

@@ -1,0 +1,87 @@
+{
+  "runtime": "Chromium 156.0.8078.4",
+  "command": "node e2e/scripts/benchmark-encrypted-search.mjs --dm",
+  "method": "One warmup and three samples, same IndexedDB fixture; accented case-insensitive query; reversed timestamps versus source sequence; exact full match and second-page ID/content/order assertions.",
+  "results": [
+    {
+      "mode": "dm",
+      "size": 1000,
+      "matches": 267,
+      "samplesMs": [
+        23.099999994039536,
+        23.80000001192093,
+        22.299999982118607
+      ],
+      "previousPageMs": [
+        23.700000017881393,
+        24.30000001192093,
+        22.69999998807907
+      ],
+      "indexedPageMs": [
+        2.7999999821186066,
+        1.800000011920929,
+        2.300000011920929
+      ],
+      "mediansMs": {
+        "samplesMs": 23.099999994039536,
+        "previousPageMs": 23.700000017881393,
+        "indexedPageMs": 2.300000011920929
+      }
+    },
+    {
+      "mode": "dm",
+      "size": 10000,
+      "matches": 2667,
+      "samplesMs": [
+        225.09999999403954,
+        211.09999999403954,
+        221.10000002384186
+      ],
+      "previousPageMs": [
+        229.5,
+        215.2999999821186,
+        225.60000002384186
+      ],
+      "indexedPageMs": [
+        2.5999999940395355,
+        2.699999988079071,
+        2.699999988079071
+      ],
+      "mediansMs": {
+        "samplesMs": 221.10000002384186,
+        "previousPageMs": 225.60000002384186,
+        "indexedPageMs": 2.699999988079071
+      }
+    },
+    {
+      "mode": "dm",
+      "size": 50000,
+      "matches": 13333,
+      "samplesMs": [
+        1134.800000011921,
+        1049.7999999821186,
+        1061
+      ],
+      "previousPageMs": [
+        1155.300000011921,
+        1068.3999999761581,
+        1078.5999999940395
+      ],
+      "indexedPageMs": [
+        3.600000023841858,
+        2.5,
+        2.4000000059604645
+      ],
+      "mediansMs": {
+        "samplesMs": 1061,
+        "previousPageMs": 1078.5999999940395,
+        "indexedPageMs": 2.5
+      }
+    }
+  ],
+  "limits": [
+    "Storage and page selection measurement, not React rendering",
+    "First query remains linear and retains all matching IDs",
+    "No heap bound or complete RF17 acceptance claimed"
+  ]
+}

@@ -1,0 +1,219 @@
+{
+  "runtimeSource": "0ae393e1",
+  "finalSource": "597313df",
+  "regressionCommit": "65f6a166",
+  "behaviorFixCommit": "0c05343a",
+  "scope": "RF13 accessibility preset correctness and shared store-free options/numeric bounds across UI,setters,hydration and account cache. Wire/storage names unchanged.",
+  "red": "4unsupported duration cases4/6/19/3.5 failed against original store;12oldtests passed;TEMP/hichat-accessibility-duration-red.log",
+  "green": "35testsPASS after behavior fix;146targeted testsPASS after runtime contract extraction,4.48s",
+  "validation": {
+    "fullClient": "495files5330passed1skipped121.04s on0ae393e1",
+    "coverageTotal": {
+      "lines": {
+        "total": 38506,
+        "covered": 26518,
+        "skipped": 0,
+        "pct": 68.86
+      },
+      "statements": {
+        "total": 52752,
+        "covered": 35777,
+        "skipped": 0,
+        "pct": 67.82
+      },
+      "functions": {
+        "total": 12321,
+        "covered": 7640,
+        "skipped": 0,
+        "pct": 62
+      },
+      "branches": {
+        "total": 39973,
+        "covered": 25934,
+        "skipped": 0,
+        "pct": 64.87
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "coverageAccessibilityStore": {
+      "lines": {
+        "total": 93,
+        "covered": 74,
+        "skipped": 0,
+        "pct": 79.56
+      },
+      "functions": {
+        "total": 43,
+        "covered": 26,
+        "skipped": 0,
+        "pct": 60.46
+      },
+      "statements": {
+        "total": 117,
+        "covered": 95,
+        "skipped": 0,
+        "pct": 81.19
+      },
+      "branches": {
+        "total": 75,
+        "covered": 63,
+        "skipped": 0,
+        "pct": 84
+      }
+    },
+    "lint": "Fullclient0errors2existingwarnings on0ae393e1;5touchedfiles targetedlintPASS aftertype-only336fb196",
+    "runtimeBuild": "Actualtsc-b/VitePASS1.69s",
+    "typeOnlyFollowup": "336fb196 changes erased types only;TypeScript transpileModule output compared byte-for-byte identical for all3changedfiles against0ae393e1",
+    "finalTypeBuild": "Actual npm run build(tsc-b plusVite)PASS;Vite1.64s;TEMP/hichat-accessibility-contract-types-build.log",
+    "immutableSelfScan": "Both immutable0ae393e1 andfinal336fb196 scans RUNNING;neither accepted yet"
+  },
+  "remaining": [
+    "New-headCI afterpush",
+    "RF13 final runtime/account/platform acceptance;RF01-RF30 stillopen"
+  ],
+  "priorRuntimeSource": "0ae393e1",
+  "pureCodecExtraction": {
+    "source": "71d22b48",
+    "scope": "Store/DOM-free sanitizer shared by local hydration and account cache;existing store re-export preserved. Remove duplicated accessibility enum/boolean/range checks from generic account codec.",
+    "targeted": "146tests5filesPASS4.82s",
+    "build": "Actualnpmrunbuild(tsc-b,Vite)PASS1.68s",
+    "fullClientCoverage": "71d22b48:495files5330passed1skipped126.06s;line68.85%,branch64.86%. This did not cover changing accessors and does not replace final597313df validation.",
+    "lint": "71d22b48:fullclientPASS0errors2existingwarnings",
+    "immutableScan": "RUNNING on71d22b48;TEMP/hichat-accessibility-codec-final-scan.log"
+  },
+  "accessorCorrection": {
+    "regressionCommit": "94406dd5",
+    "fixCommit": "597313df",
+    "red": "One failing regression against71d22b48:accessor returned18forvalidation then400forassignment;priorpre-extraction sanitizer readonce. TEMP/hichat-accessibility-codec-accessor-red.log",
+    "green": "147tests6filesPASS4.63s;TEMP/hichat-accessibility-codec-accessor-green.log",
+    "scope": "Corrects a regression caught locally during unpublished extraction;not a newly discovered pre-existing production bug."
+  },
+  "finalValidation": {
+    "fullClientCoverage": "PASS496files5331passed1skipped;TEMP/hichat-accessibility-codec-final-coverage.log",
+    "build": "PASS actualtsc-b/Vite4.43s;TEMP/hichat-accessibility-codec-final-build.log",
+    "lint": "PASS changedpurecodec andregressiontest0errors;previous71d22b48 fullclientlint0errors2existingwarnings",
+    "scan": "PASS immutable597313df:51exact source records,478reviewlines,0blockingpatterns. Pattern scan is not absence-of-vulnerability proof;TEMP/hichat-accessibility-codec-delivery-scan.log",
+    "coverageTotal": {
+      "lines": {
+        "total": 38498,
+        "covered": 26510,
+        "skipped": 0,
+        "pct": 68.86
+      },
+      "statements": {
+        "total": 52737,
+        "covered": 35762,
+        "skipped": 0,
+        "pct": 67.81
+      },
+      "functions": {
+        "total": 12321,
+        "covered": 7640,
+        "skipped": 0,
+        "pct": 62
+      },
+      "branches": {
+        "total": 39939,
+        "covered": 25908,
+        "skipped": 0,
+        "pct": 64.86
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "coverageModules": {
+      "\\src\\stores\\accessibilityStore.ts": {
+        "lines": {
+          "total": 68,
+          "covered": 49,
+          "skipped": 0,
+          "pct": 72.05
+        },
+        "functions": {
+          "total": 41,
+          "covered": 24,
+          "skipped": 0,
+          "pct": 58.53
+        },
+        "statements": {
+          "total": 82,
+          "covered": 60,
+          "skipped": 0,
+          "pct": 73.17
+        },
+        "branches": {
+          "total": 20,
+          "covered": 16,
+          "skipped": 0,
+          "pct": 80
+        }
+      },
+      "\\src\\stores\\preferencesCodec.ts": {
+        "lines": {
+          "total": 81,
+          "covered": 74,
+          "skipped": 0,
+          "pct": 91.35
+        },
+        "functions": {
+          "total": 25,
+          "covered": 22,
+          "skipped": 0,
+          "pct": 88
+        },
+        "statements": {
+          "total": 116,
+          "covered": 102,
+          "skipped": 0,
+          "pct": 87.93
+        },
+        "branches": {
+          "total": 173,
+          "covered": 147,
+          "skipped": 0,
+          "pct": 84.97
+        }
+      },
+      "\\src\\utils\\accessibilityPreferenceCodec.ts": {
+        "lines": {
+          "total": 16,
+          "covered": 16,
+          "skipped": 0,
+          "pct": 100
+        },
+        "functions": {
+          "total": 2,
+          "covered": 2,
+          "skipped": 0,
+          "pct": 100
+        },
+        "statements": {
+          "total": 20,
+          "covered": 20,
+          "skipped": 0,
+          "pct": 100
+        },
+        "branches": {
+          "total": 19,
+          "covered": 19,
+          "skipped": 0,
+          "pct": 100
+        }
+      }
+    }
+  },
+  "priorScans": {
+    "0ae393e1": "PASS0blocking/51exactrecords/478reviewlines",
+    "336fb196": "PASS0blocking/51exactrecords/478reviewlines",
+    "71d22b48": "PASS0blocking/51exactrecords/478reviewlines;superseded by597313df"
+  }
+}

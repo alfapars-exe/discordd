@@ -12,12 +12,12 @@
  * passed in. A real safeStorage round trip is out of scope anyway — it needs a
  * running Electron app, and the encryption is not what this file is about.
  */
+import { redirectFixture } from "./redirect-test-fixture";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loginWithSavedCredentials, NO_SAVED_CREDENTIALS } from "./credential-login";
-import { DEFAULT_UPSTREAM } from "./api-proxy";
 
-type Creds = { username: string; password: string } | null;
+type Creds = { username: string; password: string; origin?: string } | null;
 
 let stored: Creds = null;
 /** Injected in place of the real safeStorage-backed reader. */
@@ -46,7 +46,7 @@ const okLogin = () =>
   });
 
 test("sends the stored credentials to the upstream login endpoint", async () => {
-  stored = { username: "ada", password: "hunter2" };
+  stored = { username: "ada", password: "hunter2", origin: "https://example.test" };
   const { calls, impl } = fakeFetch(okLogin());
 
   const result = await loginWithSavedCredentials("https://example.test", impl, { loadCreds });
@@ -68,7 +68,7 @@ test("sends the stored credentials to the upstream login endpoint", async () => 
 });
 
 test("returns only status and body — never the password", async () => {
-  stored = { username: "ada", password: "hunter2" };
+  stored = { username: "ada", password: "hunter2", origin: "https://example.test" };
   const { impl } = fakeFetch(okLogin());
 
   const result = await loginWithSavedCredentials("https://example.test", impl, { loadCreds });
@@ -79,8 +79,18 @@ test("returns only status and body — never the password", async () => {
   assert.deepEqual(Object.keys(result).sort(), ["body", "status"]);
 });
 
-test("refuses an upstream the renderer made up, falling back to the default", async () => {
+test("legacy credentials require a manual login to establish their origin", async () => {
   stored = { username: "ada", password: "hunter2" };
+  const { calls, impl } = fakeFetch(okLogin());
+  await assert.rejects(
+    loginWithSavedCredentials("https://example.test", impl, { loadCreds }),
+    (err: Error) => err.message === NO_SAVED_CREDENTIALS,
+  );
+  assert.equal(calls.length, 0);
+});
+
+test("refuses invalid upstream origins without sending credentials", async () => {
+  stored = { username: "ada", password: "hunter2", origin: "https://example.test" };
 
   for (const hostile of [
     "http://evil.test", // plain http is not loopback
@@ -89,17 +99,13 @@ test("refuses an upstream the renderer made up, falling back to the default", as
     "",
   ]) {
     const { calls, impl } = fakeFetch(okLogin());
-    await loginWithSavedCredentials(hostile, impl, { loadCreds });
-    assert.equal(
-      calls[0].input,
-      `${DEFAULT_UPSTREAM}/api/auth/login`,
-      `hostile upstream ${JSON.stringify(hostile)} should not be dialled`,
-    );
+    await assert.rejects(() => loginWithSavedCredentials(hostile, impl, { loadCreds }));
+    assert.equal(calls.length, 0);
   }
 });
 
 test("accepts a legitimate https upstream", async () => {
-  stored = { username: "ada", password: "hunter2" };
+  stored = { username: "ada", password: "hunter2", origin: "https://self-hosted.example" };
   const { calls, impl } = fakeFetch(okLogin());
 
   await loginWithSavedCredentials("https://self-hosted.example", impl, { loadCreds });
@@ -121,7 +127,7 @@ test("throws, and never dials, when nothing is stored", async () => {
 });
 
 test("reports a non-JSON upstream response as a null body rather than throwing", async () => {
-  stored = { username: "ada", password: "hunter2" };
+  stored = { username: "ada", password: "hunter2", origin: "https://example.test" };
   const { impl } = fakeFetch(new Response("<html>502</html>", { status: 502 }));
 
   const result = await loginWithSavedCredentials("https://example.test", impl, { loadCreds });
@@ -129,4 +135,21 @@ test("reports a non-JSON upstream response as a null body rather than throwing",
   // A gateway error page must surface as an ordinary failed login, not as an
   // unhandled rejection in the renderer's mount effect.
   assert.deepEqual(result, { status: 502, body: null });
+});
+
+test("a 307 cannot relay a saved password to another origin", async t => {
+  const { origin, targetRequests } = await redirectFixture(t);
+  const result = await loginWithSavedCredentials(origin, fetch, {
+    allowLoopback: true, loadCreds: () => ({ username: "fixture", password: "fixture-only", origin }),
+  });
+  assert.equal(targetRequests(), 0);
+  assert.equal(result.status, 307);
+});
+
+test("another HTTPS origin cannot receive the remembered password", async () => {
+  const { calls, impl } = fakeFetch(okLogin());
+  await assert.rejects(() => loginWithSavedCredentials("https://other.example", impl, {
+    loadCreds: () => ({ username: "reader", password: "fixture", origin: "https://original.example" }),
+  }));
+  assert.equal(calls.length, 0);
 });

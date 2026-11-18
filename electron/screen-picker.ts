@@ -157,7 +157,15 @@ export function installScreenPicker(): void {
       && !contents.isDestroyed() && contents.mainFrame === frame;
     const trusted = (event: Electron.IpcMainEvent) => current()
       && event.sender === contents && event.senderFrame === frame;
-    const timeout = setTimeout(() => finish(null), PICKER_TIMEOUT_MS);
+    const timeout = setTimeout(() => {
+      try {
+        if (current()) contents.send("screen-picker-dismissed");
+      } catch {
+        // The renderer may already be tearing down.
+      } finally {
+        finish(null);
+      }
+    }, PICKER_TIMEOUT_MS);
 
     function finish(streams: Parameters<typeof callback>[0]) {
       if (finished) return;
@@ -193,12 +201,22 @@ export function installScreenPicker(): void {
       if (!trusted(event) || refreshing) return;
       refreshing = true;
       try {
-        const updated = await querySources();
+        let updated = sources;
+        try {
+          updated = await querySources();
+        } catch (error) {
+          if (current()) console.error("[screen-picker] refresh error:", error);
+        }
         if (!current()) return;
+        const previews = updated.map(serialize);
+        contents.send("screen-picker-refresh-result", previews);
         sources = updated;
-        contents.send("screen-picker-refresh-result", sources.map(serialize));
       } catch (error) {
-        if (current()) console.error("[screen-picker] refresh error:", error);
+        // A renderer that cannot receive the list cannot finish this request.
+        if (current()) {
+          console.error("[screen-picker] refresh delivery error:", error);
+          finish(null);
+        }
       } finally {
         refreshing = false;
       }

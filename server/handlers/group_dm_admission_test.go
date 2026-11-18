@@ -32,7 +32,7 @@ func TestGroupAdmissionHTTPRealServiceKnownIDAndActorCannotBypassFriendGate(t *t
 		}
 	}
 	groups := repository.NewSQLiteGroupDMRepo(db.Conn)
-	svc := services.NewGroupDMService(groups, repository.NewSQLiteUserRepo(db.Conn), repository.NewSQLiteFriendshipRepo(db.Conn), &testutil.MockBroadcaster{}, "", "", "", nil, "")
+	svc := services.NewGroupDMService(groups, repository.NewSQLiteUserRepo(db.Conn), repository.NewSQLiteFriendshipRepo(db.Conn), &testutil.MockBroadcaster{}, "", "", "", nil, "", nil, nil, nil, nil)
 	handler := &GroupDMHandler{service: svc}
 	request := func(fn http.HandlerFunc, body, actor, group string) *httptest.ResponseRecorder {
 		t.Helper()

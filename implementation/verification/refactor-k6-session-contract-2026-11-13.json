@@ -1,0 +1,78 @@
+{
+  "source": "c2bda0c1ce6838112046aaa0876c41e78a361f36",
+  "prHead": "0fb62cf886af92258bf79c8dc1cd4fcb61860238",
+  "k6": {
+    "version": "v2.4.0",
+    "commit": "dd9395906d",
+    "runtime": "go1.26.11 windows/amd64",
+    "releaseArchiveSHA256": "aaa90b3afc336faf90172c7addf45c4f41305f6f188e3d564f79466e80ac68e3"
+  },
+  "node": "v26.13.1",
+  "goServer": "go1.27.4 windows/amd64",
+  "fixture": "Real isolated Go HTTP/WebSocket server; fresh verified-mTLS PostgreSQL database. Password generated in memory and passed only to child environment; not in evidence.",
+  "profile": {
+    "virtualUsers": 1,
+    "userCount": 1,
+    "rampUp": "1s",
+    "hold": "36s",
+    "rampDown": "1s",
+    "holdSeconds": 35,
+    "legacyTokenPath": false
+  },
+  "result": {
+    "exitCode": 0,
+    "passingChecks": 5,
+    "failingChecks": 0,
+    "successfulHandshakes": 1,
+    "successfulSessions": 1,
+    "heartbeatAcks": 1,
+    "connectionMilliseconds": 9.5671,
+    "sessionMilliseconds": 35010.0356
+  },
+  "negativeControl": {
+    "fixture": "Local HTTP 200 success/data envelope with no token; no database.",
+    "observations": [
+      {
+        "label": "before",
+        "exitCode": 99,
+        "passingChecks": 1657,
+        "failingChecks": 0,
+        "websocketSessions": 0
+      },
+      {
+        "label": "after",
+        "exitCode": 99,
+        "passingChecks": 0,
+        "failingChecks": 1,
+        "websocketSessions": 0
+      }
+    ],
+    "interpretation": "Baseline HTTP checks were misleadingly green but the whole old process already exited 99 due to its existing duration threshold. New checks identify the missing credential immediately; no overall before-green claim."
+  },
+  "contractTests": {
+    "passed": 14,
+    "failed": 0,
+    "skipped": 0
+  },
+  "cleanup": {
+    "serverPortClosed": true,
+    "disposableDatabaseDropExitCode": 0,
+    "ownedDescriptorRemoved": true,
+    "serverErrorLines": 0
+  },
+  "logs": [
+    "hichat-k6-contract-before.log",
+    "hichat-k6-contract-after.log",
+    "hichat-k6-contract-pr.log",
+    "hichat-k6-real-smoke.log",
+    "hichat-k6-no-session-before.log",
+    "hichat-k6-no-session-after.log",
+    "hichat-k6-isolated-server.log",
+    "hichat-k6-fixture-cleanup.log"
+  ],
+  "limits": [
+    "One session is liveness evidence, not capacity or statistically meaningful latency distribution.",
+    "No slow-consumer, database query/wait, CPU/heap, goroutine or long-soak acceptance is claimed.",
+    "No production endpoint was loaded."
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "base_source": "8a2f2804ca876f1d3cdc0b3a5664b44943b41236",
+  "ci_job": 132360757348,
+  "finding": "WebSocket channel create/update cached successful plaintext without encryptedSourceTag, overwriting the source-bound send cache and leaving restored history to hit replay rejection.",
+  "regression_before": {
+    "new_failures": 2,
+    "existing_passed": 15,
+    "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-ws-cache-before.log"
+  },
+  "change": "Route both WebSocket cache writes through cacheChannelMessage with event-session/history permission guard; retain file keys and source tag.",
+  "after": {
+    "tests": 151,
+    "failed": 0,
+    "typescript": "passed",
+    "changed_files_eslint": "passed"
+  },
+  "remaining": [
+    "Production restore/history E2E must pass with this follow-up.",
+    "Current CI remains live on base source; no restart or cancellation.",
+    "Unversioned legacy channel backups still require compatibility work."
+  ],
+  "environment": "Local Docker recheck returned Docker Desktop is unable to start; no shared service restart performed."
+}

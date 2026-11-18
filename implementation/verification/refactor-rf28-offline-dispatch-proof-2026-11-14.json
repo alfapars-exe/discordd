@@ -1,0 +1,14 @@
+{
+  "source_before": "0a5d936d4a00b26adf7eba96bfaad7fee311cefa",
+  "failed_run": 43573607343,
+  "failed_job": 132383082293,
+  "observed": "Strict Chromium: offline retry case flaky; second Enter left composer draft unchanged. DM and role cases passed first attempt.",
+  "artifact_directory": "G:/hichat-verification-overflow-20261114/0a5-offline-browser",
+  "change": "Retry through actual Send Message button actionability after online event; explicitly require POST /messages status201. Retain offline toast, retained draft, zero offline messages, cleared successful draft, one message and one after reload.",
+  "reason": "navigator.onLine does not imply composer send/permission gates ready; textarea supports slash commands even when ordinary message sends are gated. Button actionability reflects readiness.",
+  "limits": [
+    "Snapshot/logs do not independently establish the exact transient gate causing the ignored Enter. No product root-cause claim.",
+    "New strict production-browser run required; no arbitrary sleep or removed outcome assertions."
+  ],
+  "local_validation": "E2E profile/isolation CLI checks exit0; Windows file symlink case explicitly skipped"
+}

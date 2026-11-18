@@ -3,8 +3,6 @@ package services
 import (
 	"context"
 	"errors"
-	"io/fs"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -17,15 +15,7 @@ import (
 // Exercises the real consent/dedupe transaction through the notifier, including
 // broadcast-after-commit. Provider transport is tested separately via the SDK.
 func TestStreamStartNotifierSQLiteCommittedRealtimeIntegration(t *testing.T) {
-	migrations, err := fs.Sub(database.EmbeddedMigrations, "migrations")
-	if err != nil {
-		t.Fatal(err)
-	}
-	db, err := database.NewLegacy(filepath.Join(t.TempDir(), "stream.db"), migrations)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
+	db := newServiceFixtureDB(t, "stream.db")
 	for _, query := range []string{
 		`INSERT INTO users(id,username,password_hash) VALUES('publisher','publisher','x'),('friend','friend','x')`,
 		`INSERT INTO servers(id,name,owner_id) VALUES('server','Test','publisher')`,

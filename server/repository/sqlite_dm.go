@@ -8,6 +8,6 @@ type sqliteDMRepo struct {
 	db database.TxQuerier
 }
 
-func NewSQLiteDMRepo(db database.TxQuerier) DMRepository {
+func NewSQLiteDMRepo(db database.TxQuerier) DMRequestStore {
 	return &sqliteDMRepo{db: db}
 }

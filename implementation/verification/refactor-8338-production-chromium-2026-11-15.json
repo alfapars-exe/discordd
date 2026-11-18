@@ -1,0 +1,34 @@
+{
+  "source": "833888a6ccbc7373d130d0aee61f7f58be91092e",
+  "clientProductSource": "3c22ae60",
+  "serverProductSource": "4ad77d3e",
+  "command": "HICHAT_E2E_PRODUCTION_CLIENT=1 npm --prefix e2e test -- --project=chromium",
+  "runtime": "Real Go CGO_ENABLED=0; production Vite bundle; Chromium; owned PostgreSQL 18.6 control/run databases with verify-full mTLS",
+  "result": {
+    "passed": 16,
+    "duration": "2.8m",
+    "exitCode": 0
+  },
+  "covered": [
+    "Two-session parent permission revocation blocks warmed thread HTTP history and WebSocket delivery",
+    "Role grants/revocations update channel tree in two sessions",
+    "Concurrent sends/edit/deletion converge",
+    "Channel and DM reply navigation loads an out-of-window original",
+    "Committed send/lost response and offline retry",
+    "Attachment rendering and archive access",
+    "Concurrent refresh and keyboard login/recovery smoke"
+  ],
+  "sessionRefreshObservations": {
+    "400": 19,
+    "401": 5,
+    "429": 1
+  },
+  "sessionRefreshScope": "Helper logged rejected refresh responses, including a Retry-After 30 wait. Full suite passed; these responses are not counted as server application-error proof.",
+  "isolationChecks": "test:isolation passed; file-symlink case skipped on Windows",
+  "cleanup": "Playwright-owned listeners 3030/9090 absent after completion; dedicated PostgreSQL container and uniquely tagged fixture image removed. Developer containers untouched.",
+  "limits": [
+    "No complete search-specific browser acceptance",
+    "No physical media/native packaged acceptance",
+    "Final-source CI and first-query bounded memory remain open"
+  ]
+}

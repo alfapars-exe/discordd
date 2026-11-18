@@ -1,0 +1,160 @@
+{
+  "source": "a9f00ad9a2a5203ddb33bbe578a9d40ee8312235",
+  "run": 43535987403,
+  "native_job": {
+    "completedAt": "2026-11-14T00:50:01Z",
+    "conclusion": "success",
+    "databaseId": 132264989679,
+    "name": "PostgreSQL repository and migration contracts",
+    "startedAt": "2026-11-14T00:42:34Z",
+    "status": "completed",
+    "steps": [
+      {
+        "completedAt": "2026-11-14T00:42:37Z",
+        "conclusion": "success",
+        "name": "Set up job",
+        "number": 1,
+        "startedAt": "2026-11-14T00:42:34Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T00:42:51Z",
+        "conclusion": "success",
+        "name": "Initialize containers",
+        "number": 2,
+        "startedAt": "2026-11-14T00:42:37Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T00:42:59Z",
+        "conclusion": "success",
+        "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "number": 3,
+        "startedAt": "2026-11-14T00:42:51Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T00:43:01Z",
+        "conclusion": "success",
+        "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+        "number": 4,
+        "startedAt": "2026-11-14T00:42:59Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T00:43:01Z",
+        "conclusion": "success",
+        "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+        "number": 5,
+        "startedAt": "2026-11-14T00:43:01Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T00:43:07Z",
+        "conclusion": "success",
+        "name": "Start active-process PostgreSQL with mutual TLS",
+        "number": 6,
+        "startedAt": "2026-11-14T00:43:01Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T00:43:48Z",
+        "conclusion": "success",
+        "name": "Build production server for active-process acceptance",
+        "number": 7,
+        "startedAt": "2026-11-14T00:43:07Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T00:47:35Z",
+        "conclusion": "success",
+        "name": "Execute server, repository, and database tests; reject required test skips",
+        "number": 8,
+        "startedAt": "2026-11-14T00:43:48Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T00:49:28Z",
+        "conclusion": "success",
+        "name": "Race-check role mutations, durable delivery and email queues against PostgreSQL",
+        "number": 9,
+        "startedAt": "2026-11-14T00:47:35Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T00:49:58Z",
+        "conclusion": "success",
+        "name": "Race-check active voice process SIGTERM against mutual TLS PostgreSQL",
+        "number": 10,
+        "startedAt": "2026-11-14T00:49:28Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T00:49:58Z",
+        "conclusion": "success",
+        "name": "Stop active-process PostgreSQL",
+        "number": 11,
+        "startedAt": "2026-11-14T00:49:58Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T00:49:58Z",
+        "conclusion": "success",
+        "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+        "number": 19,
+        "startedAt": "2026-11-14T00:49:58Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T00:49:58Z",
+        "conclusion": "success",
+        "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+        "number": 20,
+        "startedAt": "2026-11-14T00:49:58Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T00:49:58Z",
+        "conclusion": "success",
+        "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "number": 21,
+        "startedAt": "2026-11-14T00:49:58Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T00:49:59Z",
+        "conclusion": "success",
+        "name": "Stop containers",
+        "number": 22,
+        "startedAt": "2026-11-14T00:49:58Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T00:49:59Z",
+        "conclusion": "success",
+        "name": "Complete job",
+        "number": 23,
+        "startedAt": "2026-11-14T00:49:59Z",
+        "status": "completed"
+      }
+    ],
+    "url": "https://github.com/alfapars-exe/discordd/actions/runs/43535987403/job/132264989679"
+  },
+  "sanitized_evidence": [
+    "2026-11-14T00:43:07.9013980Z ##[group]Run go build -o \"$RUNNER_TEMP/active-voice-server\" .",
+    "2026-11-14T00:43:07.9014409Z \u001b[36;1mgo build -o \"$RUNNER_TEMP/active-voice-server\" .\u001b[0m",
+    "2026-11-14T00:44:00.9523666Z     active_voice_process_postgres_test.go:42: ACTIVE_VOICE_SIGNAL_RESULT credits=1 pending=0 applied=1 usage=2 ledger=2",
+    "2026-11-14T00:44:01.2626008Z     active_voice_process_postgres_test.go:42: ACTIVE_VOICE_SIGNAL_RESULT credits=1 pending=0 applied=1 usage=2 ledger=2",
+    "2026-11-14T00:44:01.2627169Z     active_voice_process_postgres_test.go:42: ACTIVE_VOICE_RESTART_RESULT retained_credit=true",
+    "2026-11-14T00:49:28.4844326Z \u001b[36;1mgo build -race -o \"$HICHAT_ACTIVE_VOICE_SERVER_BINARY\" .\u001b[0m",
+    "2026-11-14T00:49:28.4844712Z \u001b[36;1mgo test -race . -run '^TestActiveVoiceProcessPostgresSignal$' -count=1 -timeout=2m\u001b[0m"
+  ],
+  "scope": "Separate production server binaries built by go build and go build -race, normal and race parent tests using explicit binary path with no test-executable fallback. Active SIGTERM and full-row-equal restart passed over owned mutual-TLS PostgreSQL.",
+  "limitations": [
+    "whole workflow not yet terminal at snapshot",
+    "not published release/installer acceptance",
+    "not actual LiveKit eviction or physical media",
+    "not pre-enqueue crash proof"
+  ],
+  "whole_workflow_status": "in_progress"
+}

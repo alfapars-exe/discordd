@@ -1,0 +1,18 @@
+{
+  "source": "a347a8ca",
+  "serverSource": "4ad77d3e",
+  "client": {
+    "command": "npm test -- --reporter=dot",
+    "filesPassed": 477,
+    "testsPassed": 4907,
+    "testsSkipped": 1,
+    "durationSeconds": 135.55,
+    "exitCode": 0
+  },
+  "build": {
+    "command": "npm run build",
+    "exitCode": 0,
+    "warning": "Existing chunks larger than 500 kB; no warning threshold change"
+  },
+  "scope": "Client product source unchanged through docs-only 5cb415ba. This is local validation, not new-head CI or whole-project acceptance."
+}

@@ -1,0 +1,30 @@
+{
+  "scope": "RF11 administrative service composition extraction",
+  "owners": [
+    "AdminUser",
+    "AdminServer",
+    "LiveKitAdmin"
+  ],
+  "preserved": [
+    "Same database and user/server/livekit/channel repositories",
+    "Voice revocation and active voice provider explicit composite",
+    "Same auth user-cache invalidator",
+    "Configured email and upload cleanup paths",
+    "Hetzner token and allow-instance-creation flag from same config"
+  ],
+  "ordering": "LiveKit admin moved later into administration group; inspected constructor creates fields/HTTP client, no background worker. Other constructors retain fields.",
+  "checks": {
+    "root": "PASS ServiceInitialization, routes/callbacks, real permission/auth-cache and friendship-DM integration, 2.845s",
+    "service_initial_filter": "AdminUser/AdminServer/LiveKitAdmin matched no tests; excluded from acceptance",
+    "service_explicit": "PASS six top-level PlatformBanUser/PlatformUnbanUser/HardDeleteUser/SetPlatformAdmin and filesystem cleanup cases, 0.588s, no skips",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_manifest": "PASS 50 exact records"
+  },
+  "remaining": [
+    "Mandatory and optional email input validation for new group",
+    "AdminServer/LiveKitAdmin direct behavior acceptance not proven by user-administration tests",
+    "Other domains and full RF11/RF01-RF30 acceptance"
+  ],
+  "ci": "43655342717 on 0eb3744f still live without observed failures; local extraction excluded."
+}

@@ -1,3 +1,4 @@
+import { redirectFixture } from "./redirect-test-fixture";
 /**
  * Uses node:test — zero new dependencies, same harness as resolve-path.test.ts.
  * api-proxy.ts deliberately imports nothing from `electron` so these run
@@ -202,4 +203,11 @@ test("rethrows upstream network failures so the renderer sees a fetch error", as
     () => proxyApiRequest(new Request("app://hichat/api/health"), impl),
     /ERR_CONNECTION_REFUSED/
   );
+});
+
+test("a proxied API read cannot follow an upstream redirect into a second server", async t => {
+  const { origin, targetRequests } = await redirectFixture(t);
+  const request = new Request("app://hichat/api/health", {headers: {[UPSTREAM_HEADER]: origin}});
+  await assert.rejects(() => proxyApiRequest(request, fetch, {allowLoopback: true}));
+  assert.equal(targetRequests(), 0);
 });

@@ -1,0 +1,125 @@
+{
+  "sourceCommit": "221f19df",
+  "serverBinarySHA256": "8bcef137d8a5acf1a8d785e8140744ed9c8b26d613790e82880bf85e99972ebf",
+  "environment": {
+    "go": "go version go1.27.4 windows/amd64",
+    "k6": "k6.exe v2.4.0 (commit/dd9395906d, go1.26.11, windows/amd64)",
+    "database": "PostgreSQL18.6, loopback verified server TLS and required client certificate",
+    "source": "Immutable Git archive; normal Windows CGO0 Go backend; fixture TLS freshness fix fd0a7c12",
+    "instrumentation": "Authenticated synthetic platform-admin pprof plus owned-process and DB activity snapshots; no forced GC; 46 samples"
+  },
+  "profile": {
+    "vus": 20,
+    "users": 20,
+    "rampUp": "10s",
+    "hold": "60s",
+    "rampDown": "10s",
+    "holdSeconds": 75,
+    "legacyToken": false
+  },
+  "result": {
+    "checksPass": 100,
+    "checksFail": 0,
+    "handshakes": 20,
+    "completedSessions": 20,
+    "heartbeatAcks": 40,
+    "connectingP95Ms": 3.147585,
+    "sessionP95Ms": 75003.650635,
+    "resourceSamples": {
+      "baseline": {
+        "samples": 3,
+        "goroutinesMedian": 51,
+        "goroutinesMax": 51,
+        "readPumpsMax": 0,
+        "writePumpsMax": 0,
+        "heapAllocMaxBytes": 6357872,
+        "workingSetMaxBytes": 37838848,
+        "dbConnectionsMax": 3,
+        "sampledLockWaitsMax": 0,
+        "idleInTransactionMax": 0
+      },
+      "load": {
+        "samples": 37,
+        "goroutinesMedian": 111,
+        "goroutinesMax": 112,
+        "readPumpsMax": 20,
+        "writePumpsMax": 20,
+        "heapAllocMaxBytes": 10225480,
+        "workingSetMaxBytes": 45850624,
+        "dbConnectionsMax": 3,
+        "sampledLockWaitsMax": 0,
+        "idleInTransactionMax": 1
+      },
+      "recovery": {
+        "samples": 6,
+        "goroutinesMedian": 51.0,
+        "goroutinesMax": 52,
+        "readPumpsMax": 0,
+        "writePumpsMax": 0,
+        "heapAllocMaxBytes": 10104784,
+        "workingSetMaxBytes": 45912064,
+        "dbConnectionsMax": 3,
+        "sampledLockWaitsMax": 0,
+        "idleInTransactionMax": 0
+      }
+    },
+    "allSampledApplicationConnectionsHaveTLSAndClientDN": true,
+    "serverErrorLines": 0
+  },
+  "cleanup": {
+    "databaseDropped": true,
+    "ownedServerExited": true,
+    "ownedContainerAndImageRemoved": true,
+    "ownedPrivateConfigAndClientCertificateFilesRemoved": true
+  },
+  "fixtureFailure": {
+    "baseline": "Cached Docker RUN certificate layer reused; server cert expired Nov15 17:27:55 UTC, first load never started",
+    "fix": "fd0a7c12 rebuilds expiring credentials with --no-cache; new server cert Nov16–Nov18; verify-full/client-cert requirements retained",
+    "collectorCorrection": "Second pre-load attempt failed because collector expected StackInuse; corrected using Go1.27 SDK pprof Stack used/allocated format; no server change"
+  },
+  "samples": {
+    "artifact": "implementation\\verification\\refactor-ws-20-session-samples-2026-11-16.json",
+    "sha256": "9167c4b7bc02ba3887a62b034083465ea2cb06aa1b39f6aec0337cb20c0cf556",
+    "scopeNormalization": "Only scope wording corrected: effective guild memberships were not independently queried. Numeric samples/results remain identical to the original private report."
+  },
+  "evidence": {
+    "report": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-pg-tls-test-1270ca27dfa049df88205ce524953171\\capacity-report.json",
+      "sha256": "f9ae33c103ab5f091487290d72f019a330dc156861a1e83c36a938fb3ed27672"
+    },
+    "k6Summary": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-pg-tls-test-1270ca27dfa049df88205ce524953171\\capacity-k6-summary.json",
+      "sha256": "1a5cfba3b6ad7a900f6e5a88cdd21a7e40b1b8012d66345fdbe9ce39b0859a50"
+    },
+    "serverLog": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-pg-tls-test-1270ca27dfa049df88205ce524953171\\capacity-server.log",
+      "sha256": "5eb527743ba83fb59d93715e3ee3c19b9b229fd56287dcff5d6e5e0b23f53942"
+    },
+    "runner": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-capacity-runner-20261116.mjs",
+      "sha256": "f6c90f79db7285ad3e2b9c41bf95dfdaaefb761959281654a35c90f6d1029cfe"
+    },
+    "launcher": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-capacity-launch-20261116.ps1",
+      "sha256": "aec03e420406691234d7fdb0bff522674f5b9b705bead5ea2903dc648430e1da"
+    },
+    "expiredCertDates": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-capacity-cached-cert-dates.log",
+      "sha256": "88b65bcb366d41d79fcdc579c5c324f3caf425183f4f9c2d32c42ab5ff459bd7"
+    },
+    "freshCertDates": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-pg-tls-test-1270ca27dfa049df88205ce524953171\\server-cert-dates.log",
+      "sha256": "2418498e69e14cf4f69159f604b79b4b5cae40c5cd54559d7359549fa8fb0b19"
+    }
+  },
+  "limits": [
+    "One 20-session local profile, not capacity/SLA or long-soak acceptance",
+    "No channel traffic, fan-out, slow consumers or media provider load",
+    "Profiling and process/DB sampling overhead included; CPU not pinned; other developer Docker services remain running",
+    "Load users were seeded through direct users inserts; no guild/channel workload was configured. Effective memberships were not independently queried; a separate synthetic platform admin sampled profiles.",
+    "Heap is observed without forced GC; idle pool/heap retention is not asserted to return byte-for-byte to baseline",
+    "Sampled DB activity is not query-count/pool-wait instrumentation; one transient idle-in-transaction observation, none in recovery",
+    "Heap/working set remained above initial baseline; no memory-baseline return or soak acceptance claimed",
+    "Not a before/after throughput improvement; no RF29/project completion claim"
+  ]
+}

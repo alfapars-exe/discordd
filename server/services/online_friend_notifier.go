@@ -68,11 +68,26 @@ type OnlineFriendNotifier interface {
 	ObserveOffline(string)
 }
 
+// OnlineFriendPresenceNotifier owns the bounded, lifecycle-aware presence
+// transition entry point. Callers invoke it only after committing presence.
+type OnlineFriendPresenceNotifier interface {
+	NotifyOnlinePresence(string) error
+	ObserveOffline(string)
+}
+
+// OnlineFriendNotifierRuntime gives the composition root explicit cleanup ownership.
+// Request consumers continue to use the narrower OnlineFriendNotifier interface.
+type OnlineFriendNotifierRuntime interface {
+	OnlineFriendNotifier
+	OnlineFriendPresenceNotifier
+	Stop()
+}
+
 type onlineFriendNotifier struct {
 	users         onlineFriendUserReader
 	prefs         onlineFriendPreferenceReader
 	friends       onlineFriendRelationshipReader
-	notifications repository.NotificationRepository
+	candidates    repository.OnlineFriendCandidateReader
 	guardedWriter repository.OnlineFriendNotificationRepository
 	presence      onlineFriendPresenceReader
 	hub           ws.Broadcaster
@@ -87,15 +102,15 @@ func NewOnlineFriendNotifier(
 	users onlineFriendUserReader,
 	prefs onlineFriendPreferenceReader,
 	friends onlineFriendRelationshipReader,
-	notifications repository.NotificationRepository,
+	writer repository.OnlineFriendNotificationRepository,
 	presence onlineFriendPresenceReader,
 	hub ws.Broadcaster,
-) OnlineFriendNotifier {
-	guardedWriter, _ := notifications.(repository.OnlineFriendNotificationRepository)
+	candidates repository.OnlineFriendCandidateReader,
+) OnlineFriendNotifierRuntime {
 	lifecycle, stop := context.WithCancel(context.Background())
 	return &onlineFriendNotifier{
 		users: users, prefs: prefs, friends: friends,
-		notifications: notifications, guardedWriter: guardedWriter, presence: presence, hub: hub,
+		candidates: candidates, guardedWriter: writer, presence: presence, hub: hub,
 		epochs: make(map[string]*onlineFriendEpoch), lifecycle: lifecycle, stop: stop,
 	}
 }
@@ -158,9 +173,8 @@ func (n *onlineFriendNotifier) NotifyOnline(ctx context.Context, actorID string)
 
 	var friends []models.FriendshipWithUser
 	bulk := make(map[string]repository.OnlineFriendCandidate)
-	bulkReader, hasBulk := n.notifications.(interface {
-		ListOnlineFriendCandidates(context.Context, string) ([]repository.OnlineFriendCandidate, error)
-	})
+	bulkReader := n.candidates
+	hasBulk := bulkReader != nil
 	if hasBulk {
 		candidates, loadErr := bulkReader.ListOnlineFriendCandidates(ctx, actorID)
 		if loadErr != nil {

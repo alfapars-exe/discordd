@@ -1,0 +1,89 @@
+package services
+
+import (
+	"github.com/argeinfina/hichat/pkg/logx"
+	"sync"
+	"time"
+)
+
+// voiceOperations closes root admission while allowing already admitted
+// operations to register child credits and media cleanup before releasing their own slot.
+// The final slot closes done, so child Add never races a zero-count Wait.
+type voiceOperations struct {
+	mu      sync.Mutex
+	closing bool
+	active  int
+	done    chan struct{}
+}
+
+func (g *voiceOperations) begin() (func(), bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.closing {
+		return nil, false
+	}
+	if g.done == nil {
+		g.done = make(chan struct{})
+	}
+	g.active++
+	return g.finish, true
+}
+func (g *voiceOperations) child(work func()) bool {
+	g.mu.Lock()
+	if g.closing && g.active == 0 {
+		g.mu.Unlock()
+		return false
+	}
+	if g.done == nil {
+		g.done = make(chan struct{})
+	}
+	g.active++
+	g.mu.Unlock()
+	logx.Go("voice-operation-child", func() { defer g.finish(); work() })
+	return true
+}
+func (g *voiceOperations) finish() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.active--
+	if g.closing && g.active == 0 {
+		close(g.done)
+	}
+}
+func (g *voiceOperations) closeAndWait() {
+	g.mu.Lock()
+	if g.done == nil {
+		g.done = make(chan struct{})
+	}
+	if !g.closing {
+		g.closing = true
+		if g.active == 0 {
+			close(g.done)
+		}
+	}
+	done := g.done
+	g.mu.Unlock()
+	<-done
+}
+
+func (s *voiceService) ShutdownUsageProducers() { s.operations.closeAndWait() }
+
+func (s *voiceService) dispatchUsageCredit(sessionID, instanceID string, isCloud bool, joinedAt, endedAt time.Time) {
+	if !s.operations.child(func() { s.creditUsageSession(sessionID, instanceID, isCloud, joinedAt, endedAt) }) {
+		// A committed revocation can finish after the terminal owner drains.
+		// Preserve its bounded accounting handoff in caller ownership rather
+		// than dropping the credit or launching an untracked goroutine. Such
+		// late callers must have released s.mu, as disconnectVoiceLocked does.
+		s.creditUsageSession(sessionID, instanceID, isCloud, joinedAt, endedAt)
+	}
+}
+
+// dispatchDisconnectCleanup joins asynchronous disconnect work while admission
+// is open. Committed membership/permission revocations may arrive after terminal
+// shutdown; their cleanup stays synchronous in that caller rather than escaping
+// the closed owner or being silently dropped. Call only after releasing s.mu.
+func (s *voiceService) dispatchDisconnectCleanup(work func()) {
+	if !s.operations.child(work) {
+		work()
+	}
+}

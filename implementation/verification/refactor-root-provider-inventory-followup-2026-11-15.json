@@ -1,0 +1,39 @@
+{
+  "source": "4eec9daf5f9482a80ec08064478e1bd1ea256fb5",
+  "correction": "Previous remaining direct-constructor inventory focused on local assignments and was incomplete. Include constructors inside returned Services literal.",
+  "direct_repository_fields": [
+    "ServerEvent",
+    "Server",
+    "Role",
+    "Channel",
+    "Invite",
+    "Friendship",
+    "ServerMute",
+    "ChannelMute",
+    "LinkPreview",
+    "Badge",
+    "EmailCampaign",
+    "AccountAssetCleanup",
+    "Reminder",
+    "ProfileShowcase",
+    "ServerEventDelivery",
+    "FriendAnniversary"
+  ],
+  "returned_literal_owners": [
+    "EmailCampaign",
+    "AccountAssetCleanup",
+    "Backup",
+    "ReminderWorker",
+    "ProfileShowcase",
+    "ServerEventWorker",
+    "FriendAnniversaryWorker"
+  ],
+  "next": "Add bounded root composition validation before resource allocation, covering nil and typed nil providers; preserve optional config and worker startup semantics.",
+  "ownership_note": "Backup constructor owns lifecycle context; worker constructors must be inspected for allocation/start distinction. Do not infer all ownership from variable assignments.",
+  "acceptance": "RF11 still incomplete; source inventory is not runtime proof.",
+  "live_verification": {
+    "session": 81657,
+    "source": "4eec9daf5f9482a80ec08064478e1bd1ea256fb5",
+    "status": "running"
+  }
+}

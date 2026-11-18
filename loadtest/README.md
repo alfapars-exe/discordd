@@ -1,5 +1,8 @@
 # WebSocket connect load test (k6)
 
+For the repository-owned Windows PostgreSQL workload and independent history
+audit, see [LOCAL_PROFILE.md](LOCAL_PROFILE.md).
+
 `ws_connect.js` opens many concurrent WebSocket connections against the
 HiChat server's real connect path — `POST /api/auth/login` ->
 `POST /api/auth/ws-ticket` -> `GET /ws?ticket=...` — holds each connection
@@ -121,3 +124,57 @@ the *connection* side end-to-end — real HTTP auth, real ticket issuance,
 real WS upgrades, and real concurrent connection volume — which the
 in-process benchmark deliberately does not attempt (it constructs `*Client`
 values directly rather than going through the network).
+
+## Contract verification
+
+Run `node --experimental-vm-modules --test loadtest/ws_connect.test.mjs` from the repository root. CI executes this dependency-free suite with mocked k6 imports while evaluating the actual load script. These tests verify the current `success/data` response envelope, required nonempty string credentials, zero-session failure, early close/connect failure, one measured connection per VU and numeric configuration. They are not a real k6 or server throughput result.
+
+Each VU opens one measured connection. Subsequent executor iterations sleep for one second without logging in again. `ws_handshakes_succeeded` and `ws_sessions_succeeded` must each match `WS_VUS`; a run that never opens a WebSocket cannot pass on successful HTTP checks alone. Every session must complete its configured hold without socket errors. The scenario allows up to `HOLD_SECONDS + 5` seconds of graceful stop/ramp-down for in-flight connections. Short smoke profiles below the 30-second heartbeat interval do not establish heartbeat acceptance.
+
+Example bounded local smoke: `WS_VUS=1 USER_COUNT=1 RAMP_UP=1s HOLD=36s RAMP_DOWN=1s HOLD_SECONDS=35`. Use an isolated disposable backend and a freshly seeded local account; pass its password through the environment. This is contract/liveness evidence, not a capacity/SLA claim. No production endpoint should be used for this profile.
+
+## Bounded multi-account resource profile
+
+A recorded local profile uses 20 distinct seeded ordinary accounts, the real login/ticket path, `WS_VUS=20 USER_COUNT=20 RAMP_UP=10s HOLD=60s RAMP_DOWN=10s HOLD_SECONDS=75`. Supply `PASSWORD` through the environment and set `USERNAME_PREFIX` to the owned fixture's prefix. Limits remain enabled. Every connection spans two 30-second heartbeats; expect exactly 20 completed sessions and 40 ACKs. Authentication and session checks remain mandatory.
+
+The November 16 diagnostic used a normal Windows Go1.27.4 backend built from immutable `221f19df`, k6 v2.4.0 and an isolated PostgreSQL18.6 database with verified mutual TLS. A separate synthetic platform admin sampled pprof; load users were not platform admins. It passed 100 checks, observed 20 simultaneous read/write pump pairs and zero pairs in all six recovery samples. Samples and limitations are in `implementation/verification/refactor-ws-20-session-profile-2026-11-16.json` and its companion samples artifact.
+
+This is one connect/heartbeat resource profile, not a throughput/SLA or extended-soak result. No guild/channel workload, message fan-out, slow-consumer or media traffic was applied; effective memberships were not separately queried. Profiling overhead and other developer services were present; CPU was not pinned. Goroutine medians returned to their observed baseline, but heap/working set did not; no forced GC or memory-baseline acceptance is claimed. Database activity sampling is not a replacement for query-count and pool-wait measurements.
+
+## Message fan-out accounting contracts
+
+`fanout-observer.mjs` is a portable Node/k6 receiver-accounting component for the next message fan-out profile. It accepts only the selected channel/probe, checks each authoritative actor against the payload sender, and requires every sender/sequence slot exactly once with unique message IDs. Missing, duplicate or matching malformed deliveries prevent completeness; late duplicates invalidate earlier complete snapshots. Reordering is counted separately. State is bounded to 1,000 senders and 10,000 expected messages per receiver. Sparse sender lists are rejected before any network work.
+
+Run all load-test contracts with `node --experimental-vm-modules --test loadtest/*.test.mjs`. The observer was also executed in k6 v2.4.0 with two offline checks. The optional producer described below now adds message traffic to `ws_connect.js`. A real shared-guild fixture and HTTP/WebSocket/history reconciliation remain a separate acceptance gate. No actual fan-out capacity result is claimed by these unit/runtime contracts.
+
+The observer is the strict, fault-free load-profile criterion. It does not promise exactly-once transport under reconnect, outbox retry or process failure; those scenarios require separate replay/idempotency acceptance.
+
+
+## Optional local message producer
+
+`ws_connect.js` now enables message publishing when any nonempty `FANOUT_*` setting is supplied. Configure all of `FANOUT_SERVER_ID`, `FANOUT_CHANNEL_ID`, `FANOUT_PROBE_ID`, and `FANOUT_USER_IDS` (a JSON array in the same order as the seeded username suffixes). The base URL must be loopback and `USER_COUNT == WS_VUS == userIds.length`. Every account must already belong to the selected disposable plaintext channel with read/send access. Do not use a real user channel.
+
+Defaults are five messages per sender, a 20-second delay after each socket opens, and 2,000 milliseconds between messages. Override with `FANOUT_MESSAGES_PER_SENDER`, `FANOUT_START_DELAY_SECONDS`, and `FANOUT_MESSAGE_INTERVAL_MS`. The start delay must exceed the ramp duration by five seconds; the final scheduled send must precede socket closure by five seconds. This is a bounded fault-free profile: duplicate delivery fails this benchmark, without asserting exactly-once delivery across reconnects or crashes.
+
+HTTP responses must be 201 with the correct authoritative actor, channel and message ID. Each receiver must see every expected sender/sequence pair once. Aggregate counters require all sends, all deliveries and all receivers; zero duplicates and malformed matching events are mandatory. Each `FANOUT_RECEIPT` log contains a SHA-256 digest of canonical sender/sequence/message-ID tuples and the sender's HTTP acknowledgement IDs. A surrounding fixture must still compare these digests against persisted HTTP history. The bounded November16 run below completes this comparison. Passing mocked contracts or `k6 inspect` alone does not establish end-to-end fan-out acceptance.
+
+Run all contracts with `node --experimental-vm-modules --test loadtest/*.test.mjs`. These cover the producer, receiver, script wiring, history reconciliation and profile lifecycle. k6 v2.4.0 successfully evaluates the enabled profile with `k6 inspect` and explicit synthetic `-e` settings; inspect performs no network workload.
+
+
+The recorded plaintext message profile used 20 ordinary users joined through the real invite API, 5 messages each and 75-second sockets. It passed 240 checks: 100 accepted messages, 2,000 unique deliveries, 20 complete receivers, zero duplicate/invalid deliveries. All receiver digests matched the 100-message HTTP history; both pagination flags were false. All six recovery samples had zero read/write pumps. Backend88892ed1 is unchanged through load fix a03ea5d4. The initial actual run caught the wrong mocked envelope (`data` instead of Go's `d`); fail-first regression and corrected results are recorded in `implementation/verification/refactor-fanout-20-session-profile-2026-11-16.json`. This is bounded correctness/resource evidence; capacity, slow-consumer, query/pool-wait and long-soak acceptance remain open.
+
+
+`fanout-history.mjs` supplies asynchronous, bounded reconciliation for PostgreSQL profiles. Inject authenticated `fetchPage({before, limit})` returning the existing MessagePage envelope. REST pages are ascending; the first row is the oldest cursor for the next request. The default order is PostgreSQL's positive, safe `source_sequence`, matching `postgresMessageRepo`; concurrent transaction timestamps may move backward. For SQLite history, pass the explicit sixth argument `"created_at_id"`: RFC3339 timestamps retain nanosecond precision and normalize offsets, with ID ties checked. Unknown orders and missing/invalid PostgreSQL positions fail; there is no automatic timestamp fallback. Both modes reject page overlap, duplicate/foreign/malformed messages and unexpected pagination, then compare every receiver digest and HTTP acknowledgement with persisted IDs. Receiver-only success cannot prove persistence. The helper does not log in or grant permissions.
+
+Client message IDs are SHA-256 digests of the probe, sender and sequence tuple. This preserves repeatable retry IDs while respecting the server's 128-character limit even at the profile's maximum identifier lengths. A fail-first regression covers that limit. The original 75-second runtime receipt remains bound to its historical load commit; it does not retrospectively validate later producer changes.
+
+
+## Profile failure reporting
+
+Node-based fixture runners can use `runProfileWithReport` from `profile-lifecycle.mjs` to run the workload, join owned-resource cleanup, and then persist the report. Supply `run`, `cleanup`, `writeReport`, and a mutable `report` object. A single failure keeps its original identity; multiple failures are thrown together as `AggregateError.errors` in workload/cleanup/report order. The report records phase names rather than exception contents. A report-write failure still rejects the run, including after successful traffic.
+
+The caller must verify resource ownership, attempt and join each cleanup operation even if another fails, and provide sufficient disk space before starting. This helper does not manage processes, databases, permissions, disk capacity or retries. Six lifecycle contracts include the historical ENOSPC masking pattern as a negative control. They do not establish that the interrupted 5,800-message profile completed. Subsequent isolated runs completed the 5,800-message workload and independently matched all 116,000 healthy deliveries, 58 HTTP history pages, 20 receiver digests and 5,800 sender acknowledgement IDs. See `implementation/verification/refactor-fanout-5800-complete-profile-2026-11-16.json` and `refactor-fanout-integrated-5800-profile-2026-11-16.json` for their exact source revisions and resource observations. Those bounded runs do not establish capacity, natural slow-consumer isolation or long-soak acceptance.
+
+For a non-reading local peer, see [slow-consumer/README.md](slow-consumer/README.md). That helper keeps the server reader live using unsolicited pongs and application heartbeats without draining output; its contract tests are separate from a real server/PostgreSQL workload.
+
+The bounded natural TCP profile on `dda2c221` subsequently ran twenty healthy users alongside one non-reading peer. It observed 21→20 server pump pairs while all healthy sockets completed, independently reconciled all 5,800 messages/116,000 deliveries, and recovered to zero pumps. See `implementation/verification/refactor-natural-slow-consumer-profile-2026-11-16.json` for source hashes, timing, cleanup and limitations. The fixture did not instrument whether send-queue overflow or the existing write deadline removed the slow peer. This single run does not establish capacity, repeatability variance, churn or long-soak acceptance.

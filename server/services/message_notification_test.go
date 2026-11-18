@@ -76,7 +76,7 @@ func notificationCreateFixture(t *testing.T, perms map[string]models.Permission)
 				return models.PermSendMessages | models.PermReadMessages | models.PermViewChannel, nil
 			},
 		},
-		nil, notifRepo,
+		nil, notifRepo, nil,
 	)
 	return svc, &created, &broadcastTo
 }

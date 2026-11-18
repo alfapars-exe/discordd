@@ -1,0 +1,41 @@
+{
+  "date": "2026-11-15",
+  "serverSourceCommit": "96ee4cad",
+  "sources": {
+    "server/repository/sqlite_channel_message_notification_queue.go": "46ca0c8656cbe8d1edec7611bb7cde9545b650df832862afe6f3004214cf215b",
+    "server/repository/sqlite_channel_message_notification_queue_test.go": "9492ac6eb135965ab452590aa5c66b5257af3fe1566c16e24c20dfa2585699ef",
+    "scripts/run-postgres-tests.py": "3de1f4305db6a5ba57ca1b208f09d035df6b2e0c71e4163f69fb39fd3701cac9",
+    "scripts/test_run_postgres_tests.py": "27427f683e06619f0206e4df76a1bc70c176be16c2d71d280adb9a6563862fc0"
+  },
+  "before": {
+    "sqlite": "numeric1 admitted work/recipients/notification without JSON boolean opt-in",
+    "postgres": "stringtrue and numeric1 admitted recipients;invalid string,array,object caused SQLSTATE22P02 in Enqueue/NextBatch/CommitBatch"
+  },
+  "fix": "Use actual JSON type/value equality in all three queue stages:SQLite json_type=true and PostgreSQL JSONB=true,not text-to-boolean cast",
+  "regressionCases": [
+    "missing",
+    "false",
+    "string_true",
+    "numeric_one",
+    "invalid_string",
+    "array",
+    "object",
+    "null",
+    "invalid_json"
+  ],
+  "validation": {
+    "sqlite": "6root tests+9subcases,PASS5.165s,no skips",
+    "postgresWindows": "same selected queue family,PASS11.235s before final mixed-recipient assertion",
+    "postgresLinuxRace": "immutable96ee4cad,Go1.27.4 CGO1,PostgreSQL18.6 verify-full mTLS;6root+9subcases PASS10.772s,no skips/no race report",
+    "mixedRecipient": "every malformed-value case retains a separate valid opted-in/readable recipient",
+    "nativeGate": "missing/wrong-package required test regression failed before fix;16runner tests pass",
+    "productionBrowser": "notification and role focused profile5/5 passed1.2m after separate nullable-empty-list fixture fix"
+  },
+  "cleanup": "owned PG container,image and anonymous data volume removed after terminal test completion;race container auto-removed",
+  "limits": [
+    "one opt-in query family,not full RF05 or queue policy audit",
+    "broader current-source CI still required",
+    "focused browser run first exposed separate fixture-null handling failure;recorded independently",
+    "physical/media/native acceptance remains open"
+  ]
+}

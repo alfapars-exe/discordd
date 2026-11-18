@@ -159,6 +159,7 @@ func TestCosmeticHandler_BodyExactly4KiBPlusOneRejected(t *testing.T) {
 
 func TestCosmeticHandler_RateLimited(t *testing.T) {
 	limiter := ratelimit.NewMessageRateLimiter(1, time.Minute, 30*time.Second)
+	t.Cleanup(limiter.Stop)
 	h := newCosmeticHandler(limiter)
 	body := `{"scope":"global","slots":{"avatar_frame":"b_frame_aurora"}}`
 

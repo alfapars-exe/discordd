@@ -1,0 +1,13 @@
+{
+  "root": "G:\\hichat-refactor-20261116-anoknpqz\\member-sql-negative-h3z9qmn5",
+  "sourceCommit": "5fb756d17929522dc98e646c1c34cb84a96b5fe8",
+  "mutation": "One redundant GetByID per returned member before bulk enrichment; isolated archived source only",
+  "exitCode": 1,
+  "observed": [
+    "members=1 SQL=5 want=4",
+    "members=1001 SQL=1005 want=4"
+  ],
+  "result": "Expected rejection; no production fix applied",
+  "negativeLogSha256": "6a7199a67ae1d218acac492776675ef3f7e42e37ba03c18a9599e3e89c113e24",
+  "scope": "Isolated archived source; no checked-out production mutation. Confirms QueryRowContext N+1 calls are observed by the real-service contract."
+}

@@ -1,0 +1,97 @@
+{
+  "source": "fdcd2ac092169e55eeebada5b5556ae82ac4d933",
+  "run": 43576239026,
+  "job": 132390988411,
+  "status": "completed",
+  "conclusion": "success",
+  "summary_lines": [
+    "16 passed (3.7m)",
+    "3 passed (1.2m)",
+    "2 passed (1.1m)",
+    "1 passed (49.8s)",
+    "2 passed (22.0s)"
+  ],
+  "steps": [
+    {
+      "name": "Set up job",
+      "conclusion": "success"
+    },
+    {
+      "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+      "conclusion": "success"
+    },
+    {
+      "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+      "conclusion": "success"
+    },
+    {
+      "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+      "conclusion": "success"
+    },
+    {
+      "name": "Install client deps",
+      "conclusion": "success"
+    },
+    {
+      "name": "Install e2e deps",
+      "conclusion": "success"
+    },
+    {
+      "name": "Verify disposable E2E isolation guards",
+      "conclusion": "success"
+    },
+    {
+      "name": "Install Playwright Chromium and WebKit",
+      "conclusion": "success"
+    },
+    {
+      "name": "Start isolated PostgreSQL with mutual TLS",
+      "conclusion": "success"
+    },
+    {
+      "name": "Chromium production application suite",
+      "conclusion": "success"
+    },
+    {
+      "name": "Recover encrypted history in a fresh production database",
+      "conclusion": "success"
+    },
+    {
+      "name": "Verify account preference isolation in a fresh production database",
+      "conclusion": "success"
+    },
+    {
+      "name": "WebKit production client smoke",
+      "conclusion": "success"
+    },
+    {
+      "name": "Recover account from delivered email in a fresh database",
+      "conclusion": "success"
+    },
+    {
+      "name": "Stop isolated PostgreSQL",
+      "conclusion": "success"
+    },
+    {
+      "name": "Upload browser report and retry evidence",
+      "conclusion": "success"
+    },
+    {
+      "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+      "conclusion": "success"
+    },
+    {
+      "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+      "conclusion": "success"
+    },
+    {
+      "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+      "conclusion": "success"
+    },
+    {
+      "name": "Complete job",
+      "conclusion": "success"
+    }
+  ],
+  "limits": "Strict browser-job proof forfdcd only; later friendship queue/cycle changes require own CI. Overall Server CI still running."
+}

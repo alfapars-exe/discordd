@@ -1,0 +1,31 @@
+{
+  "date": "2026-11-14",
+  "source_revision": "81a6c385b04b4b2e71a9a91adec4d46d275de61f",
+  "scope": "Prepare actual process active voice SIGTERM validation; execution did not reach fixture creation",
+  "compiled": {
+    "linux_server_sha256": "d98110d09d2706e7e02fd12592f32b13e935a76f8e554224891fc63c51b93c1e",
+    "linux_probe_sha256": "62bde3f7843da83f56c0a4dc06f6d75f7bbfb312ab10c78f4016e233b7baf0af",
+    "probe_source_sha256": "3da7ab11fda95b2f358830527c4d3ea2b3712b3e76972ed2ca06b40598e78163",
+    "docker_build_exit": 0
+  },
+  "runtime": {
+    "exit": 1,
+    "stage": "docker run for owned QA container",
+    "error": "Docker Desktop Linux Engine API returned HTTP500; independent docker ps also returned HTTP500",
+    "fixture_manifest_created": false,
+    "normal_auth_executed": false,
+    "voice_join_executed": false,
+    "sigterm_executed": false,
+    "cleanup_verification": "pending healthy engine inventory; finally attempted removal of the uniquely named owned container"
+  },
+  "artifacts": {
+    "probe": "active-voice-signal-2026-11-14/probe.go.txt",
+    "harness": "active-voice-signal-2026-11-14/harness.py.txt"
+  },
+  "limitations": [
+    "Compiled artifacts do not establish active process or physical media acceptance.",
+    "No Docker service restart or unrelated process/container mutation performed.",
+    "Retry only after engine health and owned-container cleanup state verified.",
+    "Whole-project refactor goal remains active."
+  ]
+}

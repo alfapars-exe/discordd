@@ -1,0 +1,49 @@
+{
+  "head": "729e8a613c633ff542fd00960f2c81d34a43419d",
+  "database": "PostgreSQL 18.6 dedicated loopback container",
+  "tests": [
+    {
+      "name": "TestMusicControlAtomicRetryAndReplacement",
+      "seconds": 0.6
+    },
+    {
+      "name": "TestMusicControlReceiptFailureRollsBackQueueAndHead",
+      "seconds": 0.61
+    },
+    {
+      "name": "TestMusicControlRetiredPublisherCannotOverwriteReplacement",
+      "seconds": 0.53
+    },
+    {
+      "name": "TestMusicControlSameRevisionSnapshotCannotOverwriteQueue",
+      "seconds": 0.56
+    },
+    {
+      "name": "TestMusicControlServerDeletionCleansReceiptsWithFKsOff",
+      "seconds": 0.62
+    },
+    {
+      "name": "TestMusicRequesterPrivacyCanonicalEveryQueueWrite",
+      "seconds": 0.62
+    },
+    {
+      "name": "TestMusicRequesterPrivacyJSONPreservesUnrelatedBytesAndFields",
+      "seconds": 0
+    },
+    {
+      "name": "TestMusicRequesterPrivacyConcurrentWriteAndDeletionBounded",
+      "seconds": 0.69
+    },
+    {
+      "name": "TestMusicRequesterPrivacyEqualRevisionConfirmationAfterAnonymization",
+      "seconds": 0.68
+    },
+    {
+      "name": "TestSQLiteMusicSessionRoundTripAndDelete",
+      "seconds": 0.51
+    }
+  ],
+  "package_seconds": 5.674,
+  "skipped": 0,
+  "limits": "sslmode=disable, Windows non-race, no physical media or deployed-provider acceptance"
+}

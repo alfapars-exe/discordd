@@ -1,0 +1,28 @@
+{
+  "scope": "RF11 logging composition required providers",
+  "integrations": [
+    "Repositories",
+    "Hub"
+  ],
+  "repositories": [
+    "AuditLog",
+    "User",
+    "Role",
+    "AppLog"
+  ],
+  "regression": "11 invalid-input cases failed before implementation: two missing integrations, typed-nil hub, eight nil/typed-nil repositories.",
+  "fixture_adjustment": "Early configuration-failure fixture now supplies valid hub; otherwise new logging validation intercepts before intended nil-config runtime error. Existing panic-type and worker-release assertions preserved.",
+  "checks": {
+    "valid": "Both production logging owners Stop without explicit Start and tolerate repeated Stop",
+    "root": "PASS logging matrix, ServiceInitialization/routes/callbacks/permission/auth-cache/real friendship-DM, 3.988s",
+    "services": "PASS audit/AppLog tests, 10.894s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_manifest": "PASS 50 exact records at validation stage; fixture changes contain no SQL"
+  },
+  "limits": [
+    "Full resource failure-position and bounded audit drain acceptance remain open.",
+    "Current-source Linux race CI still required; historical 79afb1e9 all 36 SUCCESS separately archived.",
+    "Overall refactor incomplete."
+  ]
+}

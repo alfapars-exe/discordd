@@ -117,6 +117,7 @@ describe("useOpenAtMessage — channel", () => {
     let pending!: Promise<boolean>;
     act(() => { pending = view.result.current.openAtMessage("srv-1", "ch-1", "m-7", "", { isCurrent: () => current }); });
     current = false;
+    expect(fetchAround().mock.calls.at(-1)?.[3]?.isCurrent?.()).toBe(false);
     await act(async () => { finish(false); await pending; });
     expect(await pending).toBe(false);
     expect(setScroll()).not.toHaveBeenCalled();
@@ -153,7 +154,7 @@ describe("useOpenAtMessage — channel", () => {
     // Same server: channel selected + tab named from the channel tree.
     expect(useChannelStore.getState().selectChannel).toHaveBeenCalledWith("ch-1");
     expect(openTab()).toHaveBeenCalledWith("ch-1", "text", "genel", undefined);
-    expect(fetchAround()).toHaveBeenCalledWith("srv-1", "ch-1", "m-7");
+    expect(fetchAround()).toHaveBeenCalledWith("srv-1", "ch-1", "m-7", undefined);
     expect(setScroll()).toHaveBeenCalledWith("m-7");
     expect(addToast()).not.toHaveBeenCalled();
   });

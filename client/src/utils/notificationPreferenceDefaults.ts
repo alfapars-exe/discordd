@@ -1,0 +1,68 @@
+export type NotificationPreferences = {
+  desktopEnabled: boolean;
+  taskbarFlash: boolean;
+  unreadBadge: boolean;
+  /** Account-synced explicit opt-in; absent on legacy accounts means false. */
+  channelMessageNotifications: boolean;
+  reactionMode: "all" | "direct" | "none";
+  soundPack: "classic" | "soft" | "minimal";
+  messageSound: boolean;
+  currentChannelSound: boolean;
+  incomingCallSound: boolean;
+  muteAllSounds: boolean;
+  voiceStreamStartSound: boolean;
+  voiceStreamStopSound: boolean;
+  voiceJoinSound: boolean;
+  voiceLeaveSound: boolean;
+  voiceWatchStartSound: boolean;
+  voiceWatchStopSound: boolean;
+  voiceMuteSound: boolean;
+  voiceUnmuteSound: boolean;
+  voiceDeafenSound: boolean;
+  voiceUndeafenSound: boolean;
+
+  notifyWhenFocused: boolean;
+  /** Delay/coalesce OS desktop toasts; 0 delivers immediately. */
+  desktopDelaySeconds: 0 | 3 | 5 | 10;
+  streamNotifications: boolean;
+  onlineFriendNotifications: boolean;
+  friendAnniversaryNotifications: boolean;
+  profileUpdateNotifications: boolean;
+  upcomingEventNotifications: boolean;
+};
+
+export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
+  desktopEnabled: true,
+  taskbarFlash: true,
+  unreadBadge: true,
+  channelMessageNotifications: false,
+  reactionMode: "direct",
+  soundPack: "classic",
+  messageSound: true,
+  currentChannelSound: false,
+  incomingCallSound: true,
+  muteAllSounds: false,
+  voiceStreamStartSound: true,
+  voiceStreamStopSound: true,
+  voiceJoinSound: true,
+  voiceLeaveSound: true,
+  voiceWatchStartSound: true,
+  voiceWatchStopSound: true,
+  voiceMuteSound: true,
+  voiceUnmuteSound: true,
+  voiceDeafenSound: true,
+  voiceUndeafenSound: true,
+
+  notifyWhenFocused: false,
+  desktopDelaySeconds: 0,
+  streamNotifications: true,
+  onlineFriendNotifications: false,
+  friendAnniversaryNotifications: true,
+  profileUpdateNotifications: true,
+  upcomingEventNotifications: true,
+};
+
+/** Boolean notification fields derive from the same defaults as the UI. */
+export const NOTIFICATION_BOOLEAN_FIELDS = Object.entries(DEFAULT_NOTIFICATION_PREFERENCES)
+  .filter(([, value]) => typeof value === "boolean")
+  .map(([key]) => key);

@@ -1,0 +1,29 @@
+{
+  "scope": "RF11 activity privacy and interaction composition",
+  "owners": [
+    "Preferences",
+    "GameJoin",
+    "ClipRecording"
+  ],
+  "preserved": [
+    "Same GameActivityService owner for policy invalidation and join service",
+    "Same profile invalidator and game activity privacy policy",
+    "Explicit separate fresh and ordinary channel permissions",
+    "Voice admission plus participant/state readers",
+    "Clip consent preferences and AppLogService",
+    "GameJoinOffer callback remains registered in initServices after group return"
+  ],
+  "checks": {
+    "root": "PASS ServiceInitialization/routes/callbacks/permission/auth-cache/real friendship-DM, 3.410s",
+    "services": "PASS game-join/clip/preferences tests, 0.601s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_manifest": "PASS 50 exact records"
+  },
+  "remaining": [
+    "Required provider and repository matrix for activity feature group",
+    "Full callback/lifecycle acceptance and remaining process composition",
+    "RF01-RF30 completion unproven"
+  ],
+  "remote_ci": "43656873218 on 79afb1e9 live without observed failures; local changes excluded."
+}

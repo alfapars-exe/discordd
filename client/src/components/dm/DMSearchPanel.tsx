@@ -1,12 +1,16 @@
-import { sortDMBySource } from "../../utils/dmSourceOrder";
 /** DMSearchPanel — DM message search panel. Same pattern as channel SearchPanel. */
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { useDMStore } from "../../stores/dmStore";
 import { useE2EEStore } from "../../stores/e2eeStore";
 import { useOpenAtMessage } from "../../hooks/useOpenAtMessage";
-import { searchCachedDMMessages } from "../../crypto/keyStorage";
+import { getAuthSessionOwner, subscribeAuthOwnerChanges, getAuthSessionSnapshot, subscribeAuthGenerationChanges } from "../../api/authSessionEvents";
+import { getCachedSearchResetGeneration, subscribeCachedSearchResets } from "../../crypto/cachedSearchEpoch";
+import { runCachedSearch, type CachedSearchPage } from "../../crypto/cachedSearchRunner";
+import { useCachedSearchDeletionPool } from "../../hooks/useCachedSearchDeletionPool";
+import type { SearchDeletionPool, SearchDeletionSpool } from "../../crypto/cachedSearchDeletionSpool";
+import type { CachedSearchSnapshot } from "../../crypto/cachedSearchSnapshot";
 import Avatar from "../shared/Avatar";
 import SpamPreview from "../chat/SpamPreview";
 import GameMessageOrigin from "../chat/GameMessageOrigin";
@@ -18,37 +22,50 @@ const DEBOUNCE_MS = 300;
 /** Results per page */
 const LIMIT = 25;
 
-type DMSearchPanelProps = {
+type DMSearchPanelProps = Readonly<{
   channelId: string;
   onClose: () => void;
-};
+}>;
 
 type SearchState = {
   messages: DMMessage[];
   totalCount: number;
 } | null;
 
-function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
+function DMSearchPanel(props: DMSearchPanelProps) {
+  const encrypted = useDMStore((s) => s.channels.find((c) => c.id === props.channelId)?.e2ee_enabled);
+  const keysReady = useE2EEStore((s) => s.initStatus === "ready");
+  const owner = useSyncExternalStore(subscribeAuthOwnerChanges, getAuthSessionOwner);
+  const generation = useSyncExternalStore(subscribeAuthGenerationChanges, () => getAuthSessionSnapshot().generation);
+  const resetGeneration = useSyncExternalStore(subscribeCachedSearchResets, getCachedSearchResetGeneration);
+  const deviceId = useE2EEStore(s => s.localDeviceId);
+  const scope = JSON.stringify([owner, generation, encrypted && resetGeneration, encrypted && deviceId, props.channelId, encrypted, encrypted && keysReady]);
+  return <ScopedDMSearchPanel key={scope} {...props} encrypted={encrypted} keysReady={keysReady} />;
+}
+
+function ScopedDMSearchPanel({ channelId, onClose, encrypted, keysReady }: Readonly<DMSearchPanelProps & { encrypted?: boolean; keysReady: boolean }>) {
   const { t, i18n } = useTranslation("chat");
   const { t: tE2ee } = useTranslation("e2ee");
-  const isE2EEReady = useE2EEStore((s) => s.initStatus === "ready");
   const searchMessages = useDMStore((s) => s.searchMessages);
   const setScrollToMessageId = useDMStore((s) => s.setScrollToMessageId);
-  // E2EE is per-channel (toggleable). Only route through the IndexedDB cache
-  // when THIS channel is encrypted — plaintext channels can use server FTS5.
-  const channelE2eeEnabled = useDMStore((s) =>
-    s.channels.find((c) => c.id === channelId)?.e2ee_enabled ?? false
-  );
-  const useLocalSearch = channelE2eeEnabled && isE2EEReady;
+  const { openAtDMMessage } = useOpenAtMessage();
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchState>(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchFailed, setSearchFailed] = useState(false);
   const [offset, setOffset] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Monotonic id per doSearch call — a slow response for an abandoned query
   // must not overwrite the results of the search started after it.
   const searchSeqRef = useRef(0);
+  const searching = useRef(false);
+  const queryOffset = useRef(0);
+  const localSearch = useRef<AbortController | null>(null);
+  const localMatches = useRef<CachedSearchSnapshot | null>(null);
+  const deletionPool = useCachedSearchDeletionPool(Boolean(encrypted && keysReady));
+  const deletionSpool = useRef<SearchDeletionSpool | null>(null);
+  const queryRef = useRef("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Auto-focus input on mount
@@ -59,60 +76,98 @@ function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
   // Clear any pending debounce on unmount — the timer would otherwise fire
   // after close and call setState on an unmounted panel.
   useEffect(() => () => {
+    localSearch.current?.abort();
+    searchSeqRef.current++;
+    const snapshot = localMatches.current; localMatches.current = null;
+    const frontier = deletionSpool.current; deletionSpool.current = null;
+    void frontier?.dispose().catch(() => {});
+    void snapshot?.dispose().catch(() => {});
     if (debounceRef.current) clearTimeout(debounceRef.current);
   }, []);
+
+  const failCurrentSearch = useCallback(() => {
+    searchSeqRef.current++; localSearch.current?.abort();
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = null;
+    const frontier = deletionSpool.current; deletionSpool.current = null;
+    const snapshot = localMatches.current; localMatches.current = null;
+    void frontier?.dispose().catch(() => {}); void snapshot?.dispose().catch(() => {});
+    searching.current = false; setIsSearching(false); setResults(null); setSearchFailed(true);
+  }, []);
+  const startFrontier = useCallback((pool: SearchDeletionPool) => {
+    const frontier = pool.create(() => { if (deletionSpool.current === frontier) failCurrentSearch(); });
+    return frontier;
+  }, [failCurrentSearch]);
+
+  const publishCachedPage = useCallback((
+    page: CachedSearchPage, searchOffset: number,
+  ) => {
+    queryOffset.current = page.offset;
+    if (page.offset !== searchOffset) setOffset(page.offset);
+    const paged = page.messages;
+    const total = page.total;
+
+    // CachedDecryptedMessage -> DMMessage minimal format
+    const messages: DMMessage[] = paged.map((c) => ({
+      id: c.messageId,
+      dm_channel_id: channelId,
+      user_id: c.senderUserId ?? "",
+      application_id: c.applicationId,
+      source_sequence: c.sourceSequence,
+      content: c.content,
+      created_at: new Date(c.timestamp).toISOString(),
+      edited_at: null,
+      is_pinned: false,
+      attachments: [],
+      reactions: [],
+      reply_to_id: null,
+      referenced_message: null,
+      author: { id: "", username: "", display_name: null, avatar_url: null, status: "offline" as const, custom_status: null, created_at: "" },
+      encryption_version: 1,
+    }));
+
+    setResults({ messages, totalCount: total });
+  }, [channelId]);
+
+  // All owned mutations stay inside this phase. The dispatcher adopts its
+  // promise directly, adding no await boundary before publishing the page.
+  const searchEncryptedMessages = useCallback((searchQuery: string, searchOffset: number, seq: number) => runCachedSearch({
+    kind: "dm", channelId, query: searchQuery, offset: searchOffset, limit: LIMIT,
+    controller: localSearch, snapshot: localMatches, deletions: deletionSpool,
+    getPool: () => deletionPool.get(), startFrontier,
+    matches: (row, lowerTerm) => row.dmChannelId === channelId && row.content.toLowerCase().includes(lowerTerm),
+    isCurrent: () => seq === searchSeqRef.current,
+    publish: page => publishCachedPage(page, searchOffset),
+    fail: failCurrentSearch,
+    finish: () => { searching.current = false; setIsSearching(false); },
+  }), [channelId, deletionPool, startFrontier, failCurrentSearch, publishCachedPage]);
 
   const doSearch = useCallback(
     async (searchQuery: string, searchOffset: number) => {
       // Bumping before the empty-query early return also invalidates any
       // in-flight search when the user clears the input.
       const seq = ++searchSeqRef.current;
+      setSearchFailed(false);
+      queryOffset.current = searchOffset;
+      localSearch.current?.abort();
 
       if (searchQuery.trim().length < 1) {
         setResults(null);
+        searching.current = false; setIsSearching(false);
         return;
       }
 
-      setIsSearching(true);
+      searching.current = true; setIsSearching(true);
 
       // E2EE active — client-side IndexedDB search
-      if (useLocalSearch) {
-        try {
-          const cached = await searchCachedDMMessages(channelId, searchQuery.trim());
-          // A newer search started while this one was awaiting — its results
-          // (and spinner state) own the panel now.
-          if (seq !== searchSeqRef.current) return;
-          const total = cached.length;
-          const paged = sortDMBySource(cached.map(record => ({ id: record.messageId, created_at: new Date(record.timestamp).toISOString(), source_sequence: record.sourceSequence, record }))).reverse()
-            .slice(searchOffset, searchOffset + LIMIT).map(item => item.record);
-
-          // CachedDecryptedMessage -> DMMessage minimal format
-          const messages: DMMessage[] = paged.map((c) => ({
-            id: c.messageId,
-            dm_channel_id: channelId,
-            user_id: c.senderUserId ?? "",
-            application_id: c.applicationId,
-            source_sequence: c.sourceSequence,
-            content: c.content,
-            created_at: new Date(c.timestamp).toISOString(),
-            edited_at: null,
-            is_pinned: false,
-            attachments: [],
-            reactions: [],
-            reply_to_id: null,
-            referenced_message: null,
-            author: { id: "", username: "", display_name: null, avatar_url: null, status: "offline" as const, custom_status: null, created_at: "" },
-            encryption_version: 1,
-          }));
-
-          setResults({ messages, totalCount: total });
-        } catch {
-          if (seq !== searchSeqRef.current) return;
-          setResults({ messages: [], totalCount: 0 });
-        }
-        setIsSearching(false);
+      const current = useDMStore.getState().channels.find((c) => c.id === channelId);
+      if (encrypted === undefined || current?.e2ee_enabled !== encrypted ||
+          (encrypted && useE2EEStore.getState().initStatus !== "ready")) {
+        setResults(null);
+        searching.current = false; setIsSearching(false);
         return;
       }
+      if (encrypted) return searchEncryptedMessages(searchQuery, searchOffset, seq);
 
       // Plaintext — server-side FTS5 search
       const result = await searchMessages(channelId, searchQuery.trim(), LIMIT, searchOffset);
@@ -122,21 +177,25 @@ function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
         messages: result.messages,
         totalCount: result.total_count,
       });
-      setIsSearching(false);
+      searching.current = false; setIsSearching(false);
     },
-    [channelId, searchMessages, useLocalSearch]
+    [channelId, encrypted, searchMessages, searchEncryptedMessages]
   );
 
   /** Debounced search on input change */
   function handleInputChange(value: string) {
-    setQuery(value);
-    setOffset(0);
-
+    const previous = localMatches.current; localMatches.current = null;
+    void previous?.dispose().catch(() => {});
+    const frontier = deletionSpool.current; deletionSpool.current = null;
+    void frontier?.dispose().catch(() => {});
+    queryRef.current = value;
+    searchSeqRef.current++;
+    localSearch.current?.abort();
+    setQuery(value); setSearchFailed(false);
+    if (!value.trim()) { searching.current = false; setIsSearching(false); setResults(null); }
+    setOffset(0); queryOffset.current = 0;
     if (debounceRef.current) clearTimeout(debounceRef.current);
-
-    debounceRef.current = setTimeout(() => {
-      doSearch(value, 0);
-    }, DEBOUNCE_MS);
+    debounceRef.current = setTimeout(() => { debounceRef.current = null; void doSearch(value, 0); }, DEBOUNCE_MS);
   }
 
   /** Next page */
@@ -153,18 +212,32 @@ function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
     doSearch(query, newOffset);
   }
 
-  const { openAtDMMessage } = useOpenAtMessage();
+  const removeLocalMatch = useCallback((id: string) => {
+    if (!encrypted) return false;
+    if (!queryRef.current.trim()) return true;
+    if (!localMatches.current && !searching.current && debounceRef.current === null) return true;
+    try {
+      let frontier = deletionSpool.current;
+      if (!frontier) {
+        const pool = deletionPool.peek();
+        if (!pool) { failCurrentSearch(); return true; }
+        frontier = startFrontier(pool); deletionSpool.current = frontier;
+      }
+      frontier.append(id);
+    } catch { failCurrentSearch(); return true; }
+    if (!searching.current && debounceRef.current === null) {
+      searching.current = true; setIsSearching(true);
+      void doSearch(queryRef.current, queryOffset.current);
+    }
+    return true;
+  }, [encrypted, deletionPool, startFrontier, failCurrentSearch, doSearch]);
 
-  // Live deletion while the panel is open: results are a snapshot, so a
-  // WS-deleted message would linger as a dead row. Subscribe to the narrow
-  // lastDeletedDM field (store subscription, not a selector hook — setState
-  // belongs in the callback per react-hooks/set-state-in-effect) and drop
-  // the row from our own snapshot, NOT the loaded message window — the
-  // result may live far outside it.
+
   useEffect(() => {
     const unsubscribe = useDMStore.subscribe((state, prev) => {
       const deleted = state.lastDeletedDM;
-      if (!deleted || deleted === prev.lastDeletedDM) return;
+      if (!deleted || deleted === prev.lastDeletedDM || deleted.dm_channel_id !== channelId) return;
+      if (removeLocalMatch(deleted.id)) return;
       setResults((prevResults) => {
         if (!prevResults || !prevResults.messages.some((m) => m.id === deleted.id)) {
           return prevResults;
@@ -178,7 +251,7 @@ function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [channelId, removeLocalMatch]);
 
   /** Scroll to message on result click. Inside the loaded window this is
    *  a plain scroll; outside it, fetch a window around the message. Results
@@ -197,14 +270,15 @@ function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
       onClose();
       return;
     }
+    if (removeLocalMatch(msg.id)) return;
     setResults((prev) =>
-      prev
+      prev?.messages.some((m) => m.id === msg.id)
         ? {
             ...prev,
             messages: prev.messages.filter((m) => m.id !== msg.id),
             totalCount: Math.max(0, prev.totalCount - 1),
           }
-        : null,
+        : prev,
     );
   }
 
@@ -224,6 +298,68 @@ function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
 
   const totalPages = results ? Math.ceil(results.totalCount / LIMIT) : 0;
   const currentPage = Math.floor(offset / LIMIT) + 1;
+
+  function renderResults() {
+    if (isSearching) return <p className="search-empty">{t("searching")}</p>;
+    if (searchFailed) return <p className="search-empty" role="alert">{t("searchFailed")}</p>;
+    if (!results) return <p className="search-empty">{t("searchHint")}</p>;
+    if (results.messages.length === 0) return <p className="search-empty">{t("noSearchResults")}</p>;
+    return (
+      <>
+        <p className="search-count">
+          {t("searchResultCount", { count: results.totalCount })}
+        </p>
+        {results.messages.map((msg) => {
+          const displayName = msg.author?.display_name ?? msg.author?.username ?? "Unknown";
+
+          return (
+            <div
+              key={msg.id}
+              className="search-result-item"
+              onClick={() => void handleSelectResult(msg)}
+            >
+              <div className="search-result-header">
+                <Avatar
+                  name={displayName}
+                  avatarUrl={msg.author?.avatar_url ?? undefined}
+                  size={18}
+                />
+                <span className="search-result-author">{displayName}</span>
+                <span className="search-result-time">{formatDate(msg.created_at)}</span>
+                <GameMessageOrigin applicationID={msg.application_id} authorID={msg.user_id} />
+              </div>
+              <div className="search-result-content">
+                <SpamPreview kind="dm" message={msg} />
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="search-pagination">
+            <button
+              onClick={handlePrevPage}
+              disabled={currentPage <= 1}
+              className="search-page-btn"
+            >
+              {t("searchPrev")}
+            </button>
+            <span className="search-page-info">
+              {currentPage} / {totalPages}
+            </span>
+            <button
+              onClick={handleNextPage}
+              disabled={currentPage >= totalPages}
+              className="search-page-btn"
+            >
+              {t("searchNext")}
+            </button>
+          </div>
+        )}
+      </>
+    );
+  }
 
   return (
     <div className="search-panel">
@@ -253,73 +389,13 @@ function DMSearchPanel({ channelId, onClose }: DMSearchPanelProps) {
       </div>
 
       {/* E2EE client-side search note — only when THIS channel is encrypted */}
-      {useLocalSearch && (
+      {encrypted && (
         <p className="search-e2ee-note">{tE2ee("clientSearchNote")}</p>
       )}
 
       {/* Results */}
       <div className="search-results">
-        {isSearching ? (
-          <p className="search-empty">{t("searching")}</p>
-        ) : !results ? (
-          <p className="search-empty">{t("searchHint")}</p>
-        ) : results.messages.length === 0 ? (
-          <p className="search-empty">{t("noSearchResults")}</p>
-        ) : (
-          <>
-            <p className="search-count">
-              {t("searchResultCount", { count: results.totalCount })}
-            </p>
-            {results.messages.map((msg) => {
-              const displayName = msg.author?.display_name ?? msg.author?.username ?? "Unknown";
-
-              return (
-                <div
-                  key={msg.id}
-                  className="search-result-item"
-                  onClick={() => void handleSelectResult(msg)}
-                >
-                  <div className="search-result-header">
-                    <Avatar
-                      name={displayName}
-                      avatarUrl={msg.author?.avatar_url ?? undefined}
-                      size={18}
-                    />
-                    <span className="search-result-author">{displayName}</span>
-                    <span className="search-result-time">{formatDate(msg.created_at)}</span>
-                    <GameMessageOrigin applicationID={msg.application_id} authorID={msg.user_id} />
-                  </div>
-                  <div className="search-result-content">
-                    <SpamPreview kind="dm" message={msg} />
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="search-pagination">
-                <button
-                  onClick={handlePrevPage}
-                  disabled={currentPage <= 1}
-                  className="search-page-btn"
-                >
-                  {t("searchPrev")}
-                </button>
-                <span className="search-page-info">
-                  {currentPage} / {totalPages}
-                </span>
-                <button
-                  onClick={handleNextPage}
-                  disabled={currentPage >= totalPages}
-                  className="search-page-btn"
-                >
-                  {t("searchNext")}
-                </button>
-              </div>
-            )}
-          </>
-        )}
+        {renderResults()}
       </div>
     </div>
   );

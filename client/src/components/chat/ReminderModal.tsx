@@ -95,7 +95,7 @@ function ReminderForContext({source,onClose,owner,generation}:Props&{owner?:stri
         setListState("ready");
       } else setListState("error");
     } catch {if(current()&&version===readVersion.current)setListState("error");}
-  }, [t, toast,current,owner]);
+  }, [current, owner]);
 
   useEffect(() => {
     const mounted=active,versions=readVersion;

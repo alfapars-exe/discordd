@@ -1,0 +1,406 @@
+{
+  "sourceRevision": "608d341483f2025ad6f0740688495cab7c2becb6",
+  "scope": "RF26: extract ownership shutdown AST collection into focused test-only helpers; preserve all original guard predicates and fatal messages. No product behavior or public contract change.",
+  "validation": {
+    "mainPackage": "PASS 6.472s",
+    "targeted": "5 tests,20 repeats,PASS 0.683s",
+    "vet": "PASS",
+    "equivalence": "Six original/new AST collector comparisons on identical mutated ASTs: valid accepted; missing defer,missing join,wrong context,direct goroutine,double defer rejected. Temporary test removed. PASS 0.623s.",
+    "linuxRace": "PASS 3.598s;5 targeted tests20repeats;CGO1,Go1.26.11linux/amd64;source and host cache read-only;task-specific module/build cache reused;container auto-removed",
+    "scan": "Immutable 608d3414 archive: 0 blocking matches;478 review lines. This pattern scan is not proof of absence of vulnerabilities."
+  },
+  "evidenceLogs": [
+    "TEMP/hichat-watch-ast-main.log",
+    "TEMP/hichat-watch-ast-repeated.log",
+    "TEMP/hichat-watch-ast-vet.log",
+    "TEMP/hichat-watch-ast-equivalence.log",
+    "TEMP/hichat-watch-ast-linux-race.log",
+    "TEMP/hichat-watch-ast-final-scan.log"
+  ],
+  "sonar": {
+    "before": "go:S3776 complexity45,required15 in backend_owner_watch_test.go",
+    "after": "PR305 analysis on a1e85a84: original go:S3776 issue CLOSED/FIXED;SonarCloud checkSUCCESS. No exact after-score claimed.",
+    "evidence": [
+      {
+        "key": "AaHYWqzUd7dyvm3wYSoy",
+        "rule": "go:S3776",
+        "severity": "CRITICAL",
+        "component": "alfapars-exe_discordd:server/backend_owner_watch_test.go",
+        "project": "alfapars-exe_discordd",
+        "hash": "d9517767db1c34bb2d7c705563c058a5",
+        "textRange": {
+          "startLine": 121,
+          "endLine": 121,
+          "startOffset": 5,
+          "endOffset": 58
+        },
+        "flows": [
+          {
+            "locations": [
+              {
+                "component": "alfapars-exe_discordd:server/backend_owner_watch_test.go",
+                "textRange": {
+                  "startLine": 123,
+                  "endLine": 123,
+                  "startOffset": 1,
+                  "endOffset": 3
+                },
+                "msg": "+1"
+              }
+            ]
+          },
+          {
+            "locations": [
+              {
+                "component": "alfapars-exe_discordd:server/backend_owner_watch_test.go",
+                "textRange": {
+                  "startLine": 128,
+                  "endLine": 128,
+                  "startOffset": 2,
+                  "endOffset": 4
+                },
+                "msg": "+2 (incl 1 for nesting)"
+              }
+            ]
+          },
+          {
+            "locations": [
+              {
+                "component": "alfapars-exe_discordd:server/backend_owner_watch_test.go",
+                "textRange": {
+                  "startLine": 128,
+                  "endLine": 128,
+                  "startOffset": 9,
+                  "endOffset": 11
+                },
+                "msg": "+1"
+              }
+            ]
+          },
+          {
+            "locations": [
+              {
+                "component": "alfapars-exe_discordd:server/backend_owner_watch_test.go",
+                "textRange": {
+                  "startLine": 132,
+                  "endLine": 132,
+                  "startOffset": 12,
+                  "endOffset": 14
+                },
+                "msg": "+1"
+              }
+            ]
+          },
+          {
+            "locations": [
+              {
+                "component": "alfapars-exe_discordd:server/backend_owner_watch_test.go",
+                "textRange": {
+                  "startLine": 138,
+                  "endLine": 138,
+                  "startOffset": 2,
+                  "endOffset": 8
+                },
+                "msg": "+2 (incl 1 for nesting)"
+              }
+            ]
+          },
+          {
+            "locations": [
+              {
+                "component": "alfapars-exe_discordd:server/backend_owner_watch_test.go",
+                "textRange": {
+                  "startLine": 140,
+                  "endLine": 140,
+                  "startOffset": 3,
+                  "endOffset": 5
+                },
+                "msg": "+3 (incl 2 for nesting)"
+              }
+            ]
+          },
+          {
+            "locations": [
+              {
+                "component": "alfapars-exe_discordd:server/backend_owner_watch_test.go",
+                "textRange": {
+                  "startLine": 140,
+                  "endLine": 140,
+                  "startOffset": 50,
+                  "endOffset": 52
+                },
+                "msg": "+1"
+              }
+            ]
+          },
+          {
+            "locations": [
+              {
+                "component": "alfapars-exe_discordd:server/backend_owner_watch_test.go",
+                "textRange": {
+                  "startLine": 144,
+                  "endLine": 144,
+                  "startOffset": 3,
+                  "endOffset": 5
+                },
+                "msg": "+3 (incl 2 for nesting)"
+              }
+            ]
+          },
+          {
+            "locations": [
+              {
+                "component": "alfapars-exe_discordd:server/backend_owner_watch_test.go",
+                "textRange": {
+                  "startLine": 146,
+                  "endLine": 146,
+                  "startOffset": 5,
+                  "endOffset": 7
+                },
+                "msg": "+5 (incl 4 for nesting)"
+              }
+            ]
+          },
+          {
+            "locations": [
+              {
+                "component": "alfapars-exe_discordd:server/backend_owner_watch_test.go",
+                "textRange": {
+                  "startLine": 146,
+                  "endLine": 146,
+                  "startOffset": 46,
+                  "endOffset": 48
+                },
+                "msg": "+1"
+              }
+            ]
+          },
+          {
+            "locations": [
+              {
+                "component": "alfapars-exe_discordd:server/backend_owner_watch_test.go",
+                "textRange": {
+                  "startLine": 153,
+                  "endLine": 153,
+                  "startOffset": 3,
+                  "endOffset": 5
+                },
+                "msg": "+3 (incl 2 for nesting)"
+              }
+            ]
+          },
+          {
+            "locations": [
+              {
+                "component": "alfapars-exe_discordd:server/backend_owner_watch_test.go",
+                "textRange": {
+                  "startLine": 154,
+                  "endLine": 154,
+                  "startOffset": 4,
+                  "endOffset": 6
+                },
+                "msg": "+4 (incl 3 for nesting)"
+              }
+            ]
+          },
+          {
+            "locations": [
+              {
+                "component": "alfapars-exe_discordd:server/backend_owner_watch_test.go",
+                "textRange": {
+                  "startLine": 154,
+                  "endLine": 154,
+                  "startOffset": 45,
+                  "endOffset": 47
+                },
+                "msg": "+1"
+              }
+            ]
+          },
+          {
+            "locations": [
+              {
+                "component": "alfapars-exe_discordd:server/backend_owner_watch_test.go",
+                "textRange": {
+                  "startLine": 159,
+                  "endLine": 159,
+                  "startOffset": 3,
+                  "endOffset": 5
+                },
+                "msg": "+3 (incl 2 for nesting)"
+              }
+            ]
+          },
+          {
+            "locations": [
+              {
+                "component": "alfapars-exe_discordd:server/backend_owner_watch_test.go",
+                "textRange": {
+                  "startLine": 162,
+                  "endLine": 162,
+                  "startOffset": 3,
+                  "endOffset": 5
+                },
+                "msg": "+3 (incl 2 for nesting)"
+              }
+            ]
+          },
+          {
+            "locations": [
+              {
+                "component": "alfapars-exe_discordd:server/backend_owner_watch_test.go",
+                "textRange": {
+                  "startLine": 162,
+                  "endLine": 162,
+                  "startOffset": 54,
+                  "endOffset": 56
+                },
+                "msg": "+1"
+              }
+            ]
+          },
+          {
+            "locations": [
+              {
+                "component": "alfapars-exe_discordd:server/backend_owner_watch_test.go",
+                "textRange": {
+                  "startLine": 164,
+                  "endLine": 164,
+                  "startOffset": 22,
+                  "endOffset": 24
+                },
+                "msg": "+1"
+              }
+            ]
+          },
+          {
+            "locations": [
+              {
+                "component": "alfapars-exe_discordd:server/backend_owner_watch_test.go",
+                "textRange": {
+                  "startLine": 167,
+                  "endLine": 167,
+                  "startOffset": 3,
+                  "endOffset": 5
+                },
+                "msg": "+3 (incl 2 for nesting)"
+              }
+            ]
+          },
+          {
+            "locations": [
+              {
+                "component": "alfapars-exe_discordd:server/backend_owner_watch_test.go",
+                "textRange": {
+                  "startLine": 173,
+                  "endLine": 173,
+                  "startOffset": 1,
+                  "endOffset": 3
+                },
+                "msg": "+1"
+              }
+            ]
+          },
+          {
+            "locations": [
+              {
+                "component": "alfapars-exe_discordd:server/backend_owner_watch_test.go",
+                "textRange": {
+                  "startLine": 173,
+                  "endLine": 173,
+                  "startOffset": 31,
+                  "endOffset": 33
+                },
+                "msg": "+1"
+              }
+            ]
+          },
+          {
+            "locations": [
+              {
+                "component": "alfapars-exe_discordd:server/backend_owner_watch_test.go",
+                "textRange": {
+                  "startLine": 176,
+                  "endLine": 176,
+                  "startOffset": 1,
+                  "endOffset": 3
+                },
+                "msg": "+1"
+              }
+            ]
+          },
+          {
+            "locations": [
+              {
+                "component": "alfapars-exe_discordd:server/backend_owner_watch_test.go",
+                "textRange": {
+                  "startLine": 176,
+                  "endLine": 176,
+                  "startOffset": 28,
+                  "endOffset": 30
+                },
+                "msg": "+1"
+              }
+            ]
+          },
+          {
+            "locations": [
+              {
+                "component": "alfapars-exe_discordd:server/backend_owner_watch_test.go",
+                "textRange": {
+                  "startLine": 179,
+                  "endLine": 179,
+                  "startOffset": 1,
+                  "endOffset": 3
+                },
+                "msg": "+1"
+              }
+            ]
+          },
+          {
+            "locations": [
+              {
+                "component": "alfapars-exe_discordd:server/backend_owner_watch_test.go",
+                "textRange": {
+                  "startLine": 179,
+                  "endLine": 179,
+                  "startOffset": 18,
+                  "endOffset": 20
+                },
+                "msg": "+1"
+              }
+            ]
+          }
+        ],
+        "resolution": "FIXED",
+        "status": "CLOSED",
+        "message": "Refactor this method to reduce its Cognitive Complexity from 45 to the 15 allowed.",
+        "effort": "35min",
+        "debt": "35min",
+        "tags": [
+          "brain-overload"
+        ],
+        "creationDate": "2026-11-13T18:31:24+0000",
+        "updateDate": "2026-11-15T17:57:47+0000",
+        "closeDate": "2026-11-15T17:57:47+0000",
+        "type": "CODE_SMELL",
+        "organization": "alfapars-exe",
+        "pullRequest": "305",
+        "cleanCodeAttribute": "FOCUSED",
+        "cleanCodeAttributeCategory": "ADAPTABLE",
+        "impacts": [
+          {
+            "softwareQuality": "MAINTAINABILITY",
+            "severity": "HIGH"
+          }
+        ],
+        "issueStatus": "FIXED",
+        "projectName": "discordd",
+        "internalTags": [],
+        "lastChangeAnalysisUuid": "f522af32-1da7-41cc-bffa-cd5eb0dc140d",
+        "lastChangeSource": "ANALYSIS"
+      }
+    ]
+  },
+  "completion": "RF01-RF30 and full project acceptance remain open."
+}

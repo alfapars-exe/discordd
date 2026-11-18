@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
@@ -36,9 +37,9 @@ func Recover(logger *slog.Logger) func(http.Handler) http.Handler {
 					logger.LogAttrs(r.Context(), slog.LevelError, "panic recovered in HTTP handler",
 						slog.String("event_code", "HTTP_PANIC"), slog.String("error_kind", "panic"), slog.String("component", "http"),
 						slog.Int64("duration_ms", pkg.RequestElapsedMillis(r.Context())),
-						slog.Any("panic", rec),
+						slog.String("panic_type", fmt.Sprintf("%T", rec)),
 						slog.String("method", r.Method),
-						slog.String("path", r.URL.Path),
+						slog.String("path", diagnosticPath(r.URL.Path)),
 						slog.String("request_id", RequestID(r.Context())),
 						slog.String("stack", string(debug.Stack())),
 					)

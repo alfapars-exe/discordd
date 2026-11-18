@@ -1,3 +1,4 @@
+import { ownVoicePeerValue, voicePeerVolume, VOICE_PEER_VOLUME_RANGE } from "../../stores/voicePreferenceMaps";
 /** Independent exact-source remote playback owners, mounted outside the main chat. */
 import {useEffect,useState,useSyncExternalStore} from "react";
 import {useTranslation} from "react-i18next";
@@ -11,7 +12,7 @@ type Binding={owner:string;generation:number;callId:string;peer:string;connectio
 const streamOwners=new WeakMap<MediaStream,Binding>(),trackOwners=new WeakMap<MediaStreamTrack,Binding>();
 const subscribeSession=(changed:()=>void)=>{const a=subscribeAuthGenerationChanges(changed),b=subscribeAuthOwnerChanges(changed);return()=>{a();b();};};
 const bounded=(value:number,max:number)=>Number.isFinite(value)?Math.max(0,Math.min(max,value)):0;
-function volume(peer:string,source:Source){const state=useVoiceStore.getState();if(state.isDeafened||state.localMutedUsers[peer])return 0;return bounded(state.masterVolume,100)/100*bounded((source==="screen"?state.screenShareVolumes:state.userVolumes)[peer]??100,200)/100;}
+function volume(peer:string,source:Source){const state=useVoiceStore.getState();if(state.isDeafened||ownVoicePeerValue(state.localMutedUsers, peer))return 0;return bounded(state.masterVolume,100)/100*bounded(voicePeerVolume(source==="screen"?state.screenShareVolumes:state.userVolumes,peer),VOICE_PEER_VOLUME_RANGE[1])/100;}
 const selected=(source:Source)=>source==="screen"?useP2PCallStore.getState().remoteScreenAudioStream:useP2PCallStore.getState().remoteMicrophoneStream;
 const same=(a:Binding,b:Binding)=>a.owner===b.owner&&a.generation===b.generation&&a.callId===b.callId&&a.peer===b.peer&&a.connection===b.connection&&a.source===b.source;
 function SourceSink({source}:{source:Source}){

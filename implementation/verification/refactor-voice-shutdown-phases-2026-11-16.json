@@ -1,0 +1,43 @@
+{
+  "baselineCommit": "b4ac50b5",
+  "scope": "Separate terminal voice shutdown snapshot/accounting handoff, bounded media worker drain and per-channel panic-isolated cleanup. sync.Once owner, stop/join ordering, four-worker bound and final metadata cleanup remain unchanged.",
+  "validation": {
+    "baseline": "Seven TestVoiceShutdown tests PASS",
+    "candidate": "Same seven tests with count=20 PASS; 140 test executions",
+    "servicesGoVet": "PASS",
+    "gofmt": "Applied"
+  },
+  "remaining": [
+    "Final-source CI/Sonar",
+    "Real media/provider/physical acceptance and full shutdown resource inventory"
+  ],
+  "sourceCommit": "628f61fd",
+  "sourceSHA256": {
+    "server/services/voice_shutdown.go": "d219a4d7b4ec4ef51857adc81dc1636b2e6f5498149b5182b3f49ebce901b0e3",
+    "server/services/voice_shutdown_test.go": "a09e9681e25f4bdf9d86f32548c5c619733dd951a061263bad6f69c2120f8a9e"
+  },
+  "linuxRace": {
+    "state": "Terminal PASS",
+    "runtime": "Go1.26.11 linux/amd64, CGO1, GOMAXPROCS2",
+    "scope": "Seven TestVoiceShutdown tests, count20, race detector",
+    "constraints": "Network disabled; source bind read-only; dedicated task cache",
+    "initialAttempt": "Go1.26.10 image default toolchain rejected go.mod before test execution; corrected to cached1.26.11 with GOTOOLCHAINauto",
+    "testExecutionsPassed": 140,
+    "failed": 0,
+    "skipped": 0,
+    "packageSeconds": 3.607,
+    "logSHA256": "13fae1c18e515fe355dd0ef2a68647b868b34088b7971794cad0b02f7ede1200"
+  },
+  "sourceScan": {
+    "sourceCommit": "628f61fd",
+    "exactReviewedRecords": 51,
+    "reviewLines": 482,
+    "blockingPatterns": 0
+  },
+  "structuralParity": {
+    "finalMetadataParity": true,
+    "mediaWorkerParity": true,
+    "producerStopOrderParity": true,
+    "snapshotAccountingParity": true
+  }
+}

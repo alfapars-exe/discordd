@@ -1,0 +1,13 @@
+{
+  "sourceCommit": "ba7200cc",
+  "cause": "c9bfae0b Security scan rejected stale whole-file source digest for sqlite_group_dm.go",
+  "review": "Both existing reviewed lines retain their exact line hashes and SQL text. Updated only file digests and proof references after exact whole-file inline parity of the refactor.",
+  "manifestRecords": 51,
+  "manifestTestsPassed": 9,
+  "immutableSourceScan": {
+    "reviewLines": 482,
+    "blockingPatterns": 0,
+    "result": "PASS"
+  },
+  "scope": "No rule/path/line suppressions added; final music source has not yet been scanned by this receipt."
+}

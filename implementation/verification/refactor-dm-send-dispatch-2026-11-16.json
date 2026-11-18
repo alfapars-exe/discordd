@@ -1,0 +1,30 @@
+{
+  "baselineCommit": "0f6010ecd64d4762f468f1948975fa4a0f84ca0b",
+  "scope": "Flatten plaintext versus encrypted DM dispatch inside the existing async send closure. Preserve short-circuit E2EE readiness checks, auth owner read conditions, captured device state, existing await sites and post-persist jump-to-present.",
+  "verification": {
+    "baselineTests": 115,
+    "candidateTests": 115,
+    "finalUtf8CandidateTests": 115,
+    "structuralParity": {
+      "encryptedTryCatchJavaScriptParity": true,
+      "plaintextPhaseParity": true,
+      "outsideSendActionParity": true
+    },
+    "typescript": "PASS",
+    "targetedEslint": "PASS"
+  },
+  "limits": [
+    "New-source security scan, CI and Sonar remain pending",
+    "Complete account/permission/offline/native acceptance remains open"
+  ],
+  "sourceScan": {
+    "commit": "1f3c9cb1",
+    "blockingPatterns": 0,
+    "reviewLines": 482,
+    "normalizedReviewDelta": {
+      "added": 1,
+      "removed": 0,
+      "reason": "New inventory boundary test writes fixed queries.go beneath t.TempDir; no externally controlled path. No false-positive manifest changes."
+    }
+  }
+}

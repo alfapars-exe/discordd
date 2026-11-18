@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 )
 
@@ -64,7 +65,11 @@ func WithTxOptions(ctx context.Context, db *sql.DB, options *sql.TxOptions, fn f
 
 		if err != nil {
 			if rbErr := tx.Rollback(); rbErr != nil {
-				err = fmt.Errorf("%w (rollback also failed: %v)", err, rbErr)
+				// database/sql may already have rolled back a cancelled context.
+				// Preserve real rollback failures and unexpected early completion.
+				if ctx.Err() == nil || !errors.Is(rbErr, sql.ErrTxDone) {
+					err = fmt.Errorf("%w (rollback also failed: %v)", err, rbErr)
+				}
 			}
 			return
 		}

@@ -47,11 +47,6 @@ type MemberService interface {
 	// SetNickname applies a per-server nickname. nil or "" clears.
 	// Caller (handler/route) enforces PermManageNicknames for non-self.
 	SetNickname(ctx context.Context, serverID, actorID, targetID string, nickname *string) (*models.MemberWithRoles, error)
-	// SetPermInvalidator wires the per-channel permission cache so that
-	// role-assignment, kick, and ban operations drop the affected user's
-	// cached permissions immediately rather than after permCacheTTL.
-	SetPermInvalidator(inv PermissionInvalidator)
-	SetUserCacheInvalidator(inv UserCacheInvalidator)
 }
 
 // VoiceDisconnecter disconnects a user from voice on kick/ban (ISP).
@@ -82,24 +77,6 @@ type memberService struct {
 	userInvalidator            UserCacheInvalidator
 }
 
-func (s *memberService) SetProfileAudienceInvalidator(invalidator ProfileAudienceInvalidator) {
-	s.profileAudienceInvalidator = invalidator
-}
-
-// SetUserCacheInvalidator keeps authenticated /users/me reads fresh after
-// profile writes, including avatar/banner uploads using the same service.
-func (s *memberService) SetUserCacheInvalidator(inv UserCacheInvalidator) {
-	s.userInvalidator = inv
-}
-
-func (s *memberService) SetPermInvalidator(inv PermissionInvalidator) {
-	s.permInvalidator = inv
-}
-
-func (s *memberService) SetGameActivityPrivacyInvalidator(invalidator GameActivityPrivacyInvalidator) {
-	s.gameActivity = invalidator
-}
-
 // invalidateUserPerms — nil-safe wrapper so call sites stay flat.
 // Optional dependency: test setups frequently leave it nil.
 func (s *memberService) invalidateUserPerms(userID string) {
@@ -112,7 +89,7 @@ func (s *memberService) invalidateUserPerms(userID string) {
 //
 // Logs both branches so a "I kicked X / banned Y but the audit channel
 // stayed empty" report tells us exactly where the pipeline dropped:
-// nil logger ⇒ init_services.go's NewMemberService(..., auditLogService)
+// nil logger ⇒ init_services.go's NewMemberService(nil, nil, ..., auditLogService)
 // wiring regressed; otherwise look at [audit_log] downstream logs from
 // audit_log_service.persistAndBroadcast for Insert / broadcast outcomes.
 // Same pattern as voiceService.audit.
@@ -126,6 +103,8 @@ func (s *memberService) audit(entry models.AuditLog) {
 }
 
 func NewMemberService(
+	gameActivity GameActivityPrivacyInvalidator,
+	profileAudienceInvalidator ProfileAudienceInvalidator,
 	userRepo repository.UserRepository,
 	roleRepo repository.RoleRepository,
 	banRepo repository.BanRepository,
@@ -135,15 +114,21 @@ func NewMemberService(
 	hub ws.BroadcastAndManage,
 	voiceKick VoiceDisconnecter,
 	auditLogger AuditWriter,
+	userInvalidator UserCacheInvalidator,
+	permInvalidator PermissionInvalidator,
 	profileUpdates ...ProfileUpdateNotifier,
 ) MemberService {
 	s := &memberService{
-		memberReader:     memberReader{userRepo: userRepo, roleRepo: roleRepo, serverRepo: serverRepo, timeoutRepo: timeoutRepo},
-		roleTransactions: roleTransactions,
-		banRepo:          banRepo,
-		hub:              hub,
-		voiceKick:        voiceKick,
-		auditLogger:      auditLogger,
+		permInvalidator:            permInvalidator,
+		userInvalidator:            userInvalidator,
+		gameActivity:               gameActivity,
+		profileAudienceInvalidator: profileAudienceInvalidator,
+		memberReader:               memberReader{userRepo: userRepo, roleRepo: roleRepo, serverRepo: serverRepo, timeoutRepo: timeoutRepo},
+		roleTransactions:           roleTransactions,
+		banRepo:                    banRepo,
+		hub:                        hub,
+		voiceKick:                  voiceKick,
+		auditLogger:                auditLogger,
 	}
 	if len(profileUpdates) > 0 {
 		s.profileUpdates = profileUpdates[0]
@@ -152,18 +137,13 @@ func NewMemberService(
 }
 
 func (s *memberService) GetAll(ctx context.Context, serverID string) ([]models.MemberWithRoles, error) {
-	users, err := s.userRepo.GetAll(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get all users: %w", err)
-	}
-
-	memberIDs, err := s.serverRepo.ListMemberIDs(ctx, serverID)
+	users, err := s.userRepo.ListServerMemberProfiles(ctx, serverID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list server members: %w", err)
 	}
-	memberSet := make(map[string]struct{}, len(memberIDs))
-	for _, userID := range memberIDs {
-		memberSet[userID] = struct{}{}
+	memberIDs := make([]string, len(users))
+	for i := range users {
+		memberIDs[i] = users[i].ID
 	}
 
 	rolesByUser, err := s.roleRepo.GetRolesForUsers(ctx, serverID, memberIDs)
@@ -199,10 +179,6 @@ func (s *memberService) GetAll(ctx context.Context, serverID string) ([]models.M
 
 	members := make([]models.MemberWithRoles, 0)
 	for i := range users {
-		if _, ok := memberSet[users[i].ID]; !ok {
-			continue
-		}
-
 		roles := rolesByUser[users[i].ID]
 		m := models.ToMemberWithRoles(&users[i], roles)
 		if nick, ok := nicknames[users[i].ID]; ok && nick != "" {

@@ -1,0 +1,199 @@
+{
+  "scope": "Bounded atomic deletion reconciliation for an adopted search snapshot; no public HTTP/WebSocket contract change. Full unique-ID pending frontier is not bounded by this change.",
+  "red": "hichat-search-removal-batch-red.log: 3 failed,19 passed before removeMany implementation",
+  "tests": "65targeted passed; final frozen full485files5054passed1skipped115.57s",
+  "nativeStaging": [
+    {
+      "mode": "channel",
+      "records": 1201,
+      "exactPages": 15,
+      "failureWrites": 0,
+      "atomicRemovalAndCancellation": true,
+      "indexDisposed": true
+    },
+    {
+      "mode": "dm",
+      "records": 1201,
+      "exactPages": 15,
+      "failureWrites": 0,
+      "atomicRemovalAndCancellation": true,
+      "indexDisposed": true
+    },
+    {
+      "mode": "mixed",
+      "records": 1201,
+      "exactPages": 15,
+      "failureWrites": 0,
+      "atomicRemovalAndCancellation": true,
+      "indexDisposed": true
+    },
+    {
+      "mode": "quota",
+      "records": 1201,
+      "exactPages": 15,
+      "failureName": "QuotaExceededError",
+      "failureWrites": 300,
+      "writerReleased": true,
+      "atomicRemovalAndCancellation": true,
+      "indexDisposed": true
+    },
+    {
+      "mode": "cancel",
+      "records": 1201,
+      "exactPages": 15,
+      "failureName": "AbortError",
+      "failureWrites": 301,
+      "writerReleased": true,
+      "atomicRemovalAndCancellation": true,
+      "indexDisposed": true
+    }
+  ],
+  "nativeDiagnostic": [
+    {
+      "variant": "after",
+      "react": "19.3.1",
+      "productionBuild": true,
+      "historicalOverrides": 0
+    },
+    {
+      "variant": "after",
+      "kind": "channel",
+      "pendingSearchFrontier": [
+        {
+          "events": 1000,
+          "retainedGrowthBytes": 45908
+        },
+        {
+          "events": 5000,
+          "retainedGrowthBytes": 214188
+        },
+        {
+          "events": 10000,
+          "retainedGrowthBytes": 416060
+        }
+      ],
+      "releaseToObservedResultsMs": 232,
+      "settledHeapBytes": 3174596,
+      "disposedHeapBytes": 3193168,
+      "matches": 267,
+      "correctPage": true,
+      "indexDisposalDrained": true,
+      "scope": "Single diagnostic run of actual production React panel/native IndexedDB;ready snapshot handoff deliberately gated before adoption;10000distinct missing-ID store events;post-GC JS heap deltas while gated;release-to-observed DOM includes Playwright polling,excludes later assertions/disposal;controlled providers,not full WS/cache writer pipeline or a physical memory bound."
+    },
+    {
+      "variant": "after",
+      "kind": "dm",
+      "pendingSearchFrontier": [
+        {
+          "events": 1000,
+          "retainedGrowthBytes": 49852
+        },
+        {
+          "events": 5000,
+          "retainedGrowthBytes": 217436
+        },
+        {
+          "events": 10000,
+          "retainedGrowthBytes": 419052
+        }
+      ],
+      "releaseToObservedResultsMs": 228.80000001192093,
+      "settledHeapBytes": 3449120,
+      "disposedHeapBytes": 3397188,
+      "matches": 267,
+      "correctPage": true,
+      "indexDisposalDrained": true,
+      "scope": "Single diagnostic run of actual production React panel/native IndexedDB;ready snapshot handoff deliberately gated before adoption;10000distinct missing-ID store events;post-GC JS heap deltas while gated;release-to-observed DOM includes Playwright polling,excludes later assertions/disposal;controlled providers,not full WS/cache writer pipeline or a physical memory bound."
+    }
+  ],
+  "comparisonDiagnostic": [
+    {
+      "variant": "after",
+      "react": "19.3.1",
+      "productionBuild": true,
+      "historicalOverrides": 0
+    },
+    {
+      "variant": "after",
+      "kind": "channel",
+      "pendingSearchFrontier": [
+        {
+          "events": 1000,
+          "retainedGrowthBytes": 45908
+        },
+        {
+          "events": 5000,
+          "retainedGrowthBytes": 214188
+        },
+        {
+          "events": 10000,
+          "retainedGrowthBytes": 416060
+        }
+      ],
+      "releaseToObservedResultsMs": 7255.9000000059605,
+      "settledHeapBytes": 3402836,
+      "disposedHeapBytes": 3415304,
+      "matches": 267,
+      "correctPage": true,
+      "indexDisposalDrained": true,
+      "scope": "Single diagnostic run of actual production React panel/native IndexedDB;ready snapshot handoff deliberately gated before adoption;10000distinct missing-ID store events;post-GC JS heap deltas while gated;release-to-observed DOM includes Playwright polling,excludes later assertions/disposal;controlled providers,not full WS/cache writer pipeline or a physical memory bound."
+    },
+    {
+      "variant": "after",
+      "kind": "dm",
+      "pendingSearchFrontier": [
+        {
+          "events": 1000,
+          "retainedGrowthBytes": 49536
+        },
+        {
+          "events": 5000,
+          "retainedGrowthBytes": 217084
+        },
+        {
+          "events": 10000,
+          "retainedGrowthBytes": 418700
+        }
+      ],
+      "releaseToObservedResultsMs": 7046.199999988079,
+      "settledHeapBytes": 3749208,
+      "disposedHeapBytes": 3677424,
+      "matches": 267,
+      "correctPage": true,
+      "indexDisposalDrained": true,
+      "scope": "Single diagnostic run of actual production React panel/native IndexedDB;ready snapshot handoff deliberately gated before adoption;10000distinct missing-ID store events;post-GC JS heap deltas while gated;release-to-observed DOM includes Playwright polling,excludes later assertions/disposal;controlled providers,not full WS/cache writer pipeline or a physical memory bound."
+    }
+  ],
+  "performanceLimits": "Single controlled diagnostic,not nine-repeat benchmark; release-to-observed DOM includes Playwright polling. Actual production React/native Chromium IndexedDB; completed snapshot handoff gate,not full WS/cache writer pipeline. No general latency/capacity claim.",
+  "invariants": [
+    "At most128input IDs copied before first await.",
+    "One transaction atomically updates own refs and total; missing/duplicate IDs do not decrement count.",
+    "Every delete rejection is observed, including synchronous mid-batch cancellation.",
+    "Abort rolls back refs and total; next query and source writes remain usable.",
+    "Channel/DM canonical order, mixed legacy sequence slots, and other snapshots remain unaffected."
+  ],
+  "limitations": [
+    "Unique pending-ID Set still grows during initial scan; bounded memory frontier remains open.",
+    "Real WS events precede cache cleanup; do not discard tombstones via blind restart."
+  ],
+  "sha256": {
+    "client/src/crypto/cachedSearchSnapshot.ts": "29345b4f183c24c9dca9fe8ef796466e30f6a84a25d93f975aae43a888fedec5",
+    "client/src/crypto/cachedSearchSnapshot.test.ts": "d1f37cd5a5f566d02e68726b240ff71dfc8531781878bcf970f9d5d27eff195a",
+    "client/src/components/chat/SearchPanel.tsx": "1a55513f6ae88bef274d0b0a98a6a09ba618a828accc9efdd294387da30acf28",
+    "client/src/components/dm/DMSearchPanel.tsx": "51a347926e7e09443deb4597d07a7e1ea7a73d1aa8458a2acab3c7673294f12f",
+    "client/src/test/fakeCachedSearchSnapshot.ts": "fd87d0929d1512cdbb92988135ef767c3a66b7fcc52cc9387c4464735fe986ff",
+    "e2e/scripts/verify-search-staging.mjs": "5598bd815b5095109419452a26feb423b319d289bb1c1eaf8750762b34428da2"
+  },
+  "validationNote": "An intermediate full run overlapped source edits and used an older captured removal implementation for the new input-ownership test (1failed5053passed1skipped). Discarded as final evidence; final frozen full run is recorded separately. The final targeted65cases pass.",
+  "requiredCiGate": "Server CI now requires the production panel retention/order probe after Chromium installation;512KiB settled-versus-disposed JS heap budget;no timing threshold. actionlint1.7.12 passes all workflows with shellcheck/pyflakes disabled.",
+  "sourceRevision": "01ebe2da36b4cd48e04ed3ca78ae1534c0d0bcdf",
+  "fullClientCoverage": {
+    "statementPercent": 67.27,
+    "branchPercent": 64.51,
+    "functionPercent": 61.51,
+    "linePercent": 68.35,
+    "log": "hichat-search-removal-batch-coverage-frozen.log"
+  },
+  "build": "Actual tsc -b and Vite passed;Vite3.33s; existing chunk-size warning",
+  "lint": "General client lint passed:0errors2existing TanStack warnings"
+}

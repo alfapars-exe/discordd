@@ -1,4 +1,4 @@
-// backup_service_restore.go: boot-time restore of the DB snapshot and uploads tree from the HF Bucket.
+// backup_service_restore.go: legacy SQLite snapshot and uploads restore from the HF Bucket.
 package services
 
 import (
@@ -20,7 +20,7 @@ import (
 //
 // Returns nil (no-op) when:
 //   - cfg.Enabled == false (HF_TOKEN unset → self-host path)
-//   - cfg.DBPath is a remote libSQL/Turso DSN
+//   - cfg.DBPath is a remote database DSN (including PostgreSQL)
 //   - the file already exists and is >= 4 KiB (and BACKUP_FORCE_RESTORE != "1")
 //   - the bucket has no snapshot yet (fresh deploy, "404 / not found")
 //   - the downloaded snapshot fails PRAGMA integrity_check
@@ -29,8 +29,8 @@ import (
 // already on disk; an empty file just means migrations build the schema
 // from scratch. The only fatal-ish failure (returned as an error to the
 // caller) is the rare case where the staging file lands but cannot be
-// moved into place — main.go logs and continues either way, so even
-// this is best-effort.
+// moved into place. Callers own the recovery policy and must Stop the
+// service to cancel/join any accepted asynchronous uploads restore.
 //
 // Uploads are restored asynchronously after the DB so the HTTP server
 // can come up promptly even when the uploads dir is large; attachments
@@ -43,6 +43,15 @@ func (b *BackupService) Restore(ctx context.Context) error {
 	if database.IsRemoteDatabase(b.cfg.DBPath) {
 		backupLogger.Info("restore skipped: remote DSN, upstream is already persistent", "dsn", database.RedactDSN(b.cfg.DBPath))
 		return nil
+	}
+
+	ctx, finish, accepted := b.beginBackupOperation(ctx)
+	if !accepted {
+		return context.Canceled
+	}
+	defer finish()
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 
 	force := os.Getenv("BACKUP_FORCE_RESTORE") == "1"
@@ -129,16 +138,18 @@ func (b *BackupService) Restore(ctx context.Context) error {
 // (synchronously, before the goroutine starts and before Restore returns)
 // so callers can Wait on completion without an Add-after-Wait race.
 //
-// Its context descends from svcCtx, so Stop() tears the transfer down
-// promptly. The 60-minute timeout remains as the upper bound for a caller
-// that never stops the service.
+// Admission and completion are owned by the service lifecycle. Stop cancels
+// and joins the transfer. The 60-minute timeout remains the upper bound
+// when the service is left running.
 func (b *BackupService) startUploadsRestoreAsync() {
-	parent := b.svcCtx
-	if parent == nil {
-		parent = context.Background()
+	parent, finish, accepted := b.beginBackupOperation(context.Background())
+	if !accepted {
+		return
 	}
+
 	b.uploadsRestoreWG.Add(1)
 	go func() {
+		defer finish()
 		defer b.uploadsRestoreWG.Done()
 		ctx, cancel := context.WithTimeout(parent, 60*time.Minute)
 		defer cancel()
@@ -163,6 +174,9 @@ func (b *BackupService) waitForUploadsRestore() {
 // invoked WITHOUT --delete on purpose — restore must never destroy data
 // that already exists locally; the periodic backup will reconcile.
 func (b *BackupService) restoreUploadsFromBucket(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if b.cfg.UploadDir == "" {
 		return nil
 	}
@@ -201,6 +215,9 @@ func (b *BackupService) restoreUploadsFromBucket(ctx context.Context) error {
 // direction). Returns an error wrapping the combined stdout/stderr so
 // the caller can sniff for "404 / not found".
 func (b *BackupService) hfDownloadFile(ctx context.Context, srcSubpath, destPath string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	src := fmt.Sprintf("hf://buckets/%s/latest/%s", b.cfg.HFBucket, srcSubpath)
 	out, err := b.runCmd(ctx, b.hfEnv(), "hf", "buckets", "cp", src, destPath)
 	if err != nil {
@@ -218,6 +235,9 @@ func (b *BackupService) hfDownloadFile(ctx context.Context, srcSubpath, destPath
 // a partially-downloaded snapshot before we move it on top of the live
 // DB path.
 func (b *BackupService) verifyDBIntegrity(ctx context.Context, path string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	checkCtx, cancel := context.WithTimeout(ctx, 1*time.Minute)
 	defer cancel()
 	out, err := b.runCmd(checkCtx, nil, "sqlite3", path, "PRAGMA integrity_check;")

@@ -1,5 +1,7 @@
 import { create } from "zustand";
+import { completePreferenceMutation } from "./preferenceMutation";
 import { usePreferencesStore } from "./preferencesStore";
+import { capturePreferenceScope } from "./preferenceScope";
 
 export type TimeFormat = "auto" | "12" | "24";
 const STORAGE_KEY = "hichat.time-format.v1";
@@ -16,22 +18,32 @@ type TimeFormatState = {
   resetAccountPreferences: () => void;
 };
 
-export const useTimeFormatStore = create<TimeFormatState>((set) => ({
+export const useTimeFormatStore = create<TimeFormatState>((set, get) => ({
   timeFormat: initial(),
   setTimeFormat: (timeFormat) => {
-    set({ timeFormat });
-    try { localStorage.setItem(STORAGE_KEY, timeFormat); } catch { /* best effort */ }
-    usePreferencesStore.getState().set({ locale: { timeFormat } });
+    const isCurrent = capturePreferenceScope();
+    completePreferenceMutation(() => set({ timeFormat }), () => {
+      if (!isCurrent()) return;
+      const latest = get().timeFormat;
+      try { localStorage.setItem(STORAGE_KEY, latest); } catch { /* best effort */ }
+      if (latest === timeFormat) usePreferencesStore.getState().set({ locale: { timeFormat } });
+    });
   },
   applyFromServer: (value) => {
     const candidate = value && typeof value === "object" ? (value as { timeFormat?: unknown }).timeFormat : undefined;
     if (!valid(candidate)) return;
-    set({ timeFormat: candidate });
-    try { localStorage.setItem(STORAGE_KEY, candidate); } catch { /* best effort */ }
+    const isCurrent = capturePreferenceScope();
+    completePreferenceMutation(() => set({ timeFormat: candidate }), () => {
+      if (!isCurrent()) return;
+      try { localStorage.setItem(STORAGE_KEY, get().timeFormat); } catch { /* best effort */ }
+    });
   },
   resetAccountPreferences: () => {
-    set({ timeFormat: "auto" });
-    try { localStorage.setItem(STORAGE_KEY, "auto"); } catch { /* best effort */ }
+    const isCurrent = capturePreferenceScope();
+    completePreferenceMutation(() => set({ timeFormat: "auto" }), () => {
+      if (!isCurrent()) return;
+      try { localStorage.setItem(STORAGE_KEY, get().timeFormat); } catch { /* best effort */ }
+    });
   },
 }));
 

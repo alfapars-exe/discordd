@@ -1,3 +1,4 @@
+import { VOICE_NUMBER_RANGES } from "../../../stores/voicePreferences";
 /**
  * NoiseReductionSection — noise-reduction toggle, engine picker and the
  * DeepFilterNet3 suppression slider for the Voice & Audio settings tab.
@@ -92,7 +93,8 @@ function NoiseReductionSection() {
           <div style={{ marginTop: 8 }}>
             <VolumeSlider
               value={deepfilterSuppression}
-              max={100}
+              min={VOICE_NUMBER_RANGES.deepfilterSuppression[0]}
+              max={VOICE_NUMBER_RANGES.deepfilterSuppression[1]}
               onChange={setDeepfilterSuppression}
               ariaLabel={t("deepfilterSuppressionLabel")}
             />

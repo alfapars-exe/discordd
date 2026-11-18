@@ -4,6 +4,8 @@
  */
 
 import { getAuthGeneration } from "../../api/client";
+import { logToServer } from "../../api/clientLog";
+import { startPreferenceTask } from "../../stores/preferenceTask";
 import { invalidateUserProfile } from "../useUserProfile";
 import { useChannelStore } from "../../stores/channelStore";
 import { useGameJoinStore } from "../../stores/gameJoinStore";
@@ -210,7 +212,10 @@ export async function handleSystemEvent(
       return true;
     }
     case "preferences_changed": {
-      if (msg.d.user_id === useAuthStore.getState().user?.id) void usePreferencesStore.getState().fetchAndApply();
+      if (msg.d.user_id === useAuthStore.getState().user?.id) startPreferenceTask(
+        () => usePreferencesStore.getState().fetchAndApply(),
+        () => { void logToServer("error", "preferences_background_failed", { source: "websocket" }); },
+      );
       return true;
     }
     case "presence_update": {

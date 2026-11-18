@@ -56,6 +56,54 @@ beforeEach(() => {
   vi.mocked(api.editEncryptedMessage).mockResolvedValue({ success: true });
 });
 
+describe("overlay caller context retirement", () => {
+  it("rejects a revoked caller before fetching metadata or dispatching", async () => {
+    expect(await useMessageStore.getState().sendMessage("channel-A", "draft", undefined, undefined, "origin-server", { isCurrent: () => false })).toBe(false);
+    expect(getServer).not.toHaveBeenCalled();
+    expect(api.sendMessage).not.toHaveBeenCalled();
+    expect(api.sendEncryptedMessage).not.toHaveBeenCalled();
+  });
+
+  it.each(["metadata", "encryption", "response"] as const)("retires caller scope while awaiting %s", async stage => {
+    let current = true;
+    const metadata = deferred<Awaited<ReturnType<typeof getServer>>>();
+    const encryption = deferred<Awaited<ReturnType<typeof encryptChannelMessage>>>();
+    const response = deferred<Awaited<ReturnType<typeof api.sendMessage>>>();
+    if (stage === "metadata") vi.mocked(getServer).mockReturnValueOnce(metadata.promise);
+    if (stage === "encryption") vi.mocked(encryptChannelMessage).mockReturnValueOnce(encryption.promise);
+    if (stage === "response") {
+      vi.mocked(getServer).mockResolvedValueOnce({ success: true, data: originServer(false) });
+      vi.mocked(api.sendMessage).mockReturnValueOnce(response.promise);
+    }
+    const pending = useMessageStore.getState().sendMessage("channel-A", "draft", undefined, undefined, "origin-server", { isCurrent: () => current });
+    await vi.waitFor(() => expect(stage === "metadata" ? getServer : stage === "encryption" ? encryptChannelMessage : api.sendMessage).toHaveBeenCalled());
+    current = false;
+    metadata.resolve({ success: true, data: originServer() });
+    encryption.resolve({ distributionId: "retired" } as Awaited<ReturnType<typeof encryptChannelMessage>>);
+    response.resolve({ success: true, data: { id: "retired-response", channel_id: "channel-A" } as Message });
+    expect(await pending).toBe(false);
+    expect(api.sendEncryptedMessage).not.toHaveBeenCalled();
+    expect(api.sendMessage).toHaveBeenCalledTimes(stage === "response" ? 1 : 0);
+    expect(useMessageStore.getState().messagesByChannel["channel-A"]).toBeUndefined();
+  });
+
+  it("does not retry transient transport failure after caller retirement", async () => {
+    vi.useFakeTimers();
+    try {
+      let current = true;
+      vi.mocked(getServer).mockResolvedValueOnce({ success: true, data: originServer(false) });
+      vi.mocked(api.sendMessage).mockResolvedValue({ success: false, isNetworkError: true });
+      const pending = useMessageStore.getState().sendMessage("channel-A", "draft", undefined, undefined, "origin-server", { isCurrent: () => current });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(api.sendMessage).toHaveBeenCalledTimes(1);
+      current = false;
+      await vi.advanceTimersByTimeAsync(1500);
+      expect(await pending).toBe(false);
+      expect(api.sendMessage).toHaveBeenCalledTimes(1);
+    } finally { vi.useRealTimers(); }
+  });
+});
+
 describe("channel sends use the origin's encryption policy", () => {
   it("reuses the prepared encrypted body and identity on a manual retry", async () => {
     vi.mocked(api.sendEncryptedMessage).mockResolvedValueOnce({success:false,status:500,error:"temporary"}).mockResolvedValueOnce({success:true});

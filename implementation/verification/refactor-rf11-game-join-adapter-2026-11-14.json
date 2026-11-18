@@ -1,0 +1,32 @@
+{
+  "source_parent": "a182022c",
+  "scope": "RF11 remove transport decoding logic from composition-root constructor",
+  "change": "Extract existing game-join offer callback unchanged into game_join_offer_adapter.go; initServices only binds it to hub. No domain policy moved or weakened.",
+  "tests": [
+    "typed DTO, actor and physical connection preserved",
+    "service response propagated",
+    "bounded context canceled after dispatch",
+    "unknown/oversize/missing-field/negative-revision/invalid-recipe/unmarshalable/null inputs rejected without service call"
+  ],
+  "validation": [
+    {
+      "command": "go test . ./services -run 'TestGameJoin|Test.*Wiring|TestServiceInitialization|TestResourceOwning|TestVoiceConstructor' -count=1 -timeout=3m",
+      "exit": 0,
+      "root_seconds": 0.797,
+      "services_seconds": 0.492
+    },
+    {
+      "command": "go build ./...",
+      "exit": 0
+    },
+    {
+      "command": "go vet ./services .",
+      "exit": 0
+    }
+  ],
+  "limits": [
+    "No public HTTP/WebSocket fields changed",
+    "Windows Go1.27.4 CGO0; full Linux race and current-source CI remain separate gates",
+    "Other RF11 domain grouping and mandatory dependency checks still require requirement audit"
+  ]
+}

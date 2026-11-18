@@ -1,0 +1,144 @@
+{
+  "baseCommit": "a5287ac6c23cbcd2513e93c0231ef42d0f885401",
+  "scope": "Failed idle encrypted-search frontier; performance scanner refactor is separate",
+  "regression": "Real production React panels with a failed index creation retained ~0.9-1.0MB after10000 missing deletion events; --failure-only --after-only --assert-idle-budget failed before the fix",
+  "fix": "Clear fired debounce ownership; do not queue deletions/no-op React updates without an index or pending query; clear tombstones on failure/input/close; empty input immediately removes rendered private hits",
+  "nativeProbe": {
+    "budget": "Less than256KiB retained growth after10000 idle missing deletions; a resource regression gate, not whole-app capacity acceptance",
+    "before": [
+      {
+        "variant": "after",
+        "kind": "channel",
+        "failedSearchFrontier": [
+          {
+            "events": 1000,
+            "retainedGrowthBytes": 263200
+          },
+          {
+            "events": 5000,
+            "retainedGrowthBytes": 803820
+          },
+          {
+            "events": 10000,
+            "retainedGrowthBytes": 1102016
+          }
+        ]
+      }
+    ],
+    "after": [
+      {
+        "variant": "after",
+        "kind": "channel",
+        "failedSearchFrontier": [
+          {
+            "events": 1000,
+            "retainedGrowthBytes": 75576
+          },
+          {
+            "events": 5000,
+            "retainedGrowthBytes": 76168
+          },
+          {
+            "events": 10000,
+            "retainedGrowthBytes": 76072
+          }
+        ]
+      },
+      {
+        "variant": "after",
+        "kind": "dm",
+        "failedSearchFrontier": [
+          {
+            "events": 1000,
+            "retainedGrowthBytes": 14040
+          },
+          {
+            "events": 5000,
+            "retainedGrowthBytes": 14136
+          },
+          {
+            "events": 10000,
+            "retainedGrowthBytes": 13980
+          }
+        ]
+      }
+    ],
+    "initialQuick": [
+      {
+        "variant": "after",
+        "kind": "channel",
+        "size": 1000,
+        "matches": 267,
+        "repetitions": 1,
+        "firstMedianMs": 335.5,
+        "nextMedianMs": 20.80000001192093,
+        "previousMedianMs": 20.200000017881393,
+        "retainedMedianBytes": 256884,
+        "sampledPeakMedianBytes": 1209320,
+        "scope": "Actual production React panels + real IndexedDB, controlled stores/i18n/spam/navigation.25ms sampled peak is not an exact upper bound; excludes whole-app state/native disk. Durations use input/click capture to committed matching DOM,exclude Playwright actionability; first includes300ms debounce."
+      },
+      {
+        "variant": "after",
+        "kind": "channel",
+        "failedSearchFrontier": [
+          {
+            "events": 1000,
+            "retainedGrowthBytes": 190412
+          },
+          {
+            "events": 5000,
+            "retainedGrowthBytes": 719940
+          },
+          {
+            "events": 10000,
+            "retainedGrowthBytes": 1017944
+          }
+        ]
+      },
+      {
+        "variant": "after",
+        "kind": "dm",
+        "size": 1000,
+        "matches": 267,
+        "repetitions": 1,
+        "firstMedianMs": 340.80000001192093,
+        "nextMedianMs": 21.19999998807907,
+        "previousMedianMs": 23.099999994039536,
+        "retainedMedianBytes": 244648,
+        "sampledPeakMedianBytes": 1190572,
+        "scope": "Actual production React panels + real IndexedDB, controlled stores/i18n/spam/navigation.25ms sampled peak is not an exact upper bound; excludes whole-app state/native disk. Durations use input/click capture to committed matching DOM,exclude Playwright actionability; first includes300ms debounce."
+      },
+      {
+        "variant": "after",
+        "kind": "dm",
+        "failedSearchFrontier": [
+          {
+            "events": 1000,
+            "retainedGrowthBytes": 150752
+          },
+          {
+            "events": 5000,
+            "retainedGrowthBytes": 607416
+          },
+          {
+            "events": 10000,
+            "retainedGrowthBytes": 926200
+          }
+        ]
+      }
+    ]
+  },
+  "verification": "34 UI/hydration tests and tsc passed before native-loop refactor. Additional owner-session/device/input-clear UI cases are included in the final integrated4981-test run; see separate native refactor receipt.",
+  "normalizedLFSourceSha256": {
+    "client/src/components/chat/SearchPanel.tsx": "7fa2bce66a68d1c04907e63cc0b613ea7b55d0b954502395b8e4a06d12e821ac",
+    "client/src/components/chat/SearchPanel.test.tsx": "bcfaee52f2f3fcae3592691f661368af9d2b64cb58a3acf2690303416a514b18",
+    "client/src/components/dm/DMSearchPanel.tsx": "73963843b2af665393edee3b88221b5e5475efb83617dc343c06f8ffa2701e5e",
+    "client/src/components/dm/DMSearchPanel.test.tsx": "504fcb8e85909e70f80fb1aef3c80f40e99b03fb14e61ae00282ed47e1da4ab5",
+    "e2e/scripts/benchmark-search-panels.mjs": "d48799370bb29a72046db417ee09566a6e8edf9325fc8b684d5d066b08cb0630"
+  },
+  "remaining": [
+    "Active query/slow consumer frontier still requires separate burst/resource acceptance",
+    "Rendered-panel latency and sampled peak results depend on integrated scanner refactor, not this isolated behavioral commit",
+    "Whole-project acceptance remains open"
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "scope": "Ownership of rejected incoming WebSocket dispatch and background loaded-channel repair promises. This is a lifecycle/error-observation change, not a retry/replay or backpressure implementation.",
+  "red": [
+    {
+      "log": "hichat-ws-dispatch-rejection-red.log",
+      "failed": 1,
+      "passed": 34,
+      "unhandledRejections": 4
+    },
+    {
+      "log": "hichat-ws-history-rejection-red.log",
+      "failed": 1,
+      "passed": 38,
+      "unhandledRejections": 4
+    }
+  ],
+  "targetedGreen": {
+    "passed": 39,
+    "seconds": 2.57,
+    "unhandledRejections": 0,
+    "log": "hichat-ws-rejection-ownership-green.log"
+  },
+  "behavior": [
+    "Latest-ref dispatcher explicitly returns Promise<void>;socket owner observes its rejection.",
+    "Active owner emits one ws_event_dispatch_failed diagnostic containing only protocol op;no payload/error text,token,message ID or channel ID.",
+    "Background loaded-channel repair observes rejection and emits ws_channel_resync_failed without identifiers.",
+    "Offline,account replacement and unmount retire ownership before late rejection;the promise is observed without logging into a replacement session.",
+    "No retry after unknown partial mutation;subsequent active frames still route."
+  ],
+  "sha256": {
+    "client/src/hooks/useWebSocket.ts": "f91fdd06967ab9e0c9764fa32a9fd2570b56cd875a2b907d810bcb1652160fc7",
+    "client/src/hooks/useWebSocket.offline.test.ts": "6331c330c57afdab644096382c84ff825ef28cd2ad2d789ccf3fa1908db3fb19"
+  },
+  "limits": [
+    "Collaborators gated by real mounted hook tests;not native transport/provider/load acceptance.",
+    "Search unique-ID active frontier remains unbounded;do not discard IDs or restart before source cache writes settle.",
+    "No delivery loss/replay semantics claim."
+  ],
+  "priorRemote": {
+    "revision": "7fec123d791db89bd9421a6524deff1b20a6eb82",
+    "serverRun": 43706935713,
+    "e2eJob": 132789931044,
+    "nativeStaging": "success",
+    "productionPanelRetentionAndOrdering": "success",
+    "productionFailureAndIdleRetention": "success",
+    "overall": "still running at observation;not terminal evidence"
+  },
+  "sourceRevision": "0d89e84982c321021c8c7987b21ffab9cca3994a",
+  "fullClientCoverage": {
+    "files": 485,
+    "passed": 5064,
+    "skipped": 1,
+    "seconds": 112.41,
+    "statementPercent": 67.33,
+    "branchPercent": 64.54,
+    "functionPercent": 61.54,
+    "linePercent": 68.4,
+    "log": "hichat-ws-rejection-ownership-coverage.log"
+  },
+  "build": "actual tsc-b/VitePASS3.12s; existing chunk warning",
+  "lint": "changed hook and hook test lintPASS"
+}

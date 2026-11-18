@@ -12,32 +12,22 @@ package main
 import (
 	"context"
 	"database/sql"
-	"io/fs"
 	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/argeinfina/hichat/database"
+	"github.com/argeinfina/hichat/internal/testfixture"
 	"github.com/argeinfina/hichat/testutil"
 )
 
-// newCensusDB boots a throwaway database with the full embedded migration set
-// and returns it alongside its path, so a test can also open a second,
-// FK-disabled connection to the same file.
+var censusFixtures testfixture.SQLite
+
+// Each census owns its migrated database and its second-connection path.
 func newCensusDB(t *testing.T) (*database.DB, string) {
 	t.Helper()
-	migrationsFS, err := fs.Sub(database.EmbeddedMigrations, "migrations")
-	if err != nil {
-		t.Fatalf("fs.Sub: %v", err)
-	}
-	path := filepath.Join(t.TempDir(), "census.db")
-	db, err := database.NewLegacy(path, migrationsFS)
-	if err != nil {
-		t.Fatalf("database.New: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-	return db, path
+	return censusFixtures.OpenWithPath(t, "census.db")
 }
 
 // seedOrphans writes rows through a connection with foreign_keys OFF. Some of

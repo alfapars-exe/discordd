@@ -17,8 +17,11 @@ type profilePreferenceReader interface {
 	Get(context.Context, string) (*models.UserPreferences, error)
 }
 
-type profilePreferenceBatchReader interface {
-	GetManyStrict(context.Context, []string) (map[string]*models.UserPreferences, error)
+type profilePreferenceBatchReader = repository.StrictPreferencesBatchReader
+
+type profileAudiencePreferenceReader interface {
+	profilePreferenceReader
+	profilePreferenceBatchReader
 }
 
 type profileFriendshipReader interface {
@@ -27,11 +30,21 @@ type profileFriendshipReader interface {
 	IsBlocked(context.Context, string, string) (bool, error)
 }
 
+type profileAudienceFriendshipReader interface {
+	profileFriendshipReader
+	repository.ProfileAudienceBlockReader
+}
+
 type profileServerReader interface {
 	GetUserServers(context.Context, string) ([]models.ServerListItem, error)
 	GetMemberCount(context.Context, string) (int, error)
 	IsMember(context.Context, string, string) (bool, error)
 	ListMemberIDs(context.Context, string) ([]string, error)
+}
+
+type profileAudienceServerReader interface {
+	profileServerReader
+	repository.ProfileAudienceSharedServerReader
 }
 
 // ProfileAudiencePolicy enforces the target user's account-scoped profile
@@ -61,12 +74,12 @@ type ProfileAudienceServicePolicy interface {
 }
 
 type profileAudiencePolicy struct {
-	prefs   profilePreferenceReader
-	friends profileFriendshipReader
-	servers profileServerReader
+	prefs   profileAudiencePreferenceReader
+	friends profileAudienceFriendshipReader
+	servers profileAudienceServerReader
 }
 
-func NewProfileAudiencePolicy(prefs profilePreferenceReader, friends profileFriendshipReader, servers profileServerReader) ProfileAudienceServicePolicy {
+func NewProfileAudiencePolicy(prefs profileAudiencePreferenceReader, friends profileAudienceFriendshipReader, servers profileAudienceServerReader) ProfileAudienceServicePolicy {
 	return &profileAudiencePolicy{prefs: prefs, friends: friends, servers: servers}
 }
 
@@ -222,11 +235,7 @@ func (p *profileAudiencePolicy) ListProfileAudienceViewers(ctx context.Context, 
 	if len(candidates) == 0 {
 		return candidates, nil
 	}
-	blocks, ok := p.friends.(repository.ProfileAudienceBlockReader)
-	if !ok {
-		return nil, errors.New("profile audience: bulk block reader is unavailable")
-	}
-	blocked, err := blocks.ListBlockedUserIDs(ctx, targetID, candidates)
+	blocked, err := p.friends.ListBlockedUserIDs(ctx, targetID, candidates)
 	if err != nil {
 		return nil, err
 	}
@@ -302,10 +311,6 @@ func (p *profileAudiencePolicy) CanViewInServerMany(ctx context.Context, viewerI
 	if p.prefs == nil || p.friends == nil || p.servers == nil {
 		return nil, errors.New("profile audience: required reader is unavailable")
 	}
-	batchPrefs, ok := p.prefs.(profilePreferenceBatchReader)
-	if !ok {
-		return nil, errors.New("profile audience: batch preference reader is unavailable")
-	}
 	viewerMember, err := p.servers.IsMember(ctx, serverID, viewerID)
 	if err != nil {
 		return nil, err
@@ -345,7 +350,7 @@ func (p *profileAudiencePolicy) CanViewInServerMany(ctx context.Context, viewerI
 		}
 		return result, nil
 	}
-	prefs, err := batchPrefs.GetManyStrict(ctx, targets)
+	prefs, err := p.prefs.GetManyStrict(ctx, targets)
 	if err != nil {
 		return nil, err
 	}
@@ -353,11 +358,7 @@ func (p *profileAudiencePolicy) CanViewInServerMany(ctx context.Context, viewerI
 	if err != nil {
 		return nil, err
 	}
-	blockReader, ok := p.friends.(repository.ProfileAudienceBlockReader)
-	if !ok {
-		return nil, errors.New("profile audience: bulk block reader is unavailable")
-	}
-	blockedIDs, err := blockReader.ListBlockedUserIDs(ctx, viewerID, targets)
+	blockedIDs, err := p.friends.ListBlockedUserIDs(ctx, viewerID, targets)
 	if err != nil {
 		return nil, err
 	}
@@ -383,11 +384,7 @@ func (p *profileAudiencePolicy) CanViewInServerMany(ctx context.Context, viewerI
 	}
 	smallSharedServers := map[string]bool{}
 	if needsSmallServerCount {
-		batchServers, ok := p.servers.(repository.ProfileAudienceSharedServerReader)
-		if !ok {
-			return nil, errors.New("profile audience: batch shared-server reader is unavailable")
-		}
-		smallSharedServers, err = batchServers.ListSmallSharedServerUserIDs(ctx, viewerID, targets, smallProfileAudienceServerMax)
+		smallSharedServers, err = p.servers.ListSmallSharedServerUserIDs(ctx, viewerID, targets, smallProfileAudienceServerMax)
 		if err != nil {
 			return nil, err
 		}

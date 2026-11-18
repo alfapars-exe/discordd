@@ -1,0 +1,81 @@
+{
+  "characterizationCommit": "3550f21b",
+  "sourceCommit": "182864c9",
+  "testOrderingCommit": "10b35dfa",
+  "sonarIssue": "AaHfuK4y4B142AX0cP6F",
+  "originalCognitiveComplexity": 22,
+  "change": "Extract one complete bounded metadata/messageCache transaction; orchestration keeps scope checks and consumer outside the transaction",
+  "transactionBodyIndentNormalizedSHA256": "acb4292c7aee0f73685d32e02b4f94e501497e43327cbc0a2e256947c44c40f9",
+  "validation": {
+    "before": 25,
+    "targetedAfter": 58,
+    "typeAndBuild": "PASS",
+    "lint": "0 errors / 2 existing warnings",
+    "coverage": {
+      "lines": 100,
+      "functions": 100,
+      "branches": 96.96,
+      "statements": 98.36
+    },
+    "initialFull": "5521 pass / 1 skip / 1 fail; pre-existing concurrent DM test assumed invocation order matched intent/eviction order",
+    "orderingFix": "Explicit durable-intent and eviction barriers retain exact outcomes and newer-intent assertion; 25 target tests pass",
+    "finalFull": "5522 pass / 1 skip / 0 fail; 504 files, 103.28s",
+    "finalFullLog": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-deletion-journal-ordered-full.log",
+      "sha256": "ee5d04c04c8b3099f7a33aaec450fd1ba13947a9d7176a7161cc49448fe75f09"
+    }
+  },
+  "pending": [
+    "Native/platform whole pipeline acceptance"
+  ],
+  "separatePublishedHeadFailure": {
+    "head": "79f600db",
+    "job": 132993860147,
+    "reason": "Production search panel pending-frontier DM stage waitForFunction timeout at benchmark-search-panels.mjs:142; channel stage and Chromium/WebKit deletion drain passed; no rerun or resolution claimed",
+    "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-79f6-playwright.log",
+    "localBrowserDiagnostic": {
+      "tool": "ego-browser",
+      "taskSpace": 28,
+      "origin": "task-owned localhost:50937",
+      "source": "Working tree after 182864c9/10b35dfa; no immutable-source comparison claim",
+      "observations": [
+        "channel then DM, each 50,000 missing-ID events: total267 and25rows",
+        "repeat channel then DM with GC after each event batch: total267 and25rows",
+        "both runs drained/disposed indexes on unmount"
+      ],
+      "limit": "Timeout not reproduced locally; different browser/host from Linux CI. No resolution claimed.",
+      "diagnosticChange": "Future timeout reports handoffReady, result count, count text, panel text, releasedAt and captured page errors; original 120s limit and thrown error preserved",
+      "cleanup": "Task browser space closed; diagnostic server stopped"
+    },
+    "followingCIObservation": {
+      "head": "1dbb9750",
+      "run": 43774484351,
+      "job": 132997515593,
+      "step": "Verify production search panel retention and ordering",
+      "conclusion": "success",
+      "limit": "Failure did not recur in this run; original root cause remains open; whole run still in progress at observation"
+    }
+  },
+  "sonar": {
+    "issue": "AaHfuK4y4B142AX0cP6F",
+    "status": "CLOSED",
+    "resolution": "FIXED",
+    "analyzedSourceMatched": true
+  },
+  "selfScan": {
+    "source": "1dbb9750",
+    "result": "PASS",
+    "reviewedExactSourceRecords": 51,
+    "reviewLines": 480,
+    "blockingPatternHits": 0,
+    "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-journal-1dbb9750-scan.log",
+    "sha256": "7c38f186e7d8179f745a771e922fef16bb76d5680582ec67805b7445a1484ff1",
+    "limit": "Pattern scan does not establish vulnerability absence"
+  },
+  "ci": {
+    "head": "1dbb9750",
+    "checks": "36/36 SUCCESS",
+    "serverRun": 43774484351,
+    "receipt": "refactor-1dbb-terminal-ci-2026-11-16.json"
+  }
+}

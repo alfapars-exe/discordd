@@ -34,12 +34,12 @@ func (r *sqliteChannelMessageNotificationQueue) Enqueue(ctx context.Context, mes
 	// opted in. Opt-in is account-synced and absent legacy values are false.
 	query := `INSERT INTO channel_message_notification_jobs(message_id,server_id,channel_id,actor_id)
 	 SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM server_members sm JOIN user_preferences p ON p.user_id=sm.user_id
-	 WHERE sm.server_id=? AND sm.user_id<>? AND CASE WHEN json_valid(p.data) THEN json_extract(p.data,'$.notifications.channelMessageNotifications') ELSE 0 END=1)
+	 WHERE sm.server_id=? AND sm.user_id<>? AND CASE WHEN json_valid(p.data) THEN json_type(p.data,'$.notifications.channelMessageNotifications') ELSE '' END='true')
 	 ON CONFLICT(message_id) DO NOTHING`
 	if r.postgres {
 		query = `INSERT INTO channel_message_notification_jobs(message_id,server_id,channel_id,actor_id)
 	 SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM server_members sm JOIN user_preferences p ON p.user_id=sm.user_id
-	 WHERE sm.server_id=? AND sm.user_id<>? AND COALESCE((CASE WHEN pg_input_is_valid(p.data,'jsonb') THEN p.data::jsonb ELSE '{}'::jsonb END #>> '{notifications,channelMessageNotifications}')::boolean,false)=true)
+	 WHERE sm.server_id=? AND sm.user_id<>? AND COALESCE((CASE WHEN pg_input_is_valid(p.data,'jsonb') THEN p.data::jsonb ELSE '{}'::jsonb END #> '{notifications,channelMessageNotifications}')='true'::jsonb,false))
 	 ON CONFLICT(message_id) DO NOTHING`
 	}
 	_, err := r.db.ExecContext(ctx, query, messageID, serverID, channelID, actorID, serverID, actorID)
@@ -83,12 +83,12 @@ func (r *sqliteChannelMessageNotificationQueue) NextBatch(ctx context.Context, l
 	}
 	query := `SELECT sm.user_id FROM server_members sm JOIN user_preferences p ON p.user_id=sm.user_id
 	 JOIN users u ON u.id=sm.user_id AND u.deleted_at IS NULL
-	 WHERE sm.server_id=? AND sm.user_id>? AND sm.user_id<>? AND CASE WHEN json_valid(p.data) THEN json_extract(p.data,'$.notifications.channelMessageNotifications') ELSE 0 END=1
+	 WHERE sm.server_id=? AND sm.user_id>? AND sm.user_id<>? AND CASE WHEN json_valid(p.data) THEN json_type(p.data,'$.notifications.channelMessageNotifications') ELSE '' END='true'
 	 ORDER BY sm.user_id LIMIT ?`
 	if r.postgres {
 		query = `SELECT sm.user_id FROM server_members sm JOIN user_preferences p ON p.user_id=sm.user_id
 	 JOIN users u ON u.id=sm.user_id AND u.deleted_at IS NULL
-	 WHERE sm.server_id=? AND sm.user_id>? AND sm.user_id<>? AND COALESCE((CASE WHEN pg_input_is_valid(p.data,'jsonb') THEN p.data::jsonb ELSE '{}'::jsonb END #>> '{notifications,channelMessageNotifications}')::boolean,false)=true
+	 WHERE sm.server_id=? AND sm.user_id>? AND sm.user_id<>? AND COALESCE((CASE WHEN pg_input_is_valid(p.data,'jsonb') THEN p.data::jsonb ELSE '{}'::jsonb END #> '{notifications,channelMessageNotifications}')='true'::jsonb,false)
 	 ORDER BY sm.user_id LIMIT ?`
 	}
 	rows, err := r.db.QueryContext(ctx, query, job.ServerID, job.CursorUserID, job.ActorID, limit)
@@ -120,7 +120,7 @@ func (r *sqliteChannelMessageNotificationQueue) SuppressedRecipients(ctx context
 	 EXISTS(SELECT 1 FROM channel_mutes cm WHERE cm.user_id=sm.user_id AND cm.channel_id IN(c.id,c.parent_channel_id) AND (cm.muted_until IS NULL OR cm.muted_until>CURRENT_TIMESTAMP)),
 	 EXISTS(SELECT 1 FROM server_mutes mu WHERE mu.user_id=sm.user_id AND mu.server_id=c.server_id AND (mu.muted_until IS NULL OR mu.muted_until>CURRENT_TIMESTAMP)),
 	 EXISTS(SELECT 1 FROM friendships f WHERE f.status='blocked' AND ((f.user_id=sm.user_id AND f.friend_id=?) OR (f.user_id=? AND f.friend_id=sm.user_id))),
-	 EXISTS(SELECT 1 FROM json_each(CASE WHEN json_valid(p.data) THEN COALESCE(json_extract(p.data,'$.privacy.ignoredUsers'),'{}') ELSE '{}' END) WHERE key=? AND value=1)
+	 EXISTS(SELECT 1 FROM json_each(CASE WHEN json_valid(p.data) THEN CASE WHEN json_type(p.data,'$.privacy.ignoredUsers')='object' THEN json_extract(p.data,'$.privacy.ignoredUsers') ELSE '{}' END ELSE '{}' END) WHERE key=? AND value=1)
 	 FROM server_members sm JOIN channels c ON c.id=? JOIN user_preferences p ON p.user_id=sm.user_id
 	 WHERE sm.server_id=? AND sm.user_id IN (SELECT value FROM json_each(?))`
 	args := []any{job.ActorID, job.ActorID, job.ActorID, job.ChannelID, job.ServerID, string(userIDsJSON)}
@@ -245,11 +245,11 @@ func (r *sqliteChannelMessageNotificationQueue) CommitBatch(ctx context.Context,
 		 SELECT 1 FROM messages m JOIN channels c ON c.id=m.channel_id JOIN server_members sm ON sm.server_id=c.server_id AND sm.user_id=?
 		 JOIN users u ON u.id=sm.user_id AND u.deleted_at IS NULL
 		 JOIN user_preferences p ON p.user_id=sm.user_id WHERE m.id=? AND m.channel_id=? AND m.user_id=?
-		 AND CASE WHEN json_valid(p.data) THEN json_extract(p.data,'$.notifications.channelMessageNotifications') ELSE 0 END=1
+		 AND CASE WHEN json_valid(p.data) THEN json_type(p.data,'$.notifications.channelMessageNotifications') ELSE '' END='true'
 		 AND NOT EXISTS(SELECT 1 FROM channel_mutes cm WHERE cm.user_id=sm.user_id AND cm.channel_id IN (c.id,c.parent_channel_id) AND (cm.muted_until IS NULL OR cm.muted_until>CURRENT_TIMESTAMP))
 		 AND NOT EXISTS(SELECT 1 FROM server_mutes smu WHERE smu.user_id=sm.user_id AND smu.server_id=c.server_id AND (smu.muted_until IS NULL OR smu.muted_until>CURRENT_TIMESTAMP))
 		 AND NOT EXISTS(SELECT 1 FROM friendships f WHERE f.status='blocked' AND ((f.user_id=sm.user_id AND f.friend_id=m.user_id) OR (f.user_id=m.user_id AND f.friend_id=sm.user_id)))
-		 AND NOT EXISTS(SELECT 1 FROM json_each(CASE WHEN json_valid(p.data) THEN COALESCE(json_extract(p.data,'$.privacy.ignoredUsers'),'{}') ELSE '{}' END) WHERE key=? AND value=1)
+		 AND NOT EXISTS(SELECT 1 FROM json_each(CASE WHEN json_valid(p.data) THEN CASE WHEN json_type(p.data,'$.privacy.ignoredUsers')='object' THEN json_extract(p.data,'$.privacy.ignoredUsers') ELSE '{}' END ELSE '{}' END) WHERE key=? AND value=1)
 		 AND NOT EXISTS(SELECT 1 FROM notifications old WHERE old.user_id=sm.user_id AND old.message_id=m.id AND old.kind IN ('mention','reply')))
 		 ON CONFLICT(id) DO NOTHING`
 		if database.IsPostgres(db) {
@@ -258,7 +258,7 @@ func (r *sqliteChannelMessageNotificationQueue) CommitBatch(ctx context.Context,
 			 SELECT 1 FROM messages m JOIN channels c ON c.id=m.channel_id JOIN server_members sm ON sm.server_id=c.server_id AND sm.user_id=?
 			 JOIN users u ON u.id=sm.user_id AND u.deleted_at IS NULL
 			 JOIN user_preferences p ON p.user_id=sm.user_id WHERE m.id=? AND m.channel_id=? AND m.user_id=?
-			 AND COALESCE((CASE WHEN pg_input_is_valid(p.data,'jsonb') THEN p.data::jsonb ELSE '{}'::jsonb END #>> '{notifications,channelMessageNotifications}')::boolean,false)=true
+			 AND COALESCE((CASE WHEN pg_input_is_valid(p.data,'jsonb') THEN p.data::jsonb ELSE '{}'::jsonb END #> '{notifications,channelMessageNotifications}')='true'::jsonb,false)
 			 AND NOT EXISTS(SELECT 1 FROM channel_mutes cm WHERE cm.user_id=sm.user_id AND cm.channel_id IN (c.id,c.parent_channel_id) AND (cm.muted_until IS NULL OR cm.muted_until>CURRENT_TIMESTAMP))
 			 AND NOT EXISTS(SELECT 1 FROM server_mutes smu WHERE smu.user_id=sm.user_id AND smu.server_id=c.server_id AND (smu.muted_until IS NULL OR smu.muted_until>CURRENT_TIMESTAMP))
 			 AND NOT EXISTS(SELECT 1 FROM friendships f WHERE f.status='blocked' AND ((f.user_id=sm.user_id AND f.friend_id=m.user_id) OR (f.user_id=m.user_id AND f.friend_id=sm.user_id)))

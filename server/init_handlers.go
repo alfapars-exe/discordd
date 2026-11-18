@@ -29,6 +29,8 @@ type Handlers struct {
 	Search                *handlers.SearchHandler
 	ReadState             *handlers.ReadStateHandler
 	DM                    *handlers.DMHandler
+	DMDeviceRoster        *handlers.DMDeviceRosterHandler
+	GroupDMDeviceRoster   *handlers.GroupDMDeviceRosterHandler
 	GroupDM               *handlers.GroupDMHandler
 	Reaction              *handlers.ReactionHandler
 	ChannelPermission     *handlers.ChannelPermissionHandler
@@ -91,7 +93,7 @@ func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, h
 		panic("music session validation dependency is not wired")
 	}
 	return &Handlers{
-		GameJoin:              handlers.NewGameJoinHandler(svcs.GameJoin, svcs.Auth, repos.User, repos.AccountLifecycle),
+		GameJoin:              handlers.NewGameJoinHandler(svcs.GameJoin, svcs.Auth, repos.User, repos.AccountLifecycle, limiters.GameJoin),
 		AccountStatus:         handlers.NewAccountStatusHandler(repos.AccountStatus),
 		AccountDeletionStatus: handlers.NewAccountDeletionStatusHandler(repos.AccountDeletionStatus),
 		EmailVerification:     handlers.NewEmailVerificationHandler(svcs.EmailVerification, limiters.VerifyEmail),
@@ -125,6 +127,8 @@ func initHandlers(svcs *Services, repos *Repositories, limiters *RateLimiters, h
 		Report:                handlers.NewReportHandler(svcs.Report, svcs.ReportUpload, cfg.Upload.MaxSize),
 		Gif:                   handlers.NewGifHandler(cfg.Klipy.APIKey),
 		Device:                handlers.NewDeviceHandler(svcs.Device),
+		DMDeviceRoster:        handlers.NewDMDeviceRosterHandler(svcs.DM, svcs.Device),
+		GroupDMDeviceRoster:   handlers.NewGroupDMDeviceRosterHandler(svcs.GroupDM, svcs.Device),
 		E2EE:                  handlers.NewE2EEHandler(svcs.E2EE, limiters.GroupSession),
 		LinkPreview:           handlers.NewLinkPreviewHandler(svcs.LinkPreview),
 		Badge:                 handlers.NewBadgeHandler(svcs.Badge, cfg.Upload.Dir),

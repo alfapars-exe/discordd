@@ -1,0 +1,17 @@
+{
+  "source_parent": "979f7826",
+  "scope": "RF13 full voice store state preservation during preference hydration",
+  "validation": {
+    "voice_store_tests_passed": 68,
+    "vitest_exit": 0,
+    "eslint_exit": 0,
+    "typescript_build_exit": 0,
+    "diff_check_exit": 0
+  },
+  "evidence": "Actual composed voice store receives seeded active channel, LiveKit URL/token, room encryption key, mute/deafen/stream state, volume restoration map and callbacks. resetAccountPreferences(true) and applyFromServer preserve session identity while account volume settings change; no leave callback or WebSocket send occurs.",
+  "limits": [
+    "No real LiveKit connection, microphone or physical media tested",
+    "Direct store actions; bootstrap/account adapter path still requires composed acceptance",
+    "Whole RF13 remains open"
+  ]
+}

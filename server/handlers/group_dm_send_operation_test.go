@@ -61,7 +61,7 @@ func groupOperationFixture(t *testing.T) (*GroupDMHandler, repository.GroupDMRep
 	}}
 	broadcasts := new(int)
 	hub := &testutil.MockBroadcaster{BroadcastToUsersFn: func([]string, ws.Event) { *broadcasts++ }}
-	service := services.NewGroupDMService(repo, users, nil, hub, "", "", "", nil, t.TempDir())
+	service := services.NewGroupDMService(repo, users, nil, hub, "", "", "", nil, t.TempDir(), nil, nil, nil, nil)
 	upload := &operationUpload{GroupDMUploadService: services.NewGroupDMUploadService(repo, t.TempDir(), 1024)}
 	return NewGroupDMHandler(service, upload, 1024, nil, nil, nil), repo, db, upload, broadcasts
 }

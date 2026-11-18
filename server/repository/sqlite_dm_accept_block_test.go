@@ -25,7 +25,7 @@ func TestAcceptPendingDMChecksCurrentBlockAndStatus(t *testing.T) {
 		if err := friends.Create(ctx, &models.Friendship{ID: "block", UserID: a, FriendID: b, Status: models.FriendshipStatusBlocked, CreatedAt: now, UpdatedAt: now}); err != nil {
 			t.Fatal(err)
 		}
-		writer := dm.(PendingDMAccepter)
+		writer := dm
 		if changed, err := writer.AcceptPendingUnblocked(ctx, ch.ID); err != nil || changed {
 			t.Fatalf("blocked request changed=%v err=%v", changed, err)
 		}
@@ -77,7 +77,7 @@ func TestPostgresPendingDMAwaitsBlockCommit(t *testing.T) {
 	started := make(chan struct{})
 	go func() {
 		close(started)
-		changed, err := dm.(PendingDMAccepter).AcceptPendingUnblocked(ctx, ch.ID)
+		changed, err := dm.AcceptPendingUnblocked(ctx, ch.ID)
 		done <- outcome{changed, err}
 	}()
 	<-started

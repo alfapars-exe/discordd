@@ -1,0 +1,27 @@
+{
+  "date": "2026-11-15",
+  "base": "dd473128",
+  "sources": {
+    "client/src/hooks/useWebUpdateChecker.ts": "424f9b3629b65ed688f4a2f8b2aa5b49ebcfd4b8b34a6cddfdcf3ddf0dbaf7ed",
+    "client/src/hooks/useWebUpdateChecker.test.ts": "08a0277e01adb121d7b53e4bc29569dbb1374ee538d63d13081dd12d97287ce3"
+  },
+  "before": "all three new web lifecycle regressions failed",
+  "fix": "Skip initially hidden polling, clear pending timeout on hide, allow only one pending request, cancel owned request on unmount and bound complete API lifetime to60s poll interval",
+  "validation": {
+    "targeted": "four suites90tests passed: web hook,electron hook,state machine,real HTTP client timeout/cancellation contracts",
+    "typescript": "npx tsc -b passed",
+    "lint": "changed web hook and tests passed",
+    "build": "Vite production build passed"
+  },
+  "invariants": [
+    "visibility bursts and slow response cannot multiply requests",
+    "baseline then redeploy detection preserved",
+    "hidden tab holds no polling timer",
+    "unmount aborts request and late response cannot update state"
+  ],
+  "limits": [
+    "hook transport mocked; API lifetime contracts separately exercised",
+    "not real-browser long-session soak or packaged/native acceptance",
+    "local commit held while remote8efdfddc workflows run"
+  ]
+}

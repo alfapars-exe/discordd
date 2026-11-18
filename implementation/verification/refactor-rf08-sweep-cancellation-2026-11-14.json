@@ -1,0 +1,13 @@
+{
+  "source_parent": "a8c1f90a",
+  "change": "Extract private runRefreshSweep(ctx,ticks) loop from the owner-managed ticker goroutine; ticker allocation, stop and done ownership unchanged",
+  "test": "TestAuthMaintenanceCancellationWaitsForInFlightSweep",
+  "method": "Hold replay-evidence mutex; unbuffered tick rendezvous proves worker selected sweep; cancel; assert worker not done; release mutex; assert done and only expired evidence removed",
+  "command": "go test ./services -run 'TestAuth(Maintenance|Sweep|Refresh)' -count=1 -timeout=3m",
+  "exit": 0,
+  "package_seconds": 0.504,
+  "limits": [
+    "Windows Go1.27.4 CGO0; no local race claim",
+    "Deterministic loop-level cancellation proof plus retained public owner lifecycle tests; not a whole-server shutdown acceptance claim"
+  ]
+}

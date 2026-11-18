@@ -1,0 +1,19 @@
+{
+  "base_source": "c805e41ca9cdab57084089822963c54d40dcb01f",
+  "requirement": "RF04 TLS positive/negative fixtures",
+  "change": "Add live endpoint certificate-chain and client-identity rejection subtests to TestOpenPostgresInlinePEMReconnect after its two verified positive sessions.",
+  "expected": [
+    "Untrusted server chain returns no pool and tls_certificate category.",
+    "Valid client certificate with a different requested PostgreSQL identity returns no pool and authentication category."
+  ],
+  "local": {
+    "command": "go -C server test ./database -run ^(TestOpenPostgresInlinePEMReconnect|TestPostgresRejectsUnverifiedTLSWithoutExposingCredentials)$ -count=1 -v",
+    "passed": 1,
+    "skipped": 1,
+    "reason": "HICHAT_TEST_POSTGRES_TLS_DSN absent; neither new live subtest executed.",
+    "vet": "go -C server vet ./database passed",
+    "gofmt": "applied"
+  },
+  "native_verification": "pending next candidate CI; current c805 CI does not contain this follow-up.",
+  "scope": "Owned PostgreSQL fixture only; no provider deployment or production database call."
+}

@@ -13,10 +13,7 @@ func TestGameActivityMembershipSnapshotIsAdditiveAndLegacyFailsClosed(t *testing
 	db := newTestDB(t)
 	ctx := context.Background()
 	repo := NewSQLiteServerRepo(db.Conn)
-	snapshotRepo, ok := repo.(GameActivityMembershipSnapshotRepository)
-	if !ok {
-		t.Fatal("server repo missing game activity snapshot capability")
-	}
+	snapshotRepo := repo
 	user := newTestUser("activity-snapshot-user")
 	if err := NewSQLiteUserRepo(db.Conn).Create(ctx, user); err != nil {
 		t.Fatal(err)
@@ -53,7 +50,7 @@ func TestGameActivityMembershipSnapshotSerializesSmallAudienceBoundary(t *testin
 	db := newTestDB(t)
 	ctx := context.Background()
 	repo := NewSQLiteServerRepo(db.Conn)
-	snapshotRepo := repo.(GameActivityMembershipSnapshotRepository)
+	snapshotRepo := repo
 	owner := newTestUser("activity-boundary-owner")
 	if err := NewSQLiteUserRepo(db.Conn).Create(ctx, owner); err != nil {
 		t.Fatal(err)
@@ -94,17 +91,13 @@ func TestGameActivityMembershipSnapshotSerializesSmallAudienceBoundary(t *testin
 			<-start
 			var allowed bool
 			err := NewServerMembershipTxRunner(db.Conn).InTx(ctx, func(r *ServerMembershipTxRepos) error {
-				counter := r.Server.(interface {
-					LockAndCountMembersForGameActivityJoin(context.Context, string) (int, error)
-				})
+				counter := r.GameActivityCounter
 				count, err := counter.LockAndCountMembersForGameActivityJoin(ctx, server.ID)
 				if err != nil {
 					return err
 				}
 				allowed = count < 200
-				return r.Server.(interface {
-					AddMemberWithGameActivityAudience(context.Context, string, string, bool) error
-				}).AddMemberWithGameActivityAudience(ctx, server.ID, userID, allowed)
+				return r.GameActivityWriter.AddMemberWithGameActivityAudience(ctx, server.ID, userID, allowed)
 			})
 			results <- result{allowed: allowed, err: err}
 		}(user.ID)
@@ -133,7 +126,7 @@ func TestGameActivityMembershipSnapshotSerializesMixedAudienceBoundary(t *testin
 	db := newTestDB(t)
 	ctx := context.Background()
 	repo := NewSQLiteServerRepo(db.Conn)
-	snapshotRepo := repo.(GameActivityMembershipSnapshotRepository)
+	snapshotRepo := repo
 	owner := newTestUser("activity-mixed-owner")
 	if err := NewSQLiteUserRepo(db.Conn).Create(ctx, owner); err != nil {
 		t.Fatal(err)
@@ -181,9 +174,7 @@ func TestGameActivityMembershipSnapshotSerializesMixedAudienceBoundary(t *testin
 			var count int
 			allowed := audience == "all"
 			err := NewServerMembershipTxRunner(db.Conn).InTx(ctx, func(r *ServerMembershipTxRepos) error {
-				counter := r.Server.(interface {
-					LockAndCountMembersForGameActivityJoin(context.Context, string) (int, error)
-				})
+				counter := r.GameActivityCounter
 				var err error
 				count, err = counter.LockAndCountMembersForGameActivityJoin(ctx, server.ID)
 				if err != nil {
@@ -192,9 +183,7 @@ func TestGameActivityMembershipSnapshotSerializesMixedAudienceBoundary(t *testin
 				if audience == "small" {
 					allowed = count < 200
 				}
-				return r.Server.(interface {
-					AddMemberWithGameActivityAudience(context.Context, string, string, bool) error
-				}).AddMemberWithGameActivityAudience(ctx, server.ID, userID, allowed)
+				return r.GameActivityWriter.AddMemberWithGameActivityAudience(ctx, server.ID, userID, allowed)
 			})
 			results <- result{audience: audience, allowed: allowed, count: count, err: err}
 		}(user.ID, join.audience)

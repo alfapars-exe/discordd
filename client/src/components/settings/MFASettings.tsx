@@ -15,19 +15,20 @@ export default function MFASettings({ userID }: { userID: string }) {
   const [error, setError] = useState("");
   const [confirmDisable, setConfirmDisable] = useState(false);
   const alive = useRef(true);
+  const statusRequest = useRef(0);
   const pending = useRef(false);
   const current = () => alive.current && useAuthStore.getState().user?.id === userID;
   useSettingsDraft(!!(password || code || setup || codes.length || busy));
 
   useEffect(() => {
     alive.current = true;
-    let cancelled = false;
+    const request = ++statusRequest.current;
     void mfa.getMFAStatus(userID).then(res => {
-      if (cancelled) return;
+      if (!alive.current || request !== statusRequest.current) return;
       if (res.success && res.data) setStatus(res.data);
       else setError(t("mfa.loadError"));
-    }).catch(() => { if (!cancelled) setError(t("mfa.loadError")); });
-    return () => { cancelled = true; alive.current = false; };
+    }).catch(() => { if (alive.current && request === statusRequest.current) setError(t("mfa.loadError")); });
+    return () => { alive.current = false; };
   }, [userID, t]);
 
   function failure(code?: string) {
@@ -42,7 +43,9 @@ export default function MFASettings({ userID }: { userID: string }) {
     pending.current = true; setBusy(true); setError("");
     try {
       if (action === "refresh") {
-        const res = await mfa.getMFAStatus(userID); if (!current()) return;
+        const request = ++statusRequest.current;
+        const res = await mfa.getMFAStatus(userID);
+        if (!current() || request !== statusRequest.current) return;
         if (!res.success || !res.data) { setError(failure(res.code)); return; }
         setStatus(res.data); if (res.data.enabled) setSetup(null);
       } else if (action === "cancel") {
@@ -59,11 +62,13 @@ export default function MFASettings({ userID }: { userID: string }) {
           : await mfa.regenerateMFA(userID, password, code);
         if (!current()) return;
         if (!res.success || !res.data) { setError(failure(res.code)); return; }
+        statusRequest.current++;
         setCodes(res.data.recovery_codes); setStatus({ enabled: true, recovery_remaining: res.data.recovery_codes.length });
         setSetup(null); setPassword(""); setCode("");
       } else {
         const res = await mfa.disableMFA(userID, password, code); if (!current()) return;
         if (!res.success) { setError(failure(res.code)); return; }
+        statusRequest.current++;
         setStatus({ enabled: false, recovery_remaining: 0 }); setConfirmDisable(false); setPassword(""); setCode(""); setCodes([]);
       }
     } catch { if (current()) setError(t("mfa.operationError")); }

@@ -1,0 +1,42 @@
+{
+  "head": "b46dfecf75e74fa75956f67dd76027ad7e2b6d7b",
+  "database": "PostgreSQL 18.6 dedicated loopback",
+  "tests": [
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "name": "TestDMIdempotentSendConcurrentReplayConflictAndDeletion",
+      "seconds": 0.67
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "name": "TestDMIdempotentSendRollsBackReceiptAndUnread",
+      "seconds": 0.54
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "name": "TestSendMessageServerDMPolicyForEmptyChannel",
+      "seconds": 0
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "name": "TestSendMessageRechecksPolicyAndPendingAfterChannelLock",
+      "seconds": 0
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "name": "TestSendMessageHistoryCheckAfterLockUsesSingleExistenceQuery",
+      "seconds": 0
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "name": "TestServerDMPolicyTransactionReadersReplacePreflightReaders",
+      "seconds": 0
+    },
+    {
+      "package": "github.com/argeinfina/hichat/repository",
+      "name": "TestDMPostgresPolicyWaitsForPreferenceUpdate",
+      "seconds": 1.11
+    }
+  ],
+  "limits": "sslmode=disable, non-race. DM idempotency and repository lock cases use real DB; policy service cases include controlled fixtures. Initial pattern missed lock test; exact-name follow-up passed."
+}

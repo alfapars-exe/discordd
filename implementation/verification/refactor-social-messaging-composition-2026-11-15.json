@@ -1,0 +1,27 @@
+{
+  "scope": "RF11 social messaging composition extraction",
+  "source_before": "bf284c6bb0dd6ad183010e43fad0c842dad4be62",
+  "changes": [
+    "Group block, DM settings, notifications, emoji, direct/group messaging and uploads behind named dependencies and returned runtime owners.",
+    "Preserve constructor order, shared DM auto-accept owner, delivery database selection and externally owned worker startup."
+  ],
+  "verification": {
+    "root_integration": "PASS Test.*(FriendshipDMProduction|Startup|Rollback|Route|Callback), 1.274s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_sql_manifest": "PASS 50 exact records",
+    "preceding_fixed_source_full_suite": {
+      "source": "bf284c6bb0dd6ad183010e43fad0c842dad4be62",
+      "services_seconds": 96.212,
+      "handlers_seconds": 7.228,
+      "repository_seconds": 194.974,
+      "ws_seconds": 5.413,
+      "root_seconds": 22.301,
+      "result": "PASS; Windows non-race; PostgreSQL contracts separate"
+    }
+  },
+  "limits": [
+    "Domain extraction does not close RF11. Required input and optional capability matrices for this group remain to implement.",
+    "Remote CI source 019a03da remains in progress; local extraction not covered by that run."
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "baselineRevision": "a9faf3fcc94d270eb96653b2ad8b16e1c9f69eaa",
+  "characterizationCommit": "077a7e5d",
+  "sourceRevision": "10a2101d3a34189c216039754526886e1e1526c7",
+  "scope": "RF13/RF26 split scalar preference validation from dictionary validation",
+  "sonarBefore": {
+    "key": "AaHYWqMkd7dyvm3wYSnp",
+    "rule": "typescript:S3776",
+    "function": "validField",
+    "complexity": 24,
+    "threshold": 15,
+    "after": "Original issue CLOSED/FIXED after98118271 delivery; checked2026-11-16. Source API matches all164 local code lines plus one empty EOF line. No exact after complexity score claimed."
+  },
+  "behavior": "Move dictionary cases unchanged to validDictionaryField after a shared object guard. Preserve scalar validation precedence, all dictionary field names and limits, peer-map sanitization, empty dictionary reset values, whole-field rejection and valid neighboring leaves. No new public exports or wire/storage names.",
+  "characterization": {
+    "additionalCases": 65,
+    "fields": ["friendRequests", "spamRestoredMessages", "ignoredUsers", "serverDMOverrides", "gameActivityServerOverrides", "sensitiveMedia", "disturbingMedia"],
+    "coverage": "Malformed outer values; empty reset dictionaries; 1/max/max+1/empty ID keys; 1024 versus1025 entries; false booleans; empty/64/65-character revisions; supported friend/media scopes and values; malformed dictionary does not discard valid neighboring fields.",
+    "limits": "128-character IDs except gameActivityServerOverrides256. Four ID dictionaries limited to1024; friend/media choices limited to3. Limits preserved, not tightened.",
+    "interpretation": "All new cases pass on original source. This is a behavior-preserving refactor, not a claimed pre-existing bug fix. Public cacheable action tested directly without mocking its validators."
+  },
+  "validation": {
+    "before": "221tests across4files PASS4.38s; TEMP/hichat-preference-dictionaries-before.log",
+    "after": "Same221tests across4files PASS4.16s; TEMP/hichat-preference-dictionaries-after.log",
+    "build": "PASS actual tsc -b and Vite3.08s; TEMP/hichat-preference-dictionaries-build.log",
+    "lint": "PASS0errors2existingTanStackwarnings; TEMP/hichat-preference-dictionaries-lint.log",
+    "fullClient": "504files5514passed1skipped120.80s; TEMP/hichat-preference-dictionaries-coverage.log",
+    "coverageTotal": { "lines": 69.11, "branches": 65.01, "statements": 68.03, "functions": 62.29 },
+    "coverageChangedModule": { "lines": 98.8, "branches": 96.17, "statements": 95.76, "functions": 100 },
+    "immutableScan": "PASS immutable10a2101d exit0:51 exact reviewed-source records,480reviewlines,0blockingpatterns; TEMP/hichat-preference-dictionaries-scan.log. Pattern scan does not prove absence of vulnerabilities.",
+    "archiveCheck": "Git archive and expanded source each contain4793 files. Runtime codec SHA256 equals working source. New test text equals archive after LF/CRLF normalization; working file has LF, Git archive CRLF. No logic difference or byte-identical test claim."
+  },
+  "ci": { "revision": "98118271bb00221acb9402382f62ffe72b802d07", "result": "36/36 terminalSUCCESS", "serverRun": 43760659938, "serverConclusion": "success", "rawChecks": "refactor-9811-terminal-ci-2026-11-16.json" },
+  "remaining": ["Final RF13 field-contract inventory and account/offline/platform acceptance", "Whole-project RF01-RF30 acceptance"]
+}

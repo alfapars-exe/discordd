@@ -1,0 +1,180 @@
+{
+  "scope": "Descriptive variation of per-repetition nearest-rank repository p95 values; no confidence interval, HTTP or contention budget",
+  "auditorSourceSha256": "dfa9e2dc5e0c526b5256764fd5888d46c96346325534b9c8ac3fc6d28f004fbf",
+  "tests": {
+    "passed": 21,
+    "failed": 0
+  },
+  "backends": {
+    "sqlite": {
+      "logSha256": "a38544431893b95d6ab28587bf693cae61c7326a773b4e7458cc9c063404c36c",
+      "summaries": {
+        "users=0/bulk=false": {
+          "repetitions": 9,
+          "p95AcrossRepetitionsNs": {
+            "min": 0,
+            "median": 0,
+            "max": 0
+          },
+          "p95SampleCoefficientOfVariation": null,
+          "scope": "Descriptive variation of nine per-repetition p95 estimates, not pooled p95, a confidence interval, cross-host variation or a latency budget."
+        },
+        "users=0/bulk=true": {
+          "repetitions": 9,
+          "p95AcrossRepetitionsNs": {
+            "min": 0,
+            "median": 0,
+            "max": 0
+          },
+          "p95SampleCoefficientOfVariation": null,
+          "scope": "Descriptive variation of nine per-repetition p95 estimates, not pooled p95, a confidence interval, cross-host variation or a latency budget."
+        },
+        "users=1/bulk=false": {
+          "repetitions": 9,
+          "p95AcrossRepetitionsNs": {
+            "min": 0,
+            "median": 514100,
+            "max": 518500
+          },
+          "p95SampleCoefficientOfVariation": 0.7500203183366848,
+          "scope": "Descriptive variation of nine per-repetition p95 estimates, not pooled p95, a confidence interval, cross-host variation or a latency budget."
+        },
+        "users=1/bulk=true": {
+          "repetitions": 9,
+          "p95AcrossRepetitionsNs": {
+            "min": 0,
+            "median": 516100,
+            "max": 519900
+          },
+          "p95SampleCoefficientOfVariation": 0.9486913880435944,
+          "scope": "Descriptive variation of nine per-repetition p95 estimates, not pooled p95, a confidence interval, cross-host variation or a latency budget."
+        },
+        "users=100/bulk=false": {
+          "repetitions": 9,
+          "p95AcrossRepetitionsNs": {
+            "min": 3208800,
+            "median": 3775700,
+            "max": 4673600
+          },
+          "p95SampleCoefficientOfVariation": 0.12167710044197888,
+          "scope": "Descriptive variation of nine per-repetition p95 estimates, not pooled p95, a confidence interval, cross-host variation or a latency budget."
+        },
+        "users=100/bulk=true": {
+          "repetitions": 9,
+          "p95AcrossRepetitionsNs": {
+            "min": 517700,
+            "median": 527500,
+            "max": 551500
+          },
+          "p95SampleCoefficientOfVariation": 0.02019262756509966,
+          "scope": "Descriptive variation of nine per-repetition p95 estimates, not pooled p95, a confidence interval, cross-host variation or a latency budget."
+        },
+        "users=1001/bulk=false": {
+          "repetitions": 9,
+          "p95AcrossRepetitionsNs": {
+            "min": 32202300,
+            "median": 43561300,
+            "max": 47657600
+          },
+          "p95SampleCoefficientOfVariation": 0.10042836882095964,
+          "scope": "Descriptive variation of nine per-repetition p95 estimates, not pooled p95, a confidence interval, cross-host variation or a latency budget."
+        },
+        "users=1001/bulk=true": {
+          "repetitions": 9,
+          "p95AcrossRepetitionsNs": {
+            "min": 3603400,
+            "median": 3625900,
+            "max": 3964800
+          },
+          "p95SampleCoefficientOfVariation": 0.03153242274076128,
+          "scope": "Descriptive variation of nine per-repetition p95 estimates, not pooled p95, a confidence interval, cross-host variation or a latency budget."
+        }
+      }
+    },
+    "postgres": {
+      "logSha256": "270d7c11e183ab262814698ed8c7477a72fc4d64f9f489fd715a87043df45f79",
+      "summaries": {
+        "users=0/bulk=false": {
+          "repetitions": 9,
+          "p95AcrossRepetitionsNs": {
+            "min": 0,
+            "median": 0,
+            "max": 0
+          },
+          "p95SampleCoefficientOfVariation": null,
+          "scope": "Descriptive variation of nine per-repetition p95 estimates, not pooled p95, a confidence interval, cross-host variation or a latency budget."
+        },
+        "users=0/bulk=true": {
+          "repetitions": 9,
+          "p95AcrossRepetitionsNs": {
+            "min": 0,
+            "median": 0,
+            "max": 0
+          },
+          "p95SampleCoefficientOfVariation": null,
+          "scope": "Descriptive variation of nine per-repetition p95 estimates, not pooled p95, a confidence interval, cross-host variation or a latency budget."
+        },
+        "users=1/bulk=false": {
+          "repetitions": 9,
+          "p95AcrossRepetitionsNs": {
+            "min": 1038100,
+            "median": 1047500,
+            "max": 1059200
+          },
+          "p95SampleCoefficientOfVariation": 0.006170349255676508,
+          "scope": "Descriptive variation of nine per-repetition p95 estimates, not pooled p95, a confidence interval, cross-host variation or a latency budget."
+        },
+        "users=1/bulk=true": {
+          "repetitions": 9,
+          "p95AcrossRepetitionsNs": {
+            "min": 1050000,
+            "median": 1068200,
+            "max": 1651500
+          },
+          "p95SampleCoefficientOfVariation": 0.16843888187498235,
+          "scope": "Descriptive variation of nine per-repetition p95 estimates, not pooled p95, a confidence interval, cross-host variation or a latency budget."
+        },
+        "users=100/bulk=false": {
+          "repetitions": 9,
+          "p95AcrossRepetitionsNs": {
+            "min": 59980800,
+            "median": 61366300,
+            "max": 76463700
+          },
+          "p95SampleCoefficientOfVariation": 0.08040834454553293,
+          "scope": "Descriptive variation of nine per-repetition p95 estimates, not pooled p95, a confidence interval, cross-host variation or a latency budget."
+        },
+        "users=100/bulk=true": {
+          "repetitions": 9,
+          "p95AcrossRepetitionsNs": {
+            "min": 1051300,
+            "median": 1148900,
+            "max": 1175900
+          },
+          "p95SampleCoefficientOfVariation": 0.04502848145962488,
+          "scope": "Descriptive variation of nine per-repetition p95 estimates, not pooled p95, a confidence interval, cross-host variation or a latency budget."
+        },
+        "users=1001/bulk=false": {
+          "repetitions": 9,
+          "p95AcrossRepetitionsNs": {
+            "min": 589616200,
+            "median": 618688300,
+            "max": 678704700
+          },
+          "p95SampleCoefficientOfVariation": 0.04341359089617913,
+          "scope": "Descriptive variation of nine per-repetition p95 estimates, not pooled p95, a confidence interval, cross-host variation or a latency budget."
+        },
+        "users=1001/bulk=true": {
+          "repetitions": 9,
+          "p95AcrossRepetitionsNs": {
+            "min": 2607600,
+            "median": 3203200,
+            "max": 4203300
+          },
+          "p95SampleCoefficientOfVariation": 0.1731174731504367,
+          "scope": "Descriptive variation of nine per-repetition p95 estimates, not pooled p95, a confidence interval, cross-host variation or a latency budget."
+        }
+      }
+    }
+  }
+}

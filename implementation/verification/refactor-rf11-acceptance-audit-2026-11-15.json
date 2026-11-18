@@ -1,0 +1,75 @@
+{
+  "head": "4c40167d54b2ff8e7d83f2801ac9ce52a7bdfe1b",
+  "overall": "incomplete",
+  "items": [
+    {
+      "requirement": "Required dependencies are explicit and absence is caught at construction/build/startup",
+      "status": "incomplete",
+      "evidence": [
+        "server/services/constructor_lifecycle_test.go",
+        "server/ws/hub_runtime_test.go"
+      ],
+      "gap": "Constructor capability types are covered; comprehensive per-domain nil/typed-nil required-input matrix is not established. Several standalone constructors permit nil fixtures."
+    },
+    {
+      "requirement": "Optional integrations have deterministic disabled behavior",
+      "status": "partially_verified",
+      "evidence": [
+        "server/services/music_control_test.go",
+        "server/services/music_requester_privacy_test.go",
+        "server/services/music_enqueue_dependency_test.go",
+        "server/services/auth_maintenance_test.go"
+      ],
+      "gap": "Named cases prove selected providers; full inventory of optional integrations is not closed."
+    },
+    {
+      "requirement": "Every callback group is wired exactly once and routes payloads",
+      "status": "scoped_evidence",
+      "evidence": [
+        "server/hub_callback_composition_test.go",
+        "server/p2p_callback_wiring_test.go",
+        "server/voice_callback_wiring_test.go",
+        "server/game_activity_callback_wiring_test.go"
+      ],
+      "gap": "Current-source combined test result pending. These controlled callbacks do not prove deployed/physical media."
+    },
+    {
+      "requirement": "Startup failure cleanup and shutdown ownership",
+      "status": "scoped_evidence",
+      "evidence": [
+        "server/service_startup_rollback_test.go",
+        "server/service_cache_lifecycle_test.go",
+        "server/services/dm_upload_lifecycle_test.go",
+        "server/services/auth_maintenance_test.go"
+      ],
+      "gap": "Known paths have behavior tests; exhaustive worker/resource ownership matrix and combined race proof remain open."
+    },
+    {
+      "requirement": "Domain grouped composition; initServices contains no business logic",
+      "status": "incomplete",
+      "evidence": [
+        "server/init_services.go",
+        "server/voice_media_wiring.go"
+      ],
+      "gap": "Voice/media and music persistence are grouped. initServices remains a long constructor chain with delivery mode selection, configuration setters and callback registration; domain-by-domain separation/review remains."
+    },
+    {
+      "requirement": "HTTP route manifest and authorization gates preserved",
+      "status": "scoped_evidence",
+      "evidence": [
+        "server/init_routes_test.go",
+        "server/route_permissions_test.go"
+      ],
+      "gap": "Current-source broad run pending; route tests do not prove all runtime authorization scenarios."
+    },
+    {
+      "requirement": "Setter completeness proves semantic wiring",
+      "status": "insufficient_as_standalone_proof",
+      "evidence": [
+        "server/wiring_test.go"
+      ],
+      "gap": "AST definition/call counts cannot prove selected provider identity, scope or callback behavior; use behavioral integration contracts alongside it."
+    }
+  ],
+  "limits": "Evidence index and gap audit only; files are inspected for scope, not treated as passing test results."
+}

@@ -1,10 +1,8 @@
 #define _WIN32_WINNT 0x0A00
 #define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#include "process-id.h"
 
 #include <cstdint>
-#include <cstdlib>
-#include <cwchar>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -134,15 +132,6 @@ void WriteSample(const Sample& sample) {
   std::cout.flush();
 }
 
-bool ParseParentPid(const wchar_t* text, DWORD* parentPid) {
-  if (!text || !*text) return false;
-  wchar_t* end = nullptr;
-  const unsigned long value = std::wcstoul(text, &end, 10);
-  if (!end || *end != L'\0' || value == 0 || value > MAXDWORD) return false;
-  *parentPid = static_cast<DWORD>(value);
-  return true;
-}
-
 }  // namespace
 
 int wmain(int argc, wchar_t* argv[]) {
@@ -151,7 +140,7 @@ int wmain(int argc, wchar_t* argv[]) {
   if (argc == 2 && std::wstring(argv[1]) == L"--once") {
     watch = false;
   } else if (argc == 4 && std::wstring(argv[1]) == L"--watch"
-      && std::wstring(argv[2]) == L"--parent-pid" && ParseParentPid(argv[3], &parentPid)) {
+      && std::wstring(argv[2]) == L"--parent-pid" && ParseProcessId(argv[3], &parentPid)) {
     watch = true;
   } else {
     return 2;

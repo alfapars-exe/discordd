@@ -1,0 +1,146 @@
+{
+  "source": "8ec41413f7ac03f72a53a1c11010df76283d1cf2",
+  "job": {
+    "id": 132333839900,
+    "run_id": 43557593050,
+    "workflow_name": "Server CI",
+    "head_branch": "verify/refactor-integration",
+    "run_url": "https://api.github.com/repos/alfapars-exe/discordd/actions/runs/43557593050",
+    "run_attempt": 1,
+    "node_id": "CR_kwDOSTBJ_88AAAAez7YmHA",
+    "head_sha": "8ec41413f7ac03f72a53a1c11010df76283d1cf2",
+    "url": "https://api.github.com/repos/alfapars-exe/discordd/actions/jobs/132333839900",
+    "html_url": "https://github.com/alfapars-exe/discordd/actions/runs/43557593050/job/132333839900",
+    "status": "completed",
+    "conclusion": "success",
+    "created_at": "2026-11-14T04:37:41Z",
+    "started_at": "2026-11-14T04:37:43Z",
+    "completed_at": "2026-11-14T04:38:08Z",
+    "name": "Electron main-process tests",
+    "steps": [
+      {
+        "name": "Set up job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 1,
+        "started_at": "2026-11-14T04:37:44Z",
+        "completed_at": "2026-11-14T04:37:45Z"
+      },
+      {
+        "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 2,
+        "started_at": "2026-11-14T04:37:45Z",
+        "completed_at": "2026-11-14T04:37:48Z"
+      },
+      {
+        "name": "Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 3,
+        "started_at": "2026-11-14T04:37:48Z",
+        "completed_at": "2026-11-14T04:37:50Z"
+      },
+      {
+        "name": "Install root deps",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 4,
+        "started_at": "2026-11-14T04:37:50Z",
+        "completed_at": "2026-11-14T04:37:54Z"
+      },
+      {
+        "name": "Load profile contract tests",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 5,
+        "started_at": "2026-11-14T04:37:54Z",
+        "completed_at": "2026-11-14T04:37:54Z"
+      },
+      {
+        "name": "electron:test (resolve-path + regression suite)",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 6,
+        "started_at": "2026-11-14T04:37:54Z",
+        "completed_at": "2026-11-14T04:37:59Z"
+      },
+      {
+        "name": "Quality runner and acceptance validator tests",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 7,
+        "started_at": "2026-11-14T04:37:59Z",
+        "completed_at": "2026-11-14T04:37:59Z"
+      },
+      {
+        "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 8,
+        "started_at": "2026-11-14T04:37:59Z",
+        "completed_at": "2026-11-14T04:38:00Z"
+      },
+      {
+        "name": "Run python3 -m pip install huggingface_hub==1.26.0",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 9,
+        "started_at": "2026-11-14T04:38:00Z",
+        "completed_at": "2026-11-14T04:38:04Z"
+      },
+      {
+        "name": "Source encoding and Python tool regressions",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 10,
+        "started_at": "2026-11-14T04:38:04Z",
+        "completed_at": "2026-11-14T04:38:05Z"
+      },
+      {
+        "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 18,
+        "started_at": "2026-11-14T04:38:05Z",
+        "completed_at": "2026-11-14T04:38:05Z"
+      },
+      {
+        "name": "Post Run actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 19,
+        "started_at": "2026-11-14T04:38:05Z",
+        "completed_at": "2026-11-14T04:38:05Z"
+      },
+      {
+        "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 20,
+        "started_at": "2026-11-14T04:38:05Z",
+        "completed_at": "2026-11-14T04:38:05Z"
+      },
+      {
+        "name": "Complete job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 21,
+        "started_at": "2026-11-14T04:38:05Z",
+        "completed_at": "2026-11-14T04:38:05Z"
+      }
+    ],
+    "check_run_url": "https://api.github.com/repos/alfapars-exe/discordd/check-runs/132333839900",
+    "labels": [
+      "ubuntu-latest"
+    ],
+    "runner_id": 1000031257,
+    "runner_name": "GitHub Actions 1000031257",
+    "runner_group_id": 0,
+    "runner_group_name": "GitHub Actions"
+  },
+  "encoding_log_lines": [
+    "2026-11-14T04:38:04.3448061Z UTF-8: 3228 source files checked, 0 invalid"
+  ]
+}

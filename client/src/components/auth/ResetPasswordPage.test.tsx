@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { Link, MemoryRouter } from "react-router-dom";
 import ResetPasswordPage from "./ResetPasswordPage";
 
 const reset = vi.hoisted(() => vi.fn());
@@ -30,6 +30,25 @@ describe("password recovery result", () => {
     reset.mockResolvedValue({ success: true });
     submit();
     await screen.findByText("resetSuccess");
+  });
+  it("starts a fresh form when the recovery link changes during a request", async () => {
+    let finish!: () => void;
+    reset.mockImplementationOnce(() => new Promise(resolve => {
+      finish = () => resolve({ success: true });
+    }));
+    render(<MemoryRouter initialEntries={["/reset-password?token=first"]}>
+      <ResetPasswordPage />
+      <Link to="/reset-password?token=second">Open second link</Link>
+    </MemoryRouter>);
+    submit();
+    fireEvent.click(screen.getByText("Open second link"));
+    await act(async () => finish());
+    expect(screen.getByLabelText("newPassword")).toHaveValue("");
+    expect(screen.queryByText("resetSuccess")).not.toBeInTheDocument();
+    reset.mockResolvedValueOnce({ success: true });
+    submit("second-password");
+    await screen.findByText("resetSuccess");
+    expect(reset).toHaveBeenLastCalledWith("second", "second-password");
   });
   it("rejects oversized Unicode passwords without consuming a recovery token", async () => {
     render(<MemoryRouter initialEntries={["/reset-password?token=test-token"]}><ResetPasswordPage /></MemoryRouter>);

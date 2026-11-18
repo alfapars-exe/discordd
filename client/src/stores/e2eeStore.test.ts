@@ -13,6 +13,10 @@ const signalMocks = vi.hoisted(() => ({
   onIdentityKeyChange: vi.fn(() => () => {}),
 }));
 
+const historyMocks = vi.hoisted(() => ({
+  invalidate: vi.fn(), invalidateDM: vi.fn(), fetch: vi.fn(async () => {}), selectedChannelId: null as string | null, encryptedDM: false,
+}));
+
 // Mock all external crypto/api dependencies before importing the store
 vi.mock("../crypto/deviceManager", () => ({
   getLocalDeviceId: vi.fn(),
@@ -49,13 +53,13 @@ vi.mock("../api/e2ee", () => ({
   downloadKeyBackup: vi.fn(),
 }));
 vi.mock("./messageStore", () => ({
-  useMessageStore: { getState: () => ({ invalidateFetchCache: vi.fn(), fetchMessages: vi.fn() }) },
+  useMessageStore: { getState: () => ({ invalidateFetchCache: historyMocks.invalidate, fetchMessages: historyMocks.fetch }) },
 }));
 vi.mock("./dmStore", () => ({
-  useDMStore: { getState: () => ({ invalidateFetchCache: vi.fn() }) },
+  useDMStore: { getState: () => ({ invalidateFetchCache: historyMocks.invalidateDM, channels: historyMocks.encryptedDM ? [{ e2ee_enabled: true }] : [] }) },
 }));
 vi.mock("./channelStore", () => ({
-  useChannelStore: { getState: () => ({ selectedChannelId: null }) },
+  useChannelStore: { getState: () => ({ selectedChannelId: historyMocks.selectedChannelId }) },
 }));
 
 import * as keyStorage from "../crypto/keyStorage";
@@ -63,7 +67,7 @@ import * as keyBackup from "../crypto/keyBackup";
 import * as deviceManager from "../crypto/deviceManager";
 import * as e2eeApi from "../api/e2ee";
 import { inspectLegacyKeyArchive, importLegacyKeyArchive } from "../crypto/legacyKeyArchive";
-import { publishAuthOwnerChange, publishAuthGenerationChange } from "../api/authSessionEvents";
+import { getAuthSessionSnapshot, publishAuthOwnerChange, publishAuthGenerationChange } from "../api/authSessionEvents";
 import { WeakRecoveryPassphraseError } from "../crypto/recoveryPassphrase";
 import { useE2EEStore } from "./e2eeStore";
 import type { DecryptionError, PeerTrustAlert } from "./e2eeStore";
@@ -75,6 +79,9 @@ function resetStore() {
     localDeviceId: null,
     devices: [],
     hasRecoveryBackup: false,
+    recoveryBackupChecked: false,
+    showRecoveryPrompt: false,
+    recoveryPromptDismissed: false,
     decryptionErrors: [],
     isGeneratingKeys: false,
     initError: null,
@@ -85,9 +92,68 @@ function resetStore() {
 describe("e2eeStore", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    historyMocks.selectedChannelId = null;
+    historyMocks.encryptedDM = false;
     publishAuthOwnerChange("userA");
     resetStore();
     vi.mocked(inspectLegacyKeyArchive).mockResolvedValue({ status: "none" });
+  });
+
+  describe("new-device backup recovery offer", () => {
+    it.each(["backup", "absent", "error", "uploaded", "owner", "generation"] as const)("does not interpret pending backup lookup as absence: %s", async mode => {
+      historyMocks.encryptedDM = true;
+      vi.mocked(keyStorage.hasLocalKeys).mockResolvedValue(true);
+      vi.mocked(keyStorage.getRegistrationData).mockResolvedValue({ registrationId: 1, deviceId: "verified-device", userId: "userA", createdAt: 0 });
+      vi.mocked(deviceManager.getLocalDeviceId).mockResolvedValue("verified-device");
+      vi.mocked(e2eeApi.listMyDevices).mockResolvedValue({ success: true, data: [] });
+      let finish!: (value: Awaited<ReturnType<typeof e2eeApi.downloadKeyBackup>>) => void;
+      vi.mocked(e2eeApi.downloadKeyBackup).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+      useE2EEStore.setState({ showRecoveryPrompt: false, recoveryPromptDismissed: false });
+      await useE2EEStore.getState().initialize("userA");
+      expect(useE2EEStore.getState().initStatus).toBe("ready");
+      useE2EEStore.getState().checkAndPromptRecovery();
+      const shownWhilePending = useE2EEStore.getState().showRecoveryPrompt;
+      if (mode === "uploaded") { stageSuccessfulBackup(); await useE2EEStore.getState().setRecoveryPassword(STRONG_PASSPHRASE); }
+      if (mode === "owner") publishAuthOwnerChange("recovery-status-replacement");
+      if (mode === "generation") publishAuthGenerationChange(getAuthSessionSnapshot().generation + 1);
+      finish(mode === "error" ? { success: false, error: "timeout" } : { success: true, data: mode === "backup" || mode === "owner" || mode === "generation" ? {
+        id: "backup", user_id: "userA", version: 1, created_at: "", updated_at: "", encrypted_data: "cipher", nonce: "nonce", salt: "salt", algorithm: "test",
+      } : null });
+      await Promise.resolve(); await Promise.resolve();
+      useE2EEStore.getState().checkAndPromptRecovery();
+      expect(shownWhilePending).toBe(false);
+      expect(useE2EEStore.getState().showRecoveryPrompt).toBe(mode === "absent");
+      expect(useE2EEStore.getState().hasRecoveryBackup).toBe(mode === "backup" || mode === "uploaded");
+      expect(useE2EEStore.getState().recoveryBackupChecked).toBe(!["error", "owner", "generation"].includes(mode));
+    });
+    it("does not offer restoration when fresh-device registration fails", async () => {
+      vi.mocked(keyStorage.hasLocalKeys).mockResolvedValueOnce(false);
+      vi.mocked(keyStorage.getMetadata).mockResolvedValue(null);
+      vi.mocked(deviceManager.registerNewDevice).mockRejectedValueOnce(new Error("registration unavailable"));
+      vi.mocked(e2eeApi.downloadKeyBackup).mockResolvedValueOnce({
+        success: true, data: { id: "backup", user_id: "userA", version: 1, created_at: "2026-11-14T00:00:00Z", updated_at: "2026-11-14T00:00:00Z", encrypted_data: "ciphertext", nonce: "nonce", salt: "salt", algorithm: "test" },
+      });
+      useE2EEStore.setState({ showRecoveryPrompt: false, recoveryPromptDismissed: false });
+      await useE2EEStore.getState().initialize("userA");
+      expect(useE2EEStore.getState().initStatus).not.toBe("ready");
+      expect(useE2EEStore.getState().showRecoveryPrompt).toBe(false);
+    });
+
+    it.each([true, false])("offers recovery on a fresh device only when backup exists: %s", async (hasBackup) => {
+      vi.mocked(keyStorage.hasLocalKeys).mockResolvedValue(false);
+      vi.mocked(keyStorage.getMetadata).mockResolvedValue(null);
+      vi.mocked(deviceManager.registerNewDevice).mockResolvedValue("fresh-device");
+      vi.mocked(e2eeApi.listMyDevices).mockResolvedValue({ success: true, data: [] });
+      vi.mocked(e2eeApi.downloadKeyBackup).mockResolvedValue({
+        success: true, data: hasBackup ? { id: "backup", user_id: "userA", version: 1, created_at: "2026-11-14T00:00:00Z", updated_at: "2026-11-14T00:00:00Z", encrypted_data: "ciphertext", nonce: "nonce", salt: "salt", algorithm: "test" } : undefined,
+      });
+      useE2EEStore.setState({ showRecoveryPrompt: false, recoveryPromptDismissed: false });
+      await useE2EEStore.getState().initialize("userA");
+      expect(useE2EEStore.getState().initStatus).toBe("ready");
+      expect(useE2EEStore.getState().hasRecoveryBackup).toBe(hasBackup);
+      expect(useE2EEStore.getState().showRecoveryPrompt).toBe(hasBackup);
+      expect(keyBackup.restoreFromBackup).not.toHaveBeenCalled();
+    });
   });
 
   // ─── Decryption Error Management ───
@@ -654,6 +720,60 @@ describe("e2eeStore", () => {
       vi.mocked(e2eeApi.downloadKeyBackup).mockResolvedValue({ success: false });
     });
 
+    it.each(["existing", "new", "restore"] as const)("does not refresh another session after ready replaces auth generation: %s", async mode => {
+      historyMocks.selectedChannelId = "old-session-channel";
+      vi.mocked(e2eeApi.listMyDevices).mockResolvedValue({ success: true, data: [] });
+      let replaced = false;
+      const unsubscribe = useE2EEStore.subscribe(state => {
+        if (state.initStatus === "ready" && !replaced) {
+          replaced = true;
+          publishAuthGenerationChange(getAuthSessionSnapshot().generation + 1);
+        }
+      });
+      try {
+        if (mode === "existing") await useE2EEStore.getState().initialize("userA");
+        else if (mode === "new") {
+          vi.mocked(deviceManager.registerNewDevice).mockResolvedValueOnce("new-device");
+          await useE2EEStore.getState().setupNewDevice("userA");
+        } else {
+          vi.mocked(e2eeApi.downloadKeyBackup).mockResolvedValueOnce({ success: true, data: {
+            id: "backup", user_id: "userA", version: 1, created_at: "", updated_at: "",
+            encrypted_data: "cipher", nonce: "nonce", salt: "salt", algorithm: "test",
+          } });
+          vi.mocked(keyBackup.restoreFromBackup).mockResolvedValueOnce(true);
+          vi.mocked(deviceManager.registerRestoredDevice).mockResolvedValueOnce("restored-device");
+          expect(await useE2EEStore.getState().restoreFromRecovery("fixture-password")).toBe(false);
+        }
+      } finally { unsubscribe(); }
+      expect(replaced).toBe(true);
+      expect(historyMocks.invalidate).not.toHaveBeenCalled();
+      expect(historyMocks.invalidateDM).not.toHaveBeenCalled();
+      expect(historyMocks.fetch).not.toHaveBeenCalled();
+    });
+
+    it("stops before clearing DM history if channel invalidation replaces the session", async () => {
+      historyMocks.selectedChannelId = "previous-session-channel";
+      vi.mocked(e2eeApi.listMyDevices).mockResolvedValue({ success: true, data: [] });
+      historyMocks.invalidate.mockImplementationOnce(() => publishAuthGenerationChange(getAuthSessionSnapshot().generation + 1));
+      await useE2EEStore.getState().initialize("userA");
+      expect(historyMocks.invalidate).toHaveBeenCalledOnce();
+      expect(historyMocks.invalidateDM).not.toHaveBeenCalled();
+      expect(historyMocks.fetch).not.toHaveBeenCalled();
+    });
+
+    it("refetches the visible history after existing keys become ready on reload", async () => {
+      historyMocks.selectedChannelId = "early-channel";
+      vi.mocked(e2eeApi.listMyDevices).mockResolvedValue({ success: true, data: [] });
+      historyMocks.fetch.mockImplementationOnce(async () => {
+        expect(useE2EEStore.getState().initStatus).toBe("ready");
+      });
+      await useE2EEStore.getState().initialize("userA");
+      expect(historyMocks.invalidate).toHaveBeenCalledOnce();
+      expect(historyMocks.invalidateDM).toHaveBeenCalledOnce();
+      expect(historyMocks.invalidateDM).toHaveBeenCalledWith({ preserveChannelList: true });
+      expect(historyMocks.fetch).toHaveBeenCalledWith("early-channel");
+    });
+
     it.each(["different-key", "foreign-owner", "matching"])("checks server identity: %s", async (scenario) => {
       vi.mocked(e2eeApi.listMyDevices).mockResolvedValue({ success: true, data: [{
         id: "row", user_id: scenario === "foreign-owner" ? "userB" : "userA", device_id: "verified-device", display_name: "Test",
@@ -662,6 +782,10 @@ describe("e2eeStore", () => {
       }] });
       await useE2EEStore.getState().initialize("userA");
       expect(useE2EEStore.getState().initStatus).toBe(scenario === "matching" ? "ready" : "error");
+      if (scenario !== "matching") {
+        expect(historyMocks.invalidate).not.toHaveBeenCalled();
+        expect(historyMocks.fetch).not.toHaveBeenCalled();
+      }
       expect(deviceManager.reRegisterDevice).not.toHaveBeenCalled();
       expect(keyStorage.clearAllE2EEData).not.toHaveBeenCalled();
     });

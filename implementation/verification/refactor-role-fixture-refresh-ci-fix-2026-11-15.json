@@ -1,0 +1,40 @@
+{
+  "date": "2026-11-15",
+  "base": "892aa995",
+  "sources": {
+    "e2e/tests/helpers.ts": "bc2d5973effdad04e7e04c4655ca27688e3dca7fe702812035182d845d3b4c22",
+    "e2e/tests/auth.setup.ts": "e7db299d2e7722d6c5feea7d11ead70ab84ed380f627edaf84415c3910aee559",
+    "e2e/tests/role-visibility.spec.ts": "71c69ee2111d0f5d1004cc473493874a7908e3c22f6137ceff550e6573f62506"
+  },
+  "failedRemote": {
+    "head": "6a165db35bd9c027dffdf311a9c19a153bf39660",
+    "run": 43692394462,
+    "job": 132745610912,
+    "primary": "fixture provisioning redundant /auth/refresh returned429",
+    "retry": "server deleted before failed reprovision;GET old server denied403 by membership middleware"
+  },
+  "fix": [
+    "fixture setup/cleanup use page login token already held in private WeakMap,not extra refresh-cookie rotations",
+    "setup final real-form login uses existing loginAsCredentials to capture page token",
+    "403 is accepted as prior-deletion absence only after verified owner identity and successful authenticated server list lacking that ID;existing accessible-server name/owner guards remain",
+    "new real-browser regression deletes only its synthetic owned fixture and proves successful reset"
+  ],
+  "validation": {
+    "productionChromium": "full default profile17/17 passed2.4m,real Go and verified mTLS PostgreSQL18.6",
+    "namedCases": [
+      "deleted fixture reset",
+      "parent permission revocation blocks warm thread history and WebSocket delivery",
+      "channel tree role grants/revocations",
+      "concurrent message edit/delete/send convergence",
+      "archive owner/peer boundary"
+    ],
+    "clientBuild": "canonical production tsc -b/Vite startup passed",
+    "isolation": "npm run test:isolation passed after changes;Windows file-symlink case unavailable"
+  },
+  "cleanup": "owned PG fixture container/image removed after terminal E2E;Playwright-owned Go/client processes terminated",
+  "limits": [
+    "server rate policy unchanged;client-handled429 and400/401 refresh diagnostics still observed,not a clean-log claim",
+    "prior flaky cases passed this run;not broad soak or physical/native acceptance",
+    "new-head CI required;remote failedhead not reused as successful evidence"
+  ]
+}

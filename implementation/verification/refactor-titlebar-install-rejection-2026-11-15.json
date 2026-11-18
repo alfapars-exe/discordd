@@ -1,0 +1,21 @@
+{
+  "date": "2026-11-15",
+  "base": "c69db7958a7f25d5615e7252f501a822ab3f8104",
+  "sources": {
+    "client/src/components/layout/CustomTitleBar.tsx": "c9ea3f11164d6348d272f7aae9b74fe3a70cf78071917ebc99e4490742060804",
+    "client/src/components/layout/CustomTitleBar.test.tsx": "3bfd3ea53709533aacba45d4ed416e954e08eb85dd0b7a832d5eceb1d3ab882d"
+  },
+  "before": "titlebar install-rejection regression failed because rejection was not observed",
+  "fix": "Observe rejected install IPC Promise from titlebar button; preserve ready button and permit retry,matching existing hook behavior",
+  "validation": {
+    "targeted": "three suites24tests passed",
+    "typescript": "npx tsc -b passed after typed Pick bridge fixture correction",
+    "lint": "changed component and test passed",
+    "build": "Vite production build passed"
+  },
+  "limits": [
+    "IPC Promise stubbed; not native installer failure/physical upgrade acceptance",
+    "previous combined5023test coverage is prior-source evidence",
+    "local commit held while remote c69db795 CI runs"
+  ]
+}

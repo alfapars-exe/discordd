@@ -9,6 +9,7 @@ import (
 
 // Repositories holds all repository instances.
 type Repositories struct {
+	VoiceAccess             repository.VoiceAccessReader
 	User                    repository.UserRepository
 	Session                 repository.SessionRepository
 	MFA                     repository.MFARepository
@@ -28,18 +29,18 @@ type Repositories struct {
 	Attachment              repository.AttachmentRepository
 	Ban                     repository.BanRepository
 	MemberTimeout           repository.MemberTimeoutRepository
-	Server                  repository.ServerRepository
+	Server                  repository.ServerStore
 	Invite                  repository.InviteRepository
 	Pin                     repository.PinRepository
 	Search                  repository.SearchRepository
 	ReadState               repository.ReadStateRepository
 	Mention                 repository.MentionRepository
-	DM                      repository.DMRepository
-	GroupDM                 repository.GroupDMRepository
+	DM                      repository.DMRequestStore
+	GroupDM                 repository.GroupDMStore
 	Reaction                repository.ReactionRepository
 	ChannelPermission       repository.ChannelPermissionRepository
-	Friendship              repository.FriendshipRepository
-	LiveKit                 repository.LiveKitRepository
+	Friendship              repository.FriendshipStore
+	LiveKit                 repository.LiveKitStore
 	ResetToken              repository.PasswordResetRepository
 	MetricsHistory          repository.MetricsHistoryRepository
 	ServerMute              repository.ServerMuteRepository
@@ -51,9 +52,9 @@ type Repositories struct {
 	GroupSession            repository.GroupSessionRepository
 	LinkPreview             repository.LinkPreviewRepository
 	Badge                   repository.BadgeRepository
-	Preferences             repository.PreferencesRepository
+	Preferences             repository.PreferencesStore
 	RoleMention             repository.RoleMentionRepository
-	AppLog                  repository.AppLogRepository
+	AppLog                  repository.AppLogStore
 	AuditLog                repository.AuditLogRepository
 	Feedback                repository.FeedbackRepository
 	Soundboard              repository.SoundboardRepository
@@ -64,11 +65,11 @@ type Repositories struct {
 	MediaAsset              repository.MediaAssetRepository
 	RuntimeTelemetry        repository.RuntimeTelemetryRepository
 	DMRead                  repository.DMReadRepository
-	Notification            repository.NotificationRepository
+	Notification            repository.NotificationRuntimeStore
 	Reminder                repository.ReminderRepository
 	Saved                   repository.SavedRepository
 	UserNote                repository.UserNoteRepository
-	MusicSession            repository.MusicSessionRepository
+	MusicSession            repository.MusicSessionStore
 	DataExport              repository.DataExportRepository
 	ProfileShowcase         repository.ProfileShowcaseRepository
 	ServerEvent             repository.ServerEventRepository
@@ -89,6 +90,7 @@ type Repositories struct {
 // using the raw connection.
 func initRepositories(conn *sql.DB, dataExportOptions ...repository.DataExportStorageOptions) *Repositories {
 	db := database.NewRetryingQuerier(conn)
+	channel := repository.NewSQLiteChannelRepo(db)
 	return &Repositories{
 		User:                    repository.NewSQLiteUserRepo(db),
 		Session:                 repository.NewSQLiteSessionRepo(db),
@@ -103,7 +105,8 @@ func initRepositories(conn *sql.DB, dataExportOptions ...repository.DataExportSt
 		AccountAssetCleanup:     repository.NewSQLiteAccountAssetCleanupRepo(db),
 		EmailVerification:       repository.NewSQLiteEmailVerificationRepo(db),
 		Role:                    repository.NewSQLiteRoleRepo(db),
-		Channel:                 repository.NewSQLiteChannelRepo(db),
+		Channel:                 channel,
+		VoiceAccess:             channel.VoiceAccess(),
 		Category:                repository.NewSQLiteCategoryRepo(db),
 		Message:                 repository.NewSQLiteMessageRepo(db),
 		Attachment:              repository.NewSQLiteAttachmentRepo(db),

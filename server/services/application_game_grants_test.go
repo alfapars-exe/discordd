@@ -21,7 +21,7 @@ func TestGameGrantSendPreservesPrivacyAndAtomicRequestState(t *testing.T) {
 		INSERT INTO users(id,username,password_hash,is_bot,owner_user_id) VALUES('game','gamebot','x',1,'owner');`); err != nil {
 		t.Fatal(err)
 	}
-	bots := NewBotService(repository.NewBotRepository(db.Conn))
+	bots := NewBotService(repository.NewBotRepository(db.Conn), BotRuntimeDependencies{})
 	if _, err := bots.RegisterGameIdentity(ctx, "owner", "game"); err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestGameGrantSendPreservesPrivacyAndAtomicRequestState(t *testing.T) {
 			payloads = append(payloads, string(b))
 		}
 	}}
-	svc := NewDMService(dm, repository.NewSQLiteUserRepo(db.Conn), hub, block, friends, nil, repository.NewSQLiteDMReadRepo(db.Conn), repository.NewSQLiteNotificationRepo(db.Conn), repository.NewDMMessageTxRunner(db.Conn))
+	svc := NewDMService(nil, dm, repository.NewSQLiteUserRepo(db.Conn), hub, block, friends, nil, repository.NewSQLiteDMReadRepo(db.Conn), repository.NewSQLiteNotificationRepo(db.Conn), repository.NewDMMessageTxRunner(db.Conn), nil, nil, nil, nil, nil)
 	cipher, device := "opaque-ciphertext", "game-device"
 	send := func() (*models.DMMessage, error) {
 		return svc.SendMessage(ctx, "game", ch.ID, &models.CreateDMMessageRequest{EncryptionVersion: 1, Ciphertext: &cipher, SenderDeviceID: &device})

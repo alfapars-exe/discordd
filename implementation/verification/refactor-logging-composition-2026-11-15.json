@@ -1,0 +1,26 @@
+{
+  "scope": "RF11 logging composition and rollback ownership",
+  "owners": [
+    "AuditLogService",
+    "AppLogRuntime"
+  ],
+  "changes": [
+    "Group same audit repository/user/role/broadcast/online providers and same app-log batch writer",
+    "Construct before voice and other logging consumers",
+    "Register both Stop owners immediately in reverse-order rollback; successful startup still starts workers in main"
+  ],
+  "prerequisite": "Audit terminal lifecycle fixed in 87dd2afa; Stop-before-Start no longer blocks. AppLog Stop already starts and joins its flush owner.",
+  "checks": {
+    "root": "PASS ServiceInitialization including injected hub callback and early config failure plus routes/callbacks/permission/auth-cache/real friendship-DM, 2.768s",
+    "services": "PASS audit/AppLog tests, 10.904s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_manifest": "PASS 50 exact records"
+  },
+  "limits": [
+    "Missing-provider validation for logging group remains to implement.",
+    "No proof yet for every failure position or bounded audit persistence drain.",
+    "Linux race/current-source CI and full RF01-RF30 acceptance remain open."
+  ],
+  "remote_ci": "43656873218 on 79afb1e9 live without observed failures; local logging/audit changes excluded."
+}

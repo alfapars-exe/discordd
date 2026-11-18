@@ -1,0 +1,27 @@
+{
+  "sourceCommit": "9a9437017201962d669f8a970470a740ba558dcd",
+  "sourceMatches": [
+    {
+      "path": "server/services/member_projection_sql_test.go",
+      "lines": 130,
+      "normalizedSha256": "6b099daba5242277c869cd5f9f1b80b718397e1f27f0147094a6b9c82555d073",
+      "sonarSourceMatches": true,
+      "openIssues": 0
+    },
+    {
+      "path": "server/repository/member_profile_benchmark_test.go",
+      "lines": 84,
+      "normalizedSha256": "9742dda459c2d0714a54b99f2e005c7bae3024cf64b4459f9b719fe8a21a8a56",
+      "sonarSourceMatches": true,
+      "openIssues": 0
+    },
+    {
+      "path": "loadtest/pool-summary.mjs",
+      "lines": 39,
+      "normalizedSha256": "979f950ce2b23d62a1f1125e9a65c938ab150b1bf2b08cd7cfa99b07e9d58709",
+      "sonarSourceMatches": true,
+      "openIssues": 0
+    }
+  ],
+  "scope": "Source-matched Sonar analysis and per-file open-issue searches; not whole-project closure"
+}

@@ -22,8 +22,6 @@ type MediaLabelService struct {
 	hub    ws.Broadcaster
 }
 
-func (s *MediaLabelService) SetBroadcaster(hub ws.Broadcaster) { s.hub = hub }
-
 // Invalidate only the owner's sessions. Clients re-read canonical state rather
 // than applying potentially reordered label values from socket events.
 func (s *MediaLabelService) changed(entry *models.MediaLabel) {
@@ -35,8 +33,8 @@ func (s *MediaLabelService) changed(entry *models.MediaLabel) {
 	}
 }
 
-func NewMediaLabelService(store mediaLabelStore, access recipientReferenceAccess) *MediaLabelService {
-	return &MediaLabelService{store: store, access: access}
+func NewMediaLabelService(store mediaLabelStore, access recipientReferenceAccess, hub ws.Broadcaster) *MediaLabelService {
+	return &MediaLabelService{hub: hub, store: store, access: access}
 }
 func (s *MediaLabelService) reference(ctx context.Context, userID string, input *models.MediaLabel, write bool) (*models.MediaLabel, error) {
 	if userID == "" {

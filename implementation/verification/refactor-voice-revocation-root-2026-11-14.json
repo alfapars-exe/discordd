@@ -1,0 +1,38 @@
+{
+  "date": "2026-11-14",
+  "scope": "Own accepted permission recheck and member-revocation roots",
+  "source_sha256": {
+    "server/services/voice_state.go": "fa01c3be3c03c0778b906226695be288b253581ac966ed3b8e793ed811629fc6",
+    "server/services/voice_usage_operations_test.go": "90e21a2da0f5c2f1d2cf4fb9848c186d2d86a40247c8630be6fe0fa6e065ba47"
+  },
+  "before": {
+    "test": "TestVoiceUsageShutdownWaitsForPermissionRecheck",
+    "exit": 1,
+    "failure": "shutdown returned before owned work"
+  },
+  "after": {
+    "host_count": 10,
+    "host_exit": 0,
+    "host_seconds": 3.017,
+    "linux_race_count": 10,
+    "race_exit": 0,
+    "race_seconds": 6.017,
+    "postgres_late_member_count": 3,
+    "postgres_exit": 0,
+    "postgres_seconds": 3.414,
+    "services_vet_exit": 0,
+    "services_lint_issues": 0
+  },
+  "published_ci_snapshot": {
+    "head": "fdd59669e5d74e9e29f690dde4c3c94364c2c29b",
+    "sonar": "COMPLETED SUCCESS",
+    "successful_checks": 9,
+    "failed_checks": 0,
+    "overall": "still running"
+  },
+  "limitations": [
+    "New root ownership changes remain local integration.",
+    "Late callbacks still require caller-owned database availability; no post-database-close guarantee.",
+    "Whole-project/runtime/physical acceptance remains open."
+  ]
+}

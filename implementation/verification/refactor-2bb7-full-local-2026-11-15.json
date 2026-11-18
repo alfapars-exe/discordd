@@ -1,0 +1,18 @@
+{
+  "source": "2bb70833229263092ccface1132f5018f02b9d6f",
+  "command": "go test ./services ./handlers ./repository ./ws . -count=1",
+  "session": 85485,
+  "result": "PASS all five packages",
+  "seconds": {
+    "services": 96.182,
+    "handlers": 7.435,
+    "repository": 194.466,
+    "ws": 5.431,
+    "root": 28.909
+  },
+  "source_stability": "Server code unchanged throughout run; subsequent commits through ee047614 are documentation/evidence only.",
+  "limits": [
+    "Windows non-race run. PostgreSQL environment absent; dedicated local PostgreSQL evidence recorded separately.",
+    "Remote CI and physical acceptance are separate; overall refactor not complete."
+  ]
+}

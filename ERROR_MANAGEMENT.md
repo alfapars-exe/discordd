@@ -91,6 +91,74 @@ korunarak gösterilir.
   rezerv vardır; rezerv her 5 saniyede bir token yeniler. INFO bu rezervi
   tüketemez. 10 dakika kullanılmayan kullanıcı bucket'ları temizlenir.
 
+## Uygulama günlüğünde bağımlılık panic'leri
+
+Eski kayıt temizliği ve her yazım girişimi mevcut `logx.Run` ile korunur. Hatalı
+bakım işi sonlanır; yazıcı yeni olayları işlemeye devam eder. Başarısız yazım
+girişimi bir kez `WriteFailures` sayacına eklenir. Tekil yazımda başarıyla dönen
+kayıtların gruplanmış olayları `FailedEvents` sayacından çıkarılır; sonucu
+doğrulanamayan kalan olaylar bu sayaca eklenir. Toplu yazım panic'inde bütün
+girişimin sonucu belirsiz sayılır. Bu sayaç kesin veri kaybı ölçümü değildir.
+Panic'ten önce depoya yazılmış olabilecek kayıtlar otomatik yeniden denenmez.
+
+Panic tanısı yalnız bir kez `app_log.write` veya `app_log.purge` bileşeniyle
+üretilir. Mevcut pipeline bu bileşenleri uygulama günlüğü sink'ine yönlendirmez;
+depolama hatası aynı kuyruğa geri beslenmez. Dış log/Sentry akışı devam eder.
+
+## Audit kuyruğu ve kapanış
+
+Audit `Write` çağrısı kullanıcı veya audit deposuna erişmez; olayın kimlik ve
+verilmiş snapshot değerlerini kopyalayıp sınırlı kuyruğa alır. Dolu kuyruk ve
+kapanmış servis yeni olayı kabul etmez. Eksik kullanıcı snapshot'ları tek yazıcıda
+ortak iki saniyelik bütçeyle tamamlanır. Çağıranın verdiği snapshot olay anındaki
+değeri korur; verilmemişse kayıt anındaki kullanıcı bilgisi kullanılır. Okuma
+başarısızsa kimlik korunur ve mevcut bilinmeyen kullanıcı gösterimi sürer.
+
+İlk `Stop` çağrısı kabulü kapatır ve aktif işin context'ini iptal eder. Aktif
+veritabanı işlemi iptalle başarısız olabilir; hata kaydı üretilir. Kuyrukta kalan
+olaylar, ilk `Stop` anından başlayan toplam beş saniyelik taze context ile yazılır.
+Sonraki `Stop` çağrıları süreyi uzatmaz. Süre dolunca kalan olaylar kuyruktan
+çıkarılır ve sayıları tek uyarıda bildirilir; başarısız yazım ayrıca hata kaydı
+üretir. Her `Stop`, aynı yazıcının çıkışını bekler; sahipsiz veritabanı goroutine'i
+bırakılmaz. Süre sınırının işlemesi depoların context iptaline uymasına bağlıdır.
+Her olay mevcut `logx.Run` ile ayrı korunur. Bağımlılık panic'i aynı olay için
+bir hata kaydı üretir ve yazıcı sonraki olaya devam eder. Hatalı olay otomatik
+yeniden denenmez; veritabanına yazımdan sonraki bir panic mükerrer satır üretmez.
+Snapshot zamanlayıcısı panic sırasında da iptal edilir.
+Bu kuyruk kalıcı teslim garantisi vermez.
+
+## İstemci tercih mutasyonları
+
+Zustand durumu eşzamanlı abonelerini çağırmadan önce kaydeder. Bir abone hata
+verdiğinde `completePreferenceMutation`, güncel hesap/sunucu bağlamına ve hâlâ
+sahip olunan alanlara ait önbellek ve gönderim kuyruğu adımlarını tamamlar.
+Durum mutasyonu bir kez çalışır; abonenin asıl hatası çağırana iletilir.
+
+Bildirim ve tamamlama birlikte hata verirse `AggregateError.errors` iki hatayı
+korur; `cause` tamamlama sırasında yakalanan hataya bağlanır. Hesap/sunucu nesli
+geçersizleşen işlem, yeni bağlamın önbelleğini veya kuyruğunu değiştiremez.
+Sunucudan uygulama ve sıfırlama yolları önbelleği tamamlar; sunucuya geri yazmaz.
+
+Doğrulanmış GET/PATCH sonucu, yükleme/kayıt bildirimi yayımlanmadan önce hesap
+önbelleğine alınır; kabul edilmiş PATCH kuyruktan çıkarılır. Yazıcı tutamacı,
+aboneler çalışmadan ayrılır. İç içe yeniden denemeler aynı yazıcıya katılır;
+hesabı değişmiş bekleyen yazıcı yeni bağlamın durumunu tüketmeden durur.
+
+Reddedilen GET/PATCH işlemleri, kendilerine ait tutamacı `finally` içinde
+serbest bırakır. Eski hesap işleminin temizliği yeni hesabın işini değiştiremez.
+Zamanlayıcı ve yeniden deneme düğmesi reddedilmeleri hesap kapsamıyla gözler;
+tanı kaydı yalnız sabit olay kodunu taşır, tercih veya hata içeriğini taşımaz.
+
+Kayıt, giriş, oturum geri yükleme, odaklanma/çevrimiçi olayları ve kullanıcının
+`preferences_changed` olayı, sahipsiz tercih görevlerini `startPreferenceTask`
+ile gözler. Görevin başladığı bağlam geçerliyse sabit kaynak etiketiyle tanı
+üretilir. Tercih yükleme hatası başarılı kimlik doğrulamayı geri almaz.
+
+Yerel depolama yazımı mevcut en iyi çaba davranışını sürdürür. Kota veya erişim
+engeli durumunda bellek kuyruğu yetkilidir; kalıcı teslim garantisi verilmez.
+Hata veren abonenin ardından atlanan diğer abonelerin bildirimi ve asenkron
+fetch/save hata yolları ayrı yaşam döngüsü sınırlarıdır.
+
 ## Doğrulama
 
 Go testleri logger başlatma sırasını, maskelemeyi, tek HTTP tanı kaydını, kuyruk
@@ -102,3 +170,18 @@ de çalıştırılabilir. Üretim veritabanı test hedefi olarak kullanılmaz.
 Yerel test/derleme sonucu canlı kabul yerine geçmez. Dağıtım sonrasında readiness,
 gerçek önizleme önbellek kullanımı, müzik zaman aşımı davranışı, DB bekleme süresi,
 istek gecikmesi ve yönetici ekranındaki kayıtlar ayrıca kontrol edilmelidir.
+
+
+Legacy preference import captures the binding and imported-marker key before observer publication. Recovery data is persisted before assignment; queued local-apply failures remain retryable. Joined account mismatch prevents backup assignment. The UI owns each import attempt by binding and identity, observes rejection, prevents duplicate active attempts and ignores retired or unmounted completion. Persistent failing error observers and broader acquisition/native cases remain open.
+
+Hesap tercihleri bağlanırken sunum hazırlığı, bağlama bildirimi yayımlanmadan önce o nesle ayrılır. Bildirim hata fırlatsa da kaydedilmiş hesabın sunumu hazırlanır; bildirim yeni bir bağlama oluşturursa eski hazırlık bunu ezmez. Sıfırlama bildirimi sırasında yeni bir nesil oluştuğunda dıştaki eski bind çağrısı durur. Ayrık tercih işleri hemen çağrılan async sarmalayıcıyla senkron fabrika hatalarını ve Promise retlerini tek gözlemlenen ret yoluna dönüştürür; tanı bildirimi yalnız hâlâ geçerli nesle aittir.
+
+Mesaj silme olayında okunmamış sayacı bildirimi veya mesaj store bildirimi hata fırlatsa da kalan aynı oturuma ait silme adımları çalıştırılır ve önbellek temizliği beklenir. Her adım öncesinde sahiplik yeniden doğrulanır. İlk bildirim hatası korunur; birden çok hata AggregateError ile nedenleriyle birlikte döner. Önbellek temizleme hatası için mevcut sabit, en iyi çaba uyarısı korunur. Kanal sayacı yalnız yüklenmiş karşı taraf mesajı için azaltılır; bildirim hatasından doğan yeniden teslim ikinci azaltma yapmaz. Kalıcı silme günlüğü ve sınırlı arama bekleme kuyruğu henüz eklenmedi.
+
+Yeni yerel arama, aynı konuşma için kabul edilmiş WebSocket silmelerinin tamamlanmasını bekler. Silme rezervasyonu store bildirimi öncesinde alınır ve hata olsa da finally ile bırakılır. Bekleme hesabın ve oturum neslinin sınırına bağlıdır; sorgu iptali bekleyiciyi kaldırır. Bu katman yalnız tamamlanma sırasını sağlar; en iyi çaba önbellek temizliğinin başarısını, kalıcı silme günlüğünü veya çapraz sekme sırasını garanti etmez.
+
+HTTP ile onaylanan DM silmesi de ortak silme tamamlayıcısını kullanır. Bildirimden önce konuşma rezervasyonu alınır; bildirim hata fırlatsa da aynı sahipliğe ait önbellek temizliği beklenir ve rezervasyon finally ile bırakılır. Hesap/nesil/cihaz değişiminden sonra eski temizlik çağrısı başlatılmaz. Ortak yardımcı utils katmanındadır; store, WebSocket hook katmanına bağımlı değildir. Boolean dönüşü ve en iyi çaba uyarısı korunur.
+
+Bekleyen önbellek silmeleri, fiziksel silmeden önce aynı hesap/sunucu IndexedDB metadata alanına mesaj kimliği ve işlem kimliğiyle kaydedilir. Fiziksel silme hatası bu niyeti geri almaz. Tekil/indeksli/eski arama okumaları ve yedek toplama bekleyen satırı süzer; yeni indeks 128 kimliklik gruplarla uzlaştırılır ve toplam/sıralama ailesi kalan referanslardan hesaplanır. Başarılı fiziksel silme yalnız kendi işlem kimliğini aynı transaction içinde kaldırır; eski işlem yeni niyeti silemez. Kaydı yazamama fiziksel silmeyi durdurmaz: fiziksel silme tamamlanırsa başarı, ikisi de hata verirse nedenleri koruyan AggregateError döner.
+
+Eski yedekten geri yüklemede yakalanmış bekleyen silme kayıtları korunur ve ilgili önbellek satırları içeri alınmaz. Yedek toplama API'si tam önbellek dizisi döndürmeye devam eder; ek metadata işi mesaj başına ayrı istek yerine bekleyen kayıt aralığı üzerinde yürür. İndeksin metadata grubu tüketiciden önce transaction'ı kapatır; son tüketici sonrasında da oturum ve iptal sınırı doğrulanır. Çift depolama hatasında kalıcı kayıt garantisi, geri yüklemeyle yarışan yeni silmeler ve bütün kaynak yazıcıları için kabul henüz açık.

@@ -33,12 +33,19 @@ func (h *Hub) removeClientFromServerIndex(client *Client, serverID string) {
 // first connection. For subsequent connections, recomputes aggregate status.
 func (h *Hub) addClient(client *Client) {
 	defer func() {
+		client.registrationProfile = nil
 		if client.registered != nil {
 			close(client.registered)
 		}
 	}()
 	h.mu.Lock()
-	if h.shuttingDown {
+	reject := h.shuttingDown
+	select {
+	case <-client.done:
+		reject = true
+	default:
+	}
+	if reject {
 		h.mu.Unlock()
 		if client.done != nil {
 			client.closeDone()
@@ -50,6 +57,11 @@ func (h *Hub) addClient(client *Client) {
 	}
 
 	isFirstConnection := len(h.clients[client.userID]) == 0
+	if profile := client.registrationProfile; profile != nil {
+		if isFirstConnection {
+			h.SetUserInfo(client.userID, profile.Username, profile.DisplayName, profile.AvatarURL)
+		}
+	}
 	if !isFirstConnection {
 		for existing := range h.clients[client.userID] {
 			client.prefStatus = existing.prefStatus
@@ -128,10 +140,17 @@ func (h *Hub) addClient(client *Client) {
 // RequestGameActivitySnapshot is called after ready is queued so activity
 // snapshots cannot overtake the stream's initial synchronization marker.
 func (h *Hub) RequestGameActivitySnapshot(userID string) {
-	cb := h.onGameActivitySnapshot
-	if cb != nil {
-		go cb(userID)
+	h.mu.Lock()
+	if h.shuttingDown || h.onGameActivitySnapshot == nil {
+		h.mu.Unlock()
+		return
 	}
+	cb := h.onGameActivitySnapshot
+	// Share the bounded owner and same-user ordering used by connect/update.
+	// Shutdown cancels queued tickets and joins callbacks already running.
+	ticket := h.presenceCallbacks.reserve(userID, "game_activity_snapshot")
+	h.mu.Unlock()
+	h.presenceCallbacks.submit(ticket, func() { cb(userID) })
 }
 
 func (h *Hub) QueueGameActivityUpdate(client *Client, sequence uint64, game *GameActivityClientGame) {
@@ -153,6 +172,8 @@ func (h *Hub) QueueGameActivityUpdate(client *Client, sequence uint64, game *Gam
 // Otherwise recomputes and broadcasts aggregate status.
 func (h *Hub) removeClient(client *Client) {
 	h.mu.Lock()
+	// The hub can consume unregister before the queued register.
+	client.closeDone()
 
 	var fullyDisconnected bool
 	var partialDisconnect bool
@@ -167,7 +188,6 @@ func (h *Hub) removeClient(client *Client) {
 	if clients, ok := h.clients[client.userID]; ok {
 		if _, exists := clients[client]; exists {
 			delete(clients, client)
-			client.closeDone()
 			activityDisconnectCallback = h.onGameActivityDisconnect
 
 			// Remove this client from all server indexes it belonged to.
@@ -205,20 +225,19 @@ func (h *Hub) removeClient(client *Client) {
 		activityDisconnectTicket = h.presenceCallbacks.reserve(client.userID, "game_activity_disconnect")
 	}
 
-	// h.mu is now held here too (deferred Unlock above, not the manual
-	// Unlock() this used to have at this point) — evictUserInfo below is a
-	// nested h.mu -> userMu acquisition rather than the fully independent
-	// one this comment used to describe. Still no ordering hazard: nothing
-	// in the package ever acquires userMu before h.mu (grep userMu — only
-	// hub_state.go touches it, and none of those funcs take h.mu), so
-	// there's no reverse-order path to deadlock against. Evict the cached
-	// profile entry once the last connection is gone so userInfos doesn't
-	// grow unboundedly over the process lifetime.
+	// Evict while holding h.mu so a new first connection cannot install its
+	// profile between the last disconnect and eviction. Lock order is
+	// h.mu before userMu throughout registration and removal.
 	if fullyDisconnected {
 		h.evictUserInfo(userID)
 	}
 
 	h.mu.Unlock()
+	// Removal retires this socket, including any write blocked on a slow peer.
+	// Close outside the hub lock and before potentially slow presence callbacks.
+	if client.conn != nil {
+		_ = client.conn.Close()
+	}
 	if disconnectCallback != nil {
 		h.presenceCallbacks.submit(ticket, func() { disconnectCallback(userID, "") })
 	} else if presenceCallback != nil {
@@ -245,7 +264,7 @@ func (h *Hub) DisconnectUser(userID string) {
 			_ = client.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(4001, "session_revoked"), time.Now().Add(writeWait))
 			_ = client.conn.Close()
 		}
-		h.unregister <- client
+		h.unregisterClient(client)
 	}
 }
 
@@ -265,7 +284,7 @@ func (h *Hub) DisconnectSession(userID, sessionID string) {
 			_ = client.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(4001, "session_revoked"), time.Now().Add(writeWait))
 			_ = client.conn.Close()
 		}
-		h.unregister <- client
+		h.unregisterClient(client)
 	}
 }
 

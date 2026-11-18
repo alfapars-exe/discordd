@@ -1278,6 +1278,42 @@ describe("channelEncryption — decryptChannelMessages", () => {
     expect(e2eeApi.fetchGroupSessions).not.toHaveBeenCalled();
   });
 
+  it("verifies legacy cached plaintext against the signed frame without resetting replay state", async () => {
+    const encrypted = await aliceSends("legacy history");
+    switchTo(BOB);
+    const message = e2eeMsg("legacy-history", encrypted);
+    await decryptChannelMessages([message]);
+    const legacy = { ...h.cached[0], encryptedSourceTag: undefined };
+    vi.mocked(keyStorage.getCachedDecryptedMessage).mockResolvedValueOnce(legacy);
+    const before = JSON.stringify([...h.bob.senderKeys]);
+    expect((await decryptChannelMessages([message]))[0].content).toBe("legacy history");
+    expect(JSON.stringify([...h.bob.senderKeys])).toBe(before);
+    await expect(receiverReads(BOB, encrypted)).rejects.toThrow(/Replay detected/);
+  });
+
+  it("reads an accepted history frame from its bound cache while live replay stays rejected", async () => {
+    const encrypted = await aliceSends("restored history");
+    switchTo(BOB);
+    const message = e2eeMsg("cached-history", encrypted);
+    expect((await decryptChannelMessages([message]))[0].content).toBe("restored history");
+    const before = JSON.stringify([...h.bob.senderKeys]);
+    vi.mocked(keyStorage.getCachedDecryptedMessage).mockResolvedValueOnce(h.cached[0]);
+    expect((await decryptChannelMessages([message]))[0].content).toBe("restored history");
+    expect(JSON.stringify([...h.bob.senderKeys])).toBe(before);
+    await expect(receiverReads(BOB, encrypted)).rejects.toThrow(/Replay detected/);
+  });
+
+  it("preserves file keys for attachment-only history in the bound cache", async () => {
+    const meta = sampleMeta();
+    switchTo(ALICE);
+    const encrypted = await encryptChannelMessage(CH, ALICE.userId, ALICE.deviceId, encodePayload("", [meta]));
+    switchTo(BOB);
+    const message = e2eeMsg("file-history", encrypted);
+    const [decrypted] = await decryptChannelMessages([message]);
+    expect(decrypted.content).toBe("");
+    expect(h.cached[0]).toMatchObject({ messageId: message.id, fileKeys: [meta] });
+  });
+
   it("bulk-decrypts a mixed batch and caches only truthy-content successes", async () => {
     const meta = sampleMeta();
     switchTo(ALICE);

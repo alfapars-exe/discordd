@@ -343,3 +343,7 @@ func TestProfileAudienceInvalidationViewersAreScopedAndExcludeBlocks(t *testing.
 		t.Fatalf("invalidation escaped eligible scope: %v", viewers)
 	}
 }
+
+func (profileNilFriendStub) ListBlockedUserIDs(context.Context, string, []string) (map[string]bool, error) {
+	return map[string]bool{}, nil
+}

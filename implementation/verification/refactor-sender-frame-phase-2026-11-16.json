@@ -1,0 +1,64 @@
+{
+  "baselineCommit": "0e9b0cfb",
+  "scope": "Separate synchronous sender-key frame decoding, minimum-length guard and mandatory Ed25519 verification from group payload decryption. Iteration/replay checks remain before it; ratchet/AES and persistence remain after it. No added asynchronous boundary, wire or protocol changes.",
+  "validation": {
+    "beforeAndAfter": "Same41 real sender-key crypto tests PASS",
+    "typescript": "PASS",
+    "targetedEslint": "PASS",
+    "structuralParity": {
+      "method": "Canonical TypeScript whole-file statement printing after inlining synchronous frame helper and removing its terminal ciphertext return",
+      "fullSourceParity": true
+    },
+    "coverage": {
+      "helperCalls": 45,
+      "statementCovered": 11,
+      "statementTotal": 11,
+      "branchArmsCovered": 4,
+      "branchArmsTotal": 4,
+      "fileSummary": {
+        "lines": {
+          "total": 217,
+          "covered": 204,
+          "skipped": 0,
+          "pct": 94
+        },
+        "statements": {
+          "total": 235,
+          "covered": 213,
+          "skipped": 0,
+          "pct": 90.63
+        },
+        "functions": {
+          "total": 38,
+          "covered": 34,
+          "skipped": 0,
+          "pct": 89.47
+        },
+        "branches": {
+          "total": 111,
+          "covered": 93,
+          "skipped": 0,
+          "pct": 83.78
+        },
+        "branchesTrue": {
+          "total": 0,
+          "covered": 0,
+          "skipped": 0,
+          "pct": "Unknown"
+        }
+      }
+    },
+    "coverageScope": "Only senderKeyProtocol.ts included; not whole-client coverage. Thresholds were not edited. Helper statement/branch counts selected from V8 locations inside the named function."
+  },
+  "remaining": [
+    "Immutable source scan and new-source CI/Sonar",
+    "Full final-head client coverage",
+    "Historical backup/native/recovery corpus and full RF16 acceptance"
+  ],
+  "sourceScan": {
+    "sourceCommit": "955233c8",
+    "exactReviewedRecords": 51,
+    "reviewLines": 482,
+    "blockingPatterns": 0
+  }
+}

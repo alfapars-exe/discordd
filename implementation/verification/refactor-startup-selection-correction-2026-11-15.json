@@ -1,0 +1,16 @@
+{
+  "source_code": "2bb70833229263092ccface1132f5018f02b9d6f",
+  "correction": "Earlier targeted commands described startup/rollback coverage but their Test.*(Startup|Rollback|Route|Callback|...) filter does not select TestServiceInitialization*. Their frozen command outcomes remain factual; those descriptions must not be treated as proof of these three tests. Broad package runs include them.",
+  "explicit_command": "go test . -run ^TestServiceInitialization -count=1 -v",
+  "result": "PASS 3, SKIP 0; 1.692s",
+  "tests": [
+    "TestServiceInitializationReleasesCacheWhenHubWiringPanics",
+    "TestServiceInitializationReleasesCacheOnEarlyConfigFailure",
+    "TestServiceInitializationTransfersLiveWorkersToSuccessfulCaller"
+  ],
+  "future_selection": "Include ServiceInitialization explicitly in composition verification commands.",
+  "limits": [
+    "Tests verify cache/limiter counts and specified owners, not every possible acquisition failure or physical runtime.",
+    "Full local session 85485 remains live; no terminal result asserted."
+  ]
+}

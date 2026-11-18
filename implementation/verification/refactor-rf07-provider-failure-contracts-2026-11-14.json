@@ -1,0 +1,22 @@
+{
+  "source_parent": "2f43b98c",
+  "scope": "RF07 recovery service provider/storage error and context lifetime contracts",
+  "tests": [
+    "TestRecoveryProviderFailureAndCancellationContracts/provider_failure",
+    "TestRecoveryProviderFailureAndCancellationContracts/request_canceled_during_send",
+    "TestRecoveryProviderFailureAndCancellationContracts/request_deadline_during_send",
+    "TestRecoveryStorageFailurePreventsProviderSend"
+  ],
+  "validation": {
+    "command": "go test ./services -run ^TestRecovery(ProviderFailureAndCancellationContracts|StorageFailurePreventsProviderSend)$ -count=1 -v",
+    "exit": 0,
+    "top_level": 2,
+    "provider_subtests": 3
+  },
+  "evidence": "Fake sender failure/cancellation/deadline causes preserved via errors.Is; actual context deadline releases fake sender. Sender gets normalized stored email and token whose SHA256 matches persisted hash. Persistence failure prevents send. Assertions do not print plaintext token.",
+  "limits": [
+    "Mock repositories and fake provider; no external email delivery",
+    "Current public HTTP error mapping not changed or fully verified here",
+    "No product behavior changed; RF07 remains open"
+  ]
+}

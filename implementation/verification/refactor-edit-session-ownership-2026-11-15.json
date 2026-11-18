@@ -1,0 +1,102 @@
+{
+  "source_commit": "ab4ec7400144f9c7ef2ca1e494ca28100ef8ce91",
+  "client_git_tree": "05bb32812ceadea1719e25f8e126e7e38338b297",
+  "source_sha256": {
+    "client/src/hooks/useMessageEditing.ts": "b455c3306f3b513c0d175e0be5ceb39bacf33be9575c98dd5b3e05851cd6d953",
+    "client/src/hooks/useMessageEditing.test.tsx": "30e81d65d92120f1b60f81212d0928828a492650f8f175f498014d6197df4640"
+  },
+  "red_proof": {
+    "log": "hichat-edit-session-ownership-red.log",
+    "result": "3failed3passed",
+    "failures": [
+      "cancelled selected mention tokenizes plain text in replacement draft",
+      "mention rAF overwrites a later user selection",
+      "old awaited save closes a replacement edit session"
+    ]
+  },
+  "fix": [
+    "Start/cancel reset mention selections,query,start offset and caret intent",
+    "Mention caret applied in layout after committed text,without delayed frames or side effects in functional state updater",
+    "Edit generation fences save completion;old request can finish upstream without clearing replacement draft",
+    "Current user/role tokens,regex-special names,trailing draft,leading whitespace and StrictMode behavior retained"
+  ],
+  "checks": {
+    "targeted": "41passed:10editing+31socket",
+    "full_client": "485files;5048passed;1skipped;113.06s",
+    "coverage": {
+      "lines": {
+        "total": 38074,
+        "covered": 26022,
+        "skipped": 0,
+        "pct": 68.34
+      },
+      "statements": {
+        "total": 52042,
+        "covered": 35011,
+        "skipped": 0,
+        "pct": 67.27
+      },
+      "functions": {
+        "total": 12149,
+        "covered": 7471,
+        "skipped": 0,
+        "pct": 61.49
+      },
+      "branches": {
+        "total": 39629,
+        "covered": 25567,
+        "skipped": 0,
+        "pct": 64.51
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "changed_module_coverage": {
+      "C:\\Users\\PARS\\Desktop\\PROJELER\\HiChat\\refactor-integration\\client\\src\\hooks\\useMessageEditing.ts": {
+        "lines": {
+          "total": 96,
+          "covered": 89,
+          "skipped": 0,
+          "pct": 92.7
+        },
+        "functions": {
+          "total": 12,
+          "covered": 10,
+          "skipped": 0,
+          "pct": 83.33
+        },
+        "statements": {
+          "total": 102,
+          "covered": 92,
+          "skipped": 0,
+          "pct": 90.19
+        },
+        "branches": {
+          "total": 43,
+          "covered": 29,
+          "skipped": 0,
+          "pct": 67.44
+        }
+      }
+    },
+    "changed_files_lint": "PASS",
+    "general_lint": "0errors2existing TanStack warnings",
+    "production_build": "actual tsc-b/Vite PASS1.60s;existing chunk warning"
+  },
+  "logs": {
+    "targeted": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-edit-session-ownership-final.log",
+    "full_coverage": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-edit-session-ownership-full-coverage.log",
+    "lint": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-edit-session-ownership-full-lint.log",
+    "build": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-edit-session-ownership-build.log"
+  },
+  "limits": [
+    "Old upstream save request is not cancelled or reordered;only edit-session UI cleanup fenced",
+    "Latest mention/session changes have real DOM hook/StrictMode/full-client proof,no new production browser run",
+    "Earlier18/18browser proof belongs to4ee84fa3 and is not relabeled for this source",
+    "Full RF15/project/native/physical acceptance remains open"
+  ]
+}

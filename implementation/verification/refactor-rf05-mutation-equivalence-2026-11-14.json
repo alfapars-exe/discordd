@@ -1,0 +1,29 @@
+{
+  "source_parent": "94cb76e7",
+  "scope": "RF05 portable UPDATE RETURNING and cascade subquery mutation families",
+  "production_examples": [
+    "server/repository/sqlite_role.go UPDATE RETURNING",
+    "server/repository/server_cascade.go DELETE IN SELECT"
+  ],
+  "checks": [
+    "Matched update returns key and persists bound question-mark literal",
+    "Missing update yields sql.ErrNoRows",
+    "Different owner cascade affects zero rows",
+    "Matching owner cascade deletes one row and preserves other rows",
+    "Enclosing transaction rollback leaves no rows"
+  ],
+  "validation": {
+    "command": "go test ./database -run ^TestRepositoryDialectContracts$ -count=1 -v",
+    "exit": 0,
+    "sqlite": "PASS",
+    "postgres": "PASS",
+    "postgres_image": "postgres:18.6-bookworm",
+    "skips": 0
+  },
+  "environment": "Dedicated temporary container hichat-rf05-mutation-20261114 on loopback random port, sslmode=disable; stopped after test. Existing dev containers untouched.",
+  "limits": [
+    "Local Windows run has no race detector",
+    "Not mTLS evidence",
+    "Complete production query-family inventory remains open"
+  ]
+}

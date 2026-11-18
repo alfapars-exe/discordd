@@ -1,0 +1,31 @@
+{
+  "scope": "RF11 administrative composition input validation",
+  "integrations": [
+    "Database",
+    "Repositories",
+    "Hub",
+    "Voice",
+    "UserCache",
+    "Config"
+  ],
+  "repositories": [
+    "User",
+    "Server",
+    "LiveKit",
+    "Channel"
+  ],
+  "regression": "18 invalid-provider cases failed first: six missing integrations, three typed-nil interfaces, eight nil/typed-nil repositories, typed-nil optional email.",
+  "optional_email": "Nil interface explicitly disables administrative email; typed nil rejected. Disabled email retains all three owners.",
+  "checks": {
+    "root": "PASS administration/moderation/channel matrices, ServiceInitialization/routes/callbacks/permission/auth-cache/real friendship-DM, 6.339s",
+    "services": "PASS explicit platform ban/unban/user deletion/admin assignment and file cleanup tests, 0.584s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_sql_manifest": "PASS 50 exact records"
+  },
+  "limits": [
+    "Constructor presence checks do not prove complete AdminServer/LiveKit runtime acceptance.",
+    "Other domains, optional/resource matrices, race/current-source CI and full RF01-RF30 acceptance remain open.",
+    "Remote source 0eb3744f CI live without observed failures; local changes excluded."
+  ]
+}

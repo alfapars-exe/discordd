@@ -1,0 +1,31 @@
+{
+  "baseCommit": "3045f7893c24c42c0e7f338748439ca0f9332852",
+  "changedSpec": "e2e/tests/crypto-recovery.spec.ts",
+  "specSha256": "f51120fadd9153dfa40cd33af145e4c4df55d131bf0df62300559481df45c2c0",
+  "clientProductSource": "3c22ae60",
+  "serverProductSource": "4ad77d3e",
+  "command": "HICHAT_E2E_CRYPTO_RECOVERY=1 HICHAT_E2E_PRODUCTION_CLIENT=1 npm --prefix e2e test -- --project=chromium tests/crypto-recovery.spec.ts",
+  "runtime": "Production client, real Go and dedicated PostgreSQL 18.6 verify-full mTLS",
+  "result": {
+    "passed": 3,
+    "duration": "1.4m",
+    "exitCode": 0
+  },
+  "contracts": [
+    "26 actual UI-encrypted channel sends return encryption_version 1 without plaintext in server response",
+    "Accented uppercase query returns exact 25/1 page contents and newest-first order",
+    "Next and previous page preserve order",
+    "Search performs no server REST search requests",
+    "Same search passes after new-context key recovery and reload",
+    "Wrong recovery password rejection and identity fingerprint preserved",
+    "Legacy-unversioned cache recovery remains passing"
+  ],
+  "priorAttempt": "First expanded run: 1 failed/2 passed due to exact text locator including grouped timestamp; corrected to existing message-ID target and reran entire isolated profile. No product fix or assertion relaxation.",
+  "profileIsolation": "passed; Windows file-symlink check skipped",
+  "cleanup": "Dedicated PostgreSQL container and uniquely tagged fixture image removed; developer containers untouched",
+  "limits": [
+    "No encrypted DM browser pagination proof",
+    "No bounded matching-ID memory acceptance",
+    "No physical media or overall refactor completion"
+  ]
+}

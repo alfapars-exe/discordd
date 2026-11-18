@@ -72,6 +72,10 @@ func (m *MockServerRepo) AddMember(ctx context.Context, serverID, userID string)
 	}
 	return nil
 }
+func (m *MockServerRepo) LeaveMember(ctx context.Context, serverID, userID string) error {
+	return m.RemoveMember(ctx, serverID, userID)
+}
+
 func (m *MockServerRepo) RemoveMember(ctx context.Context, serverID, userID string) error {
 	if m.RemoveMemberFn != nil {
 		return m.RemoveMemberFn(ctx, serverID, userID)

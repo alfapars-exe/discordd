@@ -21,6 +21,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { AppNotification, WSMessage } from "../../types";
 import type { WSHandlerContext } from "./types";
+vi.mock("../../stores/preferencesStore",()=>({usePreferencesStore:{getState:()=>({data:{},fetchAndApply:vi.fn()})}}));
+vi.mock("../../api/clientLog",()=>({logToServer:vi.fn()}));
 const shell = vi.hoisted(() => ({ enabled: false }));
 vi.mock("../../utils/uiShell", () => ({ get UI_SHELL_V2() { return shell.enabled; } }));
 
@@ -378,4 +380,20 @@ describe("handleSystemEvent — ready reconnect refetch", () => {
 
     expect(invalidateFetchedFlags).toHaveBeenCalledTimes(2);
   });
+});
+
+it.each([false,true])("observes preference event hydration rejection (retired=%s)",async retired=>{
+ const {handleSystemEvent}=await loadFresh();
+ const {usePreferencesStore}=await import("../../stores/preferencesStore");
+ const {logToServer}=await import("../../api/clientLog");
+ const {retirePreferenceScope}=await import("../../stores/preferenceScope");
+ const prefs=usePreferencesStore.getState();
+ vi.spyOn(usePreferencesStore,"getState").mockReturnValue(prefs);
+ let reject!:(error:Error)=>void;
+ vi.mocked(prefs.fetchAndApply).mockReturnValueOnce(new Promise((_resolve,fail)=>{reject=fail;}));
+ await handleSystemEvent({op:"preferences_changed",d:{user_id:"me"}},ctx,vi.fn());
+ if(retired)retirePreferenceScope();
+ reject(new Error("private event failure"));await Promise.resolve();await Promise.resolve();
+ expect(logToServer).toHaveBeenCalledTimes(retired?0:1);
+ if(!retired)expect(logToServer).toHaveBeenCalledWith("error","preferences_background_failed",{source:"websocket"});
 });

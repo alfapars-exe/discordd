@@ -24,6 +24,7 @@ import (
 
 func TestUploadLimiter_ConfigAllowsBurstButCapsAtTwenty(t *testing.T) {
 	rl := NewMessageRateLimiter(20, 1*time.Minute, 30*time.Second)
+	t.Cleanup(rl.Stop)
 	const user = "u"
 
 	// First 20 uploads within the same window all pass.
@@ -48,6 +49,7 @@ func TestUploadLimiter_CooldownIsRoughlyThirtySeconds(t *testing.T) {
 	// "you're rate-limited" to "keep pounding, one will succeed" —
 	// enabling the spam it was meant to stop.
 	rl := NewMessageRateLimiter(20, 1*time.Minute, 30*time.Second)
+	t.Cleanup(rl.Stop)
 	const user = "u"
 	for i := 0; i < 21; i++ {
 		rl.Allow(user)

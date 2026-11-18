@@ -1,0 +1,28 @@
+{
+  "date": "2026-11-15",
+  "base": "8efdfddcf642d337f6d6d9970c79e35ae3c7c0bc",
+  "sources": {
+    "client/src/hooks/useUpdateChecker.ts": "ef8de55cf84736c6c5a175aac18998a2470e9ba68b3979bffc49e87ae7040384",
+    "client/src/hooks/useUpdateChecker.test.tsx": "36d67e65b005ad9820070f58ed0e12b7e816cad810b822451dae2372ee624e7b"
+  },
+  "before": "two new hook ownership tests failed due to retained earlier/sibling subscriptions",
+  "fix": "Track successful bridge subscriptions; attempt each disposer once, rollback partial acquisition and preserve original subscription failure",
+  "validation": {
+    "targeted": "hook and state-machine suites23tests passed",
+    "typescript": "npx tsc -b passed",
+    "lint": "changed hook and tests passed",
+    "build": "Vite production build passed"
+  },
+  "invariants": [
+    "partial subscription failure rolls back earlier acquired listener",
+    "throwing cleanup does not prevent remaining disposers",
+    "primary subscription error survives secondary cleanup failure",
+    "unmount of one consumer leaves sibling active",
+    "StrictMode and legacy no-disposer bridge cases preserved"
+  ],
+  "limits": [
+    "targeted component hook tests, not native installed-app failure acceptance",
+    "previous full client5014test coverage is prior-source evidence",
+    "held locally while remote8efdfddc CI runs; latest13success21pending0failed"
+  ]
+}

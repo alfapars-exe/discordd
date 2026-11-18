@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"testing"
@@ -27,9 +28,157 @@ func channelQueueFixture(t *testing.T) (*database.DB, context.Context, *sqliteCh
 	return db, ctx, queue, msg
 }
 
+// Legacy stored preferences may predate validation. A malformed ignore map
+// must not abort the entire recipient page or be decoded a second time as JSON.
+func TestChannelNotificationSuppressionHandlesIgnoreMapShapes(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		ignored any
+		want    bool
+	}{
+		{"plain_string", "not-json", false},
+		{"encoded_object", fmt.Sprintf(`{"%s":true}`, msgAuthor), false},
+		{"number", 1, false},
+		{"boolean", true, false},
+		{"array", []bool{true}, false},
+		{"null", nil, false},
+		{"empty_object", map[string]bool{}, false},
+		{"ignored_actor", map[string]bool{msgAuthor: true}, true},
+		{"unignored_actor", map[string]bool{msgAuthor: false}, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			db, ctx, queue, message := channelQueueFixture(t)
+			data, err := json.Marshal(map[string]any{
+				"notifications": map[string]bool{"channelMessageNotifications": true},
+				"privacy":       map[string]any{"ignoredUsers": test.ignored},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := db.Conn.ExecContext(ctx, `UPDATE user_preferences SET data=? WHERE user_id=?`, string(data), msgSecondUser); err != nil {
+				t.Fatal(err)
+			}
+			if err := queue.Enqueue(ctx, message.ID, "srv-1", msgChannel, msgAuthor); err != nil {
+				t.Fatal(err)
+			}
+			job, ids, err := queue.NextBatch(ctx, ChannelMessageNotificationBatchSize)
+			if err != nil || job == nil || len(ids) != 2 {
+				t.Fatalf("page: job=%v ids=%v err=%v", job, ids, err)
+			}
+			suppressed, err := queue.SuppressedRecipients(ctx, job, ids)
+			if err != nil {
+				t.Fatalf("malformed ignore map poisoned recipient page: %v", err)
+			}
+			if got, ok := suppressed[msgSecondUser]; !ok || got != test.want {
+				t.Errorf("suppressed actor=%v present=%v want=%v", got, ok, test.want)
+			}
+			if got, ok := suppressed["u-no-view"]; !ok || got {
+				t.Errorf("unrelated recipient suppressed=%v present=%v", got, ok)
+			}
+			// Commit rechecks the same stored policy after the worker's page read.
+			// Both dialects must interpret only actual objects as ignore maps.
+			execSeed(t, db, []seedStmt{
+				{`INSERT INTO roles(id,name,server_id,permissions) VALUES('reader','Reader','srv-1',6144)`, nil},
+				{`INSERT INTO user_roles(user_id,role_id,server_id) VALUES(?,'reader','srv-1')`, []any{msgSecondUser}},
+			})
+			created, committed, err := queue.CommitBatch(ctx, job, ids[len(ids)-1], true, []*models.Notification{{UserID: msgSecondUser}})
+			wantCreated := 1
+			if test.want {
+				wantCreated = 0
+			}
+			if err != nil || !committed || len(created) != wantCreated {
+				t.Fatalf("commit ignore-map shape: created=%v committed=%v err=%v want=%d", created, committed, err, wantCreated)
+			}
+		})
+	}
+}
+
+func TestChannelNotificationOptInRequiresJSONBoolean(t *testing.T) {
+	for _, test := range []struct{ name, data string }{
+		{"missing", `{}`},
+		{"false", `{"notifications":{"channelMessageNotifications":false}}`},
+		{"string_true", `{"notifications":{"channelMessageNotifications":"true"}}`},
+		{"numeric_one", `{"notifications":{"channelMessageNotifications":1}}`},
+		{"invalid_string", `{"notifications":{"channelMessageNotifications":"invalid"}}`},
+		{"array", `{"notifications":{"channelMessageNotifications":[]}}`},
+		{"object", `{"notifications":{"channelMessageNotifications":{}}}`},
+		{"null", `{"notifications":{"channelMessageNotifications":null}}`},
+		{"invalid_json", `{`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			db, ctx, queue, message := channelQueueFixture(t)
+			execSeed(t, db, []seedStmt{
+				{`INSERT INTO roles(id,name,server_id,permissions) VALUES('reader','Reader','srv-1',6144)`, nil},
+				{`INSERT INTO user_roles(user_id,role_id,server_id) VALUES(?,'reader','srv-1')`, []any{msgSecondUser}},
+			})
+			setPreferences := func(data string) {
+				t.Helper()
+				if _, err := db.Conn.ExecContext(ctx, `UPDATE user_preferences SET data=?`, data); err != nil {
+					t.Fatal(err)
+				}
+			}
+			setPreferences(test.data)
+			if err := queue.Enqueue(ctx, message.ID, "srv-1", msgChannel, msgAuthor); err != nil {
+				t.Errorf("malformed preference poisoned enqueue: %v", err)
+			}
+			if got := countRows(t, db, `SELECT COUNT(*) FROM channel_message_notification_jobs WHERE message_id=?`, message.ID); got != 0 {
+				t.Errorf("invalid opt-in enqueued work: %d", got)
+			}
+			if err := queue.DeleteByMessageID(ctx, message.ID); err != nil {
+				t.Fatal(err)
+			}
+			valid := `{"notifications":{"channelMessageNotifications":true}}`
+			setPreferences(valid)
+			if err := queue.Enqueue(ctx, message.ID, "srv-1", msgChannel, msgAuthor); err != nil {
+				t.Fatal(err)
+			}
+			setPreferences(test.data)
+			job, ids, err := queue.NextBatch(ctx, ChannelMessageNotificationBatchSize)
+			if err != nil || job == nil || len(ids) != 0 {
+				t.Errorf("invalid preference page: job=%v ids=%v err=%v", job, ids, err)
+			}
+			setPreferences(valid)
+			job, ids, err = queue.NextBatch(ctx, ChannelMessageNotificationBatchSize)
+			if err != nil || job == nil || len(ids) != 2 {
+				t.Fatalf("valid opt-in could not recover: job=%v ids=%v err=%v", job, ids, err)
+			}
+			setPreferences(test.data)
+			created, committed, err := queue.CommitBatch(ctx, job, ids[len(ids)-1], true, []*models.Notification{{UserID: msgSecondUser}})
+			if err != nil || !committed || len(created) != 0 {
+				t.Errorf("invalid preference commit: created=%v committed=%v err=%v", created, committed, err)
+			}
+			if got := countRows(t, db, `SELECT COUNT(*) FROM notifications WHERE message_id=?`, message.ID); got != 0 {
+				t.Errorf("invalid opt-in received notifications: %d", got)
+			}
+			// One malformed member must not poison delivery to another member
+			// who has a valid opt-in and current channel read permission.
+			if _, err := db.Conn.ExecContext(ctx, `UPDATE user_preferences SET data=? WHERE user_id=?`, valid, msgSecondUser); err != nil {
+				t.Fatal(err)
+			}
+			if err := queue.Enqueue(ctx, message.ID, "srv-1", msgChannel, msgAuthor); err != nil {
+				t.Fatal(err)
+			}
+			job, ids, err = queue.NextBatch(ctx, ChannelMessageNotificationBatchSize)
+			if err != nil || job == nil || len(ids) != 1 || ids[0] != msgSecondUser {
+				t.Fatalf("mixed preference page: job=%v ids=%v err=%v", job, ids, err)
+			}
+			created, committed, err = queue.CommitBatch(ctx, job, ids[0], true, []*models.Notification{{UserID: msgSecondUser}})
+			if err != nil || !committed || len(created) != 1 || created[0].UserID != msgSecondUser {
+				t.Fatalf("valid recipient lost beside malformed preference: created=%v committed=%v err=%v", created, committed, err)
+			}
+		})
+	}
+}
+
 func TestChannelMessageNotificationRetryBackoffDoesNotStarveReadyJobs(t *testing.T) {
 	db, ctx, queue, first := channelQueueFixture(t)
 	if err := queue.Enqueue(ctx, first.ID, "srv-1", msgChannel, msgAuthor); err != nil {
+		t.Fatal(err)
+	}
+	// NextBatch is a read, not a claim: the second job remains eligible.
+	// Set an explicit earlier scheduling position for the retried first job;
+	// Enqueue timestamps can tie within the same millisecond.
+	if _, err := db.Conn.Exec(`UPDATE channel_message_notification_jobs SET last_batch_at='1999-01-01 00:00:00',created_at='1999-01-01 00:00:00' WHERE message_id=?`, first.ID); err != nil {
 		t.Fatal(err)
 	}
 	job, _, err := queue.NextBatch(ctx, ChannelMessageNotificationBatchSize)

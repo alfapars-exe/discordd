@@ -1,0 +1,28 @@
+{
+  "scope": "RF11 voice runtime composition extraction",
+  "owners": [
+    "VoiceRuntime",
+    "EntranceService",
+    "MusicBotRuntime"
+  ],
+  "preserved": [
+    "Media integrations constructed against initialized voice before fanout worker allocation",
+    "Same channel permission runtime for fresh, ordinary and invalidation callbacks",
+    "Same durable usage credit/recovery/access providers",
+    "Same online/member fanout providers, audit and logger",
+    "Root immediately retains voice fanout shutdown owner"
+  ],
+  "checks": {
+    "root": "PASS ServiceInitialization/cache/routes/callbacks/permission/auth-cache/real friendship-DM, 3.631s",
+    "services": "PASS TestVoice.*(Dependency|Hook|Fanout|Shutdown), 2.921s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_manifest": "PASS 50 exact records"
+  },
+  "limits": [
+    "Required runtime provider/repository matrix remains to implement.",
+    "Targeted voice test selection does not claim all physical media behavior.",
+    "Combined race/current-source CI and RF01-RF30 acceptance incomplete."
+  ],
+  "remote_ci": "43658196686 source 5b9b9216 live without observed failures; local extraction excluded."
+}

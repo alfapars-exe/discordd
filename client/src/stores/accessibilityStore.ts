@@ -1,3 +1,6 @@
+import { sanitizeAccessibilityPreferences } from "../utils/accessibilityPreferenceCodec";
+export { sanitizeAccessibilityPreferences } from "../utils/accessibilityPreferenceCodec";
+import { ACCESSIBILITY_NUMBER_RANGES, NOTIFICATION_DURATION_OPTIONS, type NotificationDuration } from "../utils/accessibilityPreferenceDefaults";
 /**
  * accessibilityStore — user-facing accessibility preferences.
  *
@@ -24,6 +27,7 @@
  *      themeId / blur today.
  */
 
+import { completePreferenceMutation } from "./preferenceMutation";
 import { create } from "zustand";
 
 import {
@@ -37,41 +41,9 @@ import {
   type OfficialMessageStyle,
 } from "../styles/accessibility";
 import { usePreferencesStore } from "./preferencesStore";
+import { capturePreferenceScope } from "./preferenceScope";
 
 const STORAGE_KEY = "tayfa.accessibility.v1";
-
-const NUMBER_LIMITS: Partial<Record<keyof AccessibilityState, readonly [number, number]>> = {
-  chatFontSize: [12, 24], messageGroupGapPx: [0, 24], saturation: [0, 100], notificationSoundVolume: [0, 100],
-  ttsRate: [0.5, 2], notificationDuration: [3, 20],
-};
-
-/** Stored JSON is untrusted; accept only current fields with their runtime types. */
-export function sanitizeAccessibilityPreferences(value: unknown): Partial<AccessibilityState> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  const source = value as Record<string, unknown>;
-  const valid: Record<string, unknown> = {};
-  for (const key of Object.keys(DEFAULT_ACCESSIBILITY) as (keyof AccessibilityState)[]) {
-    if (!Object.prototype.hasOwnProperty.call(source, key)) continue;
-    const item = source[key];
-    const limits = NUMBER_LIMITS[key];
-    if (limits) {
-      if (typeof item === "number" && Number.isFinite(item) && item >= limits[0] && item <= limits[1]) valid[key] = item;
-    } else if (key === "density") {
-      if (item === "compact" || item === "default" || item === "cozy") valid[key] = item;
-    } else if (key === "messageStyle") {
-      if (item === "default" || item === "compact") valid[key] = item;
-    } else if (key === "stickerAnimation") {
-      if (item === "always" || item === "interaction" || item === "never") valid[key] = item;
-    } else if (key === "roleColorMode") {
-      if (item === "names" || item === "dots" || item === "hidden") valid[key] = item;
-    } else if (key === "officialMessageStyle") {
-      if (item === "default" || item === "subtle" || item === "prominent") valid[key] = item;
-    } else if (typeof item === "boolean") {
-      valid[key] = item;
-    }
-  }
-  return valid as Partial<AccessibilityState>;
-}
 
 function loadPersisted(): AccessibilityState {
   try {
@@ -121,7 +93,7 @@ type AccessibilityStore = AccessibilityState & {
   setNotificationSoundVolume: (pct: number) => void;
   setTtsEnabled: (enabled: boolean) => void;
   setTtsRate: (rate: number) => void;
-  setNotificationDuration: (seconds: 3 | 5 | 10 | 15 | 20) => void;
+  setNotificationDuration: (seconds: NotificationDuration) => void;
   setShowImageDescriptions: (enabled: boolean) => void;
   setLegacyComposer: (enabled: boolean) => void;
   // ─── Bulk hydration from server ─────────────────────────────────────
@@ -144,28 +116,34 @@ function commit(
 ): void {
   const safe = sanitizeAccessibilityPreferences(partial);
   if (Object.keys(safe).length === 0) return;
-  set(safe);
-  const next = { ...get(), ...safe } as AccessibilityState;
-  applyAccessibility(next);
-  persist(next);
-  // The preferences store batches outgoing writes; one set() per setter
-  // is fine. Server stores under a single "accessibility" namespace so
-  // existing readers don't have to know the shape.
-  usePreferencesStore.getState().set({ accessibility: safe });
+  const isCurrent = capturePreferenceScope();
+  completePreferenceMutation(() => set(safe), () => {
+    if (!isCurrent()) return;
+    const next = get();
+    applyAccessibility(next);
+    persist(next);
+    // The preferences store batches outgoing writes; one set() per setter
+    // is fine. Server stores under a single "accessibility" namespace so
+    // existing readers don't have to know the shape.
+    // Subscribers may have changed another field, or replaced this field,
+    // without changing accounts. Queue only leaves this setter still owns.
+    const owned = Object.fromEntries(Object.entries(safe).filter(([key, value]) => Object.is(next[key as keyof AccessibilityState], value)));
+    if (Object.keys(owned).length) usePreferencesStore.getState().set({ accessibility: owned });
+  });
 }
 
 export const useAccessibilityStore = create<AccessibilityStore>((set, get) => ({
   ...initial,
 
-  setChatFontSize: (px) => commit(set, get as never, { chatFontSize: clamp(px, 12, 24) }),
+  setChatFontSize: (px) => commit(set, get as never, { chatFontSize: clamp(px, ...ACCESSIBILITY_NUMBER_RANGES.chatFontSize) }),
   setAlwaysUnderlineLinks: (v) => commit(set, get as never, { alwaysUnderlineLinks: v }),
   setShowDisplayNameStyles: (v) => commit(set, get as never, { showDisplayNameStyles: v }),
 
   setDensity: (d) => commit(set, get as never, { density: d }),
   setMessageStyle: (s) => commit(set, get as never, { messageStyle: s }),
-  setMessageGroupGapPx: (px) => commit(set, get as never, { messageGroupGapPx: clamp(px, 0, 24) }),
+  setMessageGroupGapPx: (px) => commit(set, get as never, { messageGroupGapPx: clamp(px, ...ACCESSIBILITY_NUMBER_RANGES.messageGroupGapPx) }),
 
-  setSaturation: (pct) => commit(set, get as never, { saturation: clamp(pct, 0, 100) }),
+  setSaturation: (pct) => commit(set, get as never, { saturation: clamp(pct, ...ACCESSIBILITY_NUMBER_RANGES.saturation) }),
   setSaturateCustomColors: (v) => commit(set, get as never, { saturateCustomColors: v }),
   setHighContrast: (v) => commit(set, get as never, { highContrast: v }),
   setSyncHighContrast: (v) => commit(set, get as never, { syncHighContrast: v }),
@@ -179,11 +157,11 @@ export const useAccessibilityStore = create<AccessibilityStore>((set, get) => ({
   setAutoplayGifs: (v) => commit(set, get as never, { autoplayGifs: v }),
   setStickerAnimation: (v) => commit(set, get as never, { stickerAnimation: v }),
 
-  setNotificationSoundVolume: (pct) => commit(set, get as never, { notificationSoundVolume: clamp(pct, 0, 100) }),
+  setNotificationSoundVolume: (pct) => commit(set, get as never, { notificationSoundVolume: clamp(pct, ...ACCESSIBILITY_NUMBER_RANGES.notificationSoundVolume) }),
   setTtsEnabled: (v) => commit(set, get as never, { ttsEnabled: v }),
-  setTtsRate: (v) => commit(set, get as never, { ttsRate: clamp(v, 0.5, 2) }),
+  setTtsRate: (v) => commit(set, get as never, { ttsRate: clamp(v, ...ACCESSIBILITY_NUMBER_RANGES.ttsRate) }),
   setNotificationDuration: (v) => {
-    if ([3, 5, 10, 15, 20].includes(v)) commit(set, get as never, { notificationDuration: v });
+    if (NOTIFICATION_DURATION_OPTIONS.includes(v)) commit(set, get as never, { notificationDuration: v });
   },
   setShowImageDescriptions: (v) => commit(set, get as never, { showImageDescriptions: v }),
   setLegacyComposer: (v) => commit(set, get as never, { legacyComposer: v }),
@@ -191,17 +169,24 @@ export const useAccessibilityStore = create<AccessibilityStore>((set, get) => ({
   applyFromServer: (partial) => {
     // Hydration updates the local cache without echoing a write to the server.
     const safe = sanitizeAccessibilityPreferences(partial);
-    const next = { ...get(), ...safe } as AccessibilityState;
-    set(safe);
-    applyAccessibility(next);
-    persist(next);
+    const isCurrent = capturePreferenceScope();
+    completePreferenceMutation(() => set(safe), () => {
+      if (!isCurrent()) return;
+      const next = get();
+      applyAccessibility(next);
+      persist(next);
+    });
   },
 
   reset: () => commit(set, get as never, { ...DEFAULT_ACCESSIBILITY }),
   resetAccountPreferences: () => {
-    set({ ...DEFAULT_ACCESSIBILITY });
-    applyAccessibility(DEFAULT_ACCESSIBILITY);
-    persist(DEFAULT_ACCESSIBILITY);
+    const isCurrent = capturePreferenceScope();
+    completePreferenceMutation(() => set({ ...DEFAULT_ACCESSIBILITY }), () => {
+      if (!isCurrent()) return;
+      const next = get();
+      applyAccessibility(next);
+      persist(next);
+    });
   },
 }));
 

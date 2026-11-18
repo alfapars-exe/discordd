@@ -226,6 +226,27 @@ func TestDMMarkRead_EchoesActualStoredCursorAndRemainingUnread(t *testing.T) {
 	}
 }
 
+func TestDMMarkUnreadFrom_EchoesStoredPredecessor(t *testing.T) {
+	for _, previous := range []*string{nil, strPtr("m-1")} {
+		f := newDMFixture()
+		acceptedFriendsFixture(f)
+		f.dmRead.MarkUnreadFromFn = func(context.Context, string, string, string) (int, error) { return 3, nil }
+		f.svc.(*dmService).txRunner = passthroughDMTxRunner{repos: repository.DMTxRepos{
+			DMRead:    f.dmRead,
+			ReadState: func(context.Context, string, string) (*string, int, error) { return previous, 3, nil },
+		}}
+		var event ws.Event
+		f.hub.BroadcastToUserFn = func(_ string, e ws.Event) { event = e }
+		if _, err := f.svc.MarkUnreadFrom(context.Background(), "alice", "ch-1", "m-2"); err != nil {
+			t.Fatal(err)
+		}
+		data := event.Data.(map[string]any)
+		cursor, ok := data["last_read_message_id"].(*string)
+		if !ok || cursor != previous || data["unread_count"] != 3 {
+			t.Fatalf("unexpected stored cursor or count: %v", data)
+		}
+	}
+}
 func TestDMMarkUnreadFrom_RecomputesAndSynchronizes(t *testing.T) {
 	f := newDMFixture()
 	acceptedFriendsFixture(f)
@@ -246,7 +267,7 @@ func TestDMMarkUnreadFrom_RecomputesAndSynchronizes(t *testing.T) {
 		t.Fatalf("event target=%q event=%+v", target, event)
 	}
 	data := event.Data.(map[string]any)
-	if data["unread_count"] != 3 || data["last_read_message_id"] != "m-2" {
+	if data["unread_count"] != 3 || data["last_read_message_id"] != (*string)(nil) {
 		t.Fatalf("data=%v", data)
 	}
 

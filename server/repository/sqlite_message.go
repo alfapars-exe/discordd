@@ -69,7 +69,7 @@ func (r *sqliteMessageRepo) GetByID(ctx context.Context, id string) (*models.Mes
 		       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
 		FROM messages m
 		LEFT JOIN users u ON m.user_id = u.id
-		LEFT JOIN messages rm ON m.reply_to_id = rm.id
+		LEFT JOIN messages rm ON m.reply_to_id = rm.id AND rm.channel_id = m.channel_id
 		LEFT JOIN users ru ON rm.user_id = ru.id
 		WHERE m.id = ?`
 
@@ -178,7 +178,7 @@ func (r *sqliteMessageRepo) GetByChannelID(ctx context.Context, channelID string
 			       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
 			FROM messages m
 			LEFT JOIN users u ON m.user_id = u.id
-			LEFT JOIN messages rm ON m.reply_to_id = rm.id
+			LEFT JOIN messages rm ON m.reply_to_id = rm.id AND rm.channel_id = m.channel_id
 			LEFT JOIN users ru ON rm.user_id = ru.id
 			WHERE m.channel_id = ?
 			ORDER BY m.created_at DESC, m.id DESC
@@ -204,7 +204,7 @@ func (r *sqliteMessageRepo) GetByChannelID(ctx context.Context, channelID string
 			       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
 			FROM messages m
 			LEFT JOIN users u ON m.user_id = u.id
-			LEFT JOIN messages rm ON m.reply_to_id = rm.id
+			LEFT JOIN messages rm ON m.reply_to_id = rm.id AND rm.channel_id = m.channel_id
 			LEFT JOIN users ru ON rm.user_id = ru.id
 			WHERE m.channel_id = ?
 			  AND ( m.created_at < (SELECT created_at FROM messages WHERE id = ? AND channel_id = ?)
@@ -242,7 +242,7 @@ const messageHistorySelect = `
 	       ru.id, ru.username, ru.display_name, ru.avatar_url, ru.status, ru.custom_status, ru.created_at
 	FROM messages m
 	LEFT JOIN users u ON m.user_id = u.id
-	LEFT JOIN messages rm ON m.reply_to_id = rm.id
+	LEFT JOIN messages rm ON m.reply_to_id = rm.id AND rm.channel_id = m.channel_id
 	LEFT JOIN users ru ON rm.user_id = ru.id`
 
 // anchorExists reports whether anchorID is a message of channelID. The

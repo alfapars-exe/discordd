@@ -1,0 +1,28 @@
+{
+  "sourceRevision": "05649379",
+  "scope": "RF26: extract shared-server authorization for DM device roster;retain membership,status,encryption,admin,block,friend and recipient privacy ordering. No HTTP/event contract changes.",
+  "baseline": "Existing access/revocation tests PASS0.616s;added history error no-member characterization then PASS0.595s before product extraction. This is refactoring,not a newly reproduced product bug.",
+  "validation": {
+    "targeted": "3 top-level tests incl11-case access matrix,revocation sequence,history error;20repeats PASS0.567s",
+    "vet": "go vet ./services PASS",
+    "fullServices": "ok  \tgithub.com/argeinfina/hichat/services\t96.520s",
+    "fullServicesLog": "TEMP/hichat-roster-policy-services.log",
+    "selfScan": "PASS on immutable05649379 archive;51 exact reviewed-source records,478 review lines,0 blocking patterns. Pattern scan is not proof of absence of vulnerabilities.",
+    "selfScanLog": "TEMP/hichat-roster-policy-self-scan.log"
+  },
+  "remaining": [
+    "New-head CI/Sonar",
+    "RF01-RF30 full acceptance and supported platform/physical/runtime matrix"
+  ],
+  "sonarConfirmation": {
+    "revision": "197959671b555404b07a50c1fcaa76d528b56b70",
+    "issue": {
+      "key": "AaHdPnO0xOErB7BtYU18",
+      "component": "alfapars-exe_discordd:server/services/dm_device_roster.go",
+      "message": "Refactor this method to reduce its Cognitive Complexity from 20 to the 15 allowed.",
+      "status": "CLOSED",
+      "resolution": "FIXED"
+    },
+    "scope": "Original issue resolved;not whole-project acceptance or an exact after complexity score."
+  }
+}

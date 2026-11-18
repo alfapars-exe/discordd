@@ -1,0 +1,43 @@
+{
+  "featureCommit": "23544837",
+  "sparseRegression": "2d16cc1f",
+  "sparseFix": "e96cd18a",
+  "scope": "Receiver accounting for the forthcoming authenticated message fan-out profile; no real fan-out traffic measured yet",
+  "contract": {
+    "envelope": "message_create, matching channel and probe",
+    "completeness": "Every expected sender/sequence slot exactly once; unique message IDs; any matching invalid/duplicate event prevents completeness",
+    "lateDuplicate": "Can invalidate a previously complete snapshot",
+    "ordering": "Out-of-order delivery is diagnostic, not a failure by itself",
+    "bounds": "1000 senders / 10000 expected messages per receiver / bounded identifier/content lengths",
+    "configurationOwnership": "Copies sender IDs and returns independent snapshot objects"
+  },
+  "validation": {
+    "node": "34/34 tests, zero failures/skips, including the existing14 connect contracts",
+    "k6": "v2.4.0 actual engine:2/2 checks, no network requests; positive completion and late duplicate rejection",
+    "workflow": "YAML syntax and expanded loadtest/*.test.mjs command PASS"
+  },
+  "pending": [
+    "Wire the producer and real authorized guild/channel fixture",
+    "Run end-to-end message fan-out and reconcile HTTP/WS/history IDs",
+    "Immutable-source scan and new-head CI",
+    "Capacity, slow-consumer, DB-wait and extended soak budgets"
+  ],
+  "evidence": {
+    "node": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-fanout-final-contracts.log",
+      "sha256": "0dbe3153ed80530bb82f0de80efa4a2ca30da6dc3ec95455c73fa00010256764"
+    },
+    "sparseRed": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-fanout-sparse-red.log",
+      "sha256": "95011cdfda2762387e1663938d1b76c1bcd8a15f39e77b56e33b4b1cd4310fcc"
+    },
+    "k6": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-fanout-k6-runtime.log",
+      "sha256": "47f5ea4e137e76461e385bd76820c4ab02711cc916e3f0dfff80d435d6eab6c0"
+    },
+    "k6Summary": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-fanout-k6-runtime-summary.json",
+      "sha256": "506018915a0b79ae1d72fe024f88d5639f3d0e2da8f216ab0dc18c6ff602bee6"
+    }
+  }
+}

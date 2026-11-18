@@ -26,12 +26,15 @@ const (
 )
 
 func newTestSearchService(
+	t testing.TB,
 	searchRepo *testutil.MockSearchRepo,
 	channelRepo *testutil.MockChannelRepo,
 	roleRepo *testutil.MockRoleRepo,
 	permRepo *testutil.MockChannelPermRepo,
 ) SearchService {
+	t.Helper()
 	permService := NewChannelPermissionService(permRepo, roleRepo, channelRepo, &testutil.MockBroadcaster{})
+	t.Cleanup(permService.(*cachingPermResolver).permCache.Close)
 	return NewSearchService(searchRepo, channelRepo, permService)
 }
 
@@ -75,7 +78,7 @@ func TestSearch_ExcludesUnreadableChannel(t *testing.T) {
 		},
 	}
 
-	svc := newTestSearchService(searchRepo, channelRepo, roleRepo, permRepo)
+	svc := newTestSearchService(t, searchRepo, channelRepo, roleRepo, permRepo)
 	result, err := svc.Search(context.Background(), searchServerID, searchUserID, "hello", nil, 25, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -117,7 +120,7 @@ func TestSearch_ExplicitChannelIDUnreadable_ReturnsEmptyWithoutDBCall(t *testing
 		},
 	}
 
-	svc := newTestSearchService(searchRepo, channelRepo, roleRepo, permRepo)
+	svc := newTestSearchService(t, searchRepo, channelRepo, roleRepo, permRepo)
 	b := searchChanB
 	result, err := svc.Search(context.Background(), searchServerID, searchUserID, "hello", &b, 25, 0)
 	if err != nil {
@@ -150,7 +153,7 @@ func TestSearch_ExplicitChannelIDReadable_ReachesRepository(t *testing.T) {
 		},
 	}
 
-	svc := newTestSearchService(searchRepo, channelRepo, roleRepo, permRepo)
+	svc := newTestSearchService(t, searchRepo, channelRepo, roleRepo, permRepo)
 	a := searchChanA
 	result, err := svc.Search(context.Background(), searchServerID, searchUserID, "hello", &a, 25, 0)
 	if err != nil {
@@ -192,7 +195,7 @@ func TestSearch_Admin_NoChannelFilter(t *testing.T) {
 		},
 	}
 
-	svc := newTestSearchService(searchRepo, channelRepo, roleRepo, permRepo)
+	svc := newTestSearchService(t, searchRepo, channelRepo, roleRepo, permRepo)
 	if _, err := svc.Search(context.Background(), searchServerID, searchUserID, "hello", nil, 25, 0); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -208,7 +211,7 @@ func TestSearch_Admin_NoChannelFilter(t *testing.T) {
 }
 
 func TestSearch_ValidatesQuery(t *testing.T) {
-	svc := newTestSearchService(
+	svc := newTestSearchService(t,
 		&testutil.MockSearchRepo{}, &testutil.MockChannelRepo{}, &testutil.MockRoleRepo{}, &testutil.MockChannelPermRepo{},
 	)
 
@@ -231,7 +234,7 @@ func TestSearch_PermissionResolutionError(t *testing.T) {
 			return nil, errors.New("db error")
 		},
 	}
-	svc := newTestSearchService(
+	svc := newTestSearchService(t,
 		&testutil.MockSearchRepo{}, &testutil.MockChannelRepo{}, roleRepo, &testutil.MockChannelPermRepo{},
 	)
 
@@ -261,7 +264,7 @@ func TestSearch_NoReadableChannels_ReturnsEmptyWithoutDBCall(t *testing.T) {
 		},
 	}
 
-	svc := newTestSearchService(searchRepo, channelRepo, roleRepo, permRepo)
+	svc := newTestSearchService(t, searchRepo, channelRepo, roleRepo, permRepo)
 	result, err := svc.Search(context.Background(), searchServerID, searchUserID, "hello", nil, 25, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

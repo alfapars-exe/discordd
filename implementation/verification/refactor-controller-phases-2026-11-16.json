@@ -1,0 +1,700 @@
+{
+  "scope": "Controller phase extraction only; request routes, workload, deadlines, validation and cleanup statements preserved. New async phase boundaries require actual fixture validation.",
+  "baselineCommit": "a7769e72554d41ec638137f5bcdddfeab41a006f",
+  "phaseProof": {
+    "result": "PASS",
+    "baselineCommit": "a7769e72554d41ec638137f5bcdddfeab41a006f",
+    "helperNames": [
+      "prepareProfileBackend",
+      "seedProfileAccounts",
+      "createProfileChannel",
+      "joinProfileAccounts",
+      "startSlowPeer",
+      "runHealthyProfile",
+      "assertSlowRetired",
+      "verifyProfileHistory",
+      "verifyRecovery",
+      "observeSlowPeer",
+      "assertSlowDuringLoad"
+    ],
+    "expandedWholeModuleASTIdentical": true,
+    "printerASTIdentical": true,
+    "limitation": "Async helper calls add phase promise boundaries; actual fixture execution is required, not byte-for-byte timing equivalence."
+  },
+  "baselineComplexity": [
+    {
+      "key": "AaHkErx40LlRP4mxHmDR",
+      "rule": "javascript:S3776",
+      "severity": "CRITICAL",
+      "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+      "project": "alfapars-exe_discordd",
+      "line": 163,
+      "hash": "a4c03c3bcf35fc11ab8911cdc922eac8",
+      "textRange": {
+        "startLine": 163,
+        "endLine": 163,
+        "startOffset": 16,
+        "endOffset": 18
+      },
+      "flows": [
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 200,
+                "endLine": 200,
+                "startOffset": 4,
+                "endOffset": 6
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 207,
+                "endLine": 207,
+                "startOffset": 4,
+                "endOffset": 7
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 208,
+                "endLine": 208,
+                "startOffset": 6,
+                "endOffset": 8
+              },
+              "msg": "+2 (incl. 1 for nesting)"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 244,
+                "endLine": 244,
+                "startOffset": 4,
+                "endOffset": 9
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 245,
+                "endLine": 245,
+                "startOffset": 6,
+                "endOffset": 8
+              },
+              "msg": "+2 (incl. 1 for nesting)"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 250,
+                "endLine": 250,
+                "startOffset": 8,
+                "endOffset": 10
+              },
+              "msg": "+2 (incl. 1 for nesting)"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 254,
+                "endLine": 254,
+                "startOffset": 8,
+                "endOffset": 13
+              },
+              "msg": "+2 (incl. 1 for nesting)"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 257,
+                "endLine": 257,
+                "startOffset": 4,
+                "endOffset": 6
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 269,
+                "endLine": 269,
+                "startOffset": 70,
+                "endOffset": 71
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 270,
+                "endLine": 270,
+                "startOffset": 4,
+                "endOffset": 7
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 276,
+                "endLine": 276,
+                "startOffset": 4,
+                "endOffset": 6
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 278,
+                "endLine": 278,
+                "startOffset": 4,
+                "endOffset": 6
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 286,
+                "endLine": 286,
+                "startOffset": 4,
+                "endOffset": 6
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 297,
+                "endLine": 297,
+                "startOffset": 4,
+                "endOffset": 7
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 305,
+                "endLine": 305,
+                "startOffset": 6,
+                "endOffset": 8
+              },
+              "msg": "+2 (incl. 1 for nesting)"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 307,
+                "endLine": 307,
+                "startOffset": 6,
+                "endOffset": 8
+              },
+              "msg": "+2 (incl. 1 for nesting)"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 309,
+                "endLine": 309,
+                "startOffset": 6,
+                "endOffset": 8
+              },
+              "msg": "+2 (incl. 1 for nesting)"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 312,
+                "endLine": 312,
+                "startOffset": 8,
+                "endOffset": 12
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 325,
+                "endLine": 325,
+                "startOffset": 4,
+                "endOffset": 7
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 378,
+                "endLine": 378,
+                "startOffset": 4,
+                "endOffset": 9
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 379,
+                "endLine": 379,
+                "startOffset": 6,
+                "endOffset": 8
+              },
+              "msg": "+2 (incl. 1 for nesting)"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 381,
+                "endLine": 381,
+                "startOffset": 6,
+                "endOffset": 8
+              },
+              "msg": "+2 (incl. 1 for nesting)"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 381,
+                "endLine": 381,
+                "startOffset": 29,
+                "endOffset": 31
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 387,
+                "endLine": 387,
+                "startOffset": 4,
+                "endOffset": 6
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 436,
+                "endLine": 436,
+                "startOffset": 4,
+                "endOffset": 9
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 437,
+                "endLine": 437,
+                "startOffset": 6,
+                "endOffset": 8
+              },
+              "msg": "+2 (incl. 1 for nesting)"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 439,
+                "endLine": 439,
+                "startOffset": 6,
+                "endOffset": 8
+              },
+              "msg": "+2 (incl. 1 for nesting)"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 439,
+                "endLine": 439,
+                "startOffset": 34,
+                "endOffset": 36
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 440,
+                "endLine": 440,
+                "startOffset": 6,
+                "endOffset": 8
+              },
+              "msg": "+2 (incl. 1 for nesting)"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 440,
+                "endLine": 440,
+                "startOffset": 21,
+                "endOffset": 23
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 441,
+                "endLine": 441,
+                "startOffset": 8,
+                "endOffset": 10
+              },
+              "msg": "+3 (incl. 2 for nesting)"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 442,
+                "endLine": 442,
+                "startOffset": 8,
+                "endOffset": 10
+              },
+              "msg": "+3 (incl. 2 for nesting)"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 444,
+                "endLine": 444,
+                "startOffset": 6,
+                "endOffset": 8
+              },
+              "msg": "+2 (incl. 1 for nesting)"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 444,
+                "endLine": 444,
+                "startOffset": 19,
+                "endOffset": 21
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 445,
+                "endLine": 445,
+                "startOffset": 6,
+                "endOffset": 8
+              },
+              "msg": "+2 (incl. 1 for nesting)"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 458,
+                "endLine": 458,
+                "startOffset": 4,
+                "endOffset": 6
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 460,
+                "endLine": 460,
+                "startOffset": 4,
+                "endOffset": 6
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 461,
+                "endLine": 461,
+                "startOffset": 4,
+                "endOffset": 6
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 464,
+                "endLine": 464,
+                "startOffset": 4,
+                "endOffset": 6
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 487,
+                "endLine": 487,
+                "startOffset": 4,
+                "endOffset": 6
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 543,
+                "endLine": 543,
+                "startOffset": 4,
+                "endOffset": 6
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 544,
+                "endLine": 544,
+                "startOffset": 4,
+                "endOffset": 7
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 550,
+                "endLine": 550,
+                "startOffset": 4,
+                "endOffset": 6
+              },
+              "msg": "+1"
+            }
+          ]
+        },
+        {
+          "locations": [
+            {
+              "component": "alfapars-exe_discordd:loadtest/local-fanout-runner.mjs",
+              "textRange": {
+                "startLine": 551,
+                "endLine": 551,
+                "startOffset": 4,
+                "endOffset": 6
+              },
+              "msg": "+1"
+            }
+          ]
+        }
+      ],
+      "status": "OPEN",
+      "message": "Refactor this function to reduce its Cognitive Complexity from 62 to the 15 allowed.",
+      "effort": "52min",
+      "debt": "52min",
+      "tags": [
+        "brain-overload",
+        "editable-source"
+      ],
+      "creationDate": "2026-11-16T11:11:20+0000",
+      "updateDate": "2026-11-16T11:14:06+0000",
+      "type": "CODE_SMELL",
+      "organization": "alfapars-exe",
+      "pullRequest": "305",
+      "cleanCodeAttribute": "FOCUSED",
+      "cleanCodeAttributeCategory": "ADAPTABLE",
+      "impacts": [
+        {
+          "softwareQuality": "MAINTAINABILITY",
+          "severity": "HIGH"
+        }
+      ],
+      "issueStatus": "OPEN",
+      "projectName": "discordd",
+      "internalTags": [],
+      "lastChangeAnalysisUuid": "4292dc4f-6256-4c50-b14e-dc72a3ab7f79",
+      "lastChangeSource": "ANALYSIS"
+    }
+  ],
+  "nodeContracts": {
+    "passed": 109,
+    "failed": 0,
+    "skipped": 0,
+    "logSha256": "ba94fe4f167551beb1fc22b6e0db0e19e60d25698ccda37196f3e2e6f1b8d6e2"
+  },
+  "proofDriverSha256": "9c6bba69b3cfbd41e347456a1c0930856f49c2c6fa3cf73be425a6af0aa3f28b",
+  "sourceSha256": "ef25124a1f2d22560fc3e81c3b606c71800c44a4b280cff5bcc9c7dc42ad12a4",
+  "beforeSourceSha256": "33070eabc82a01b2977127374226cfbafcfe97a17d9a2b9ee43233810cbdab8d",
+  "proofArtifactRoot": "G:\\hichat-refactor-20261116-anoknpqz",
+  "limits": [
+    "Whole-module AST parity is after helper expansion and removal of transport return wrappers; it does not prove byte-for-byte scheduling equivalence",
+    "No completed runtime validation or Sonar complexity result for this extraction yet",
+    "Controller still has shared explicit lifecycle state; further RF and query/pool/variance/churn/soak/native/physical gates remain open"
+  ]
+}

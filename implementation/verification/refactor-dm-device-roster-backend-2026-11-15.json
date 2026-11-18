@@ -1,0 +1,37 @@
+{
+  "baseCommit": "c74663e646992ea8701c432c0e7dfce13cf173e7",
+  "scope": "Backend foundation for fresh conversation rosters without fetching prekeys for every established-session message",
+  "route": "GET /api/dms/{channelId}/device-roster",
+  "wireContract": "version 1; member user IDs; device IDs and SHA256 key revisions only. Cache-Control: no-store. No keys or prekey consumption.",
+  "access": "Current DM membership, encrypted/accepted state, existing send privilege semantics, block, friends-only and empty-channel shared-server policy; repeat calls recheck revocation.",
+  "verification": {
+    "service": "11 table cases plus sequential policy/block revocation case passed",
+    "handler": "Metadata-only and independent hash fixture, auth denial before device reads, no partial response, current-device-reference changes passed",
+    "root": "Full root package passed, 7.061s; intentional golden route addition is exactly one line",
+    "targeted": "Root registration and handler/service tests passed",
+    "vet": "handlers/services passed",
+    "build": "go build ./... passed",
+    "openapi": "YAML parsed; new path and schema present",
+    "manifest": "50 exact reviewed source records valid"
+  },
+  "normalizedLFSourceSha256": {
+    "server/services/dm_device_roster.go": "69f14e1733267f48bef300ccaf5d976c3304df75a93303709f8f9ee906702f0e",
+    "server/services/dm_device_roster_test.go": "d692e87ec3bebf29164dccbc80d39c621d201eb64c45ce2cf997c69376bfd67a",
+    "server/services/dm_service.go": "8f8da29ab18a7bf524ebc709735453be2bf5645c4c464e5616945e767652bdca",
+    "server/handlers/dm_device_roster.go": "97495171d180dfe7e38d3f37e23fbf86b9e15b7de5b8bdced6c9f5b992a79f0b",
+    "server/handlers/dm_device_roster_test.go": "bbddceb77ce723ccd57121ce581aeeb0821b9d18ea44c75aeec1bf178c06759a",
+    "server/models/dm_device_roster.go": "0225af8426bb55d8f8a01d30662660c5a5f2b2ecd8a119dbeb6c5b6f6574d373",
+    "server/init_handlers.go": "1b1659924241f9d271b626ee69000b3f380582ae714a41bffe2150b272260384",
+    "server/init_routes_global.go": "6f1242d3db9e0f6bc7b9e598467c0fa48260b9d4318f8f03b1eb003c7cbae46c",
+    "server/testdata/routes.golden": "a603d20e253854f660724a5f9a2b89b73139529ee94005f3f83e74c5eabec986",
+    "server/openapi.yaml": "a823e61355e9757e6f5077ad1f759e7bc72e86315ef93d226140302ac27859b1"
+  },
+  "remaining": [
+    "Client capability negotiation and roster consumption",
+    "Fetch prekeys only for a missing/unverified Signal session; do not reuse one-time prekeys",
+    "Preserve account/backend/local-device fencing and new-device trust behavior",
+    "No stale roster fallback after an access denial or failed fresh read",
+    "Expanded 26-message encrypted DM recovery/search E2E remains failing until client integration",
+    "Group DM key-budget behavior and complete refactor acceptance remain open"
+  ]
+}

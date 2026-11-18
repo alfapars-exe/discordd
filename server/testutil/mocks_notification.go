@@ -118,3 +118,10 @@ func (m *MockDMReadRepo) IncrementUnread(ctx context.Context, userID, channelID 
 	}
 	return nil
 }
+
+// CountUnreadSummary explicitly adapts the legacy count fixture. Tests needing
+// distinct inbox/badge values override this method on their fixture.
+func (m *MockNotificationRepo) CountUnreadSummary(ctx context.Context, userID string) (models.NotificationUnreadCounts, error) {
+	n, err := m.CountUnread(ctx, userID)
+	return models.NotificationUnreadCounts{UnreadCount: n, BadgeUnreadCount: n}, err
+}

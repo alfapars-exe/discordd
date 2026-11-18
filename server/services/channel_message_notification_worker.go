@@ -27,20 +27,14 @@ type channelNotificationPreferences struct {
 type ChannelMessageNotificationWorker struct {
 	durablePublication bool
 	queue              repository.ChannelMessageNotificationQueue
-	prefs              repository.PreferencesRepository
+	prefs              repository.PreferencesBatchReader
 	users              repository.UserRepository
 	hub                ws.Broadcaster
 }
 
-// PostgreSQL publication is recorded by the notification INSERT trigger in the
-// same transaction as CommitBatch; only legacy fixtures use direct fan-out.
-func (w *ChannelMessageNotificationWorker) SetDurablePublication(enabled bool) {
-	w.durablePublication = enabled
-}
-
-func NewChannelMessageNotificationWorker(queue repository.ChannelMessageNotificationQueue, prefs repository.PreferencesRepository,
-	users repository.UserRepository, hub ws.Broadcaster) *ChannelMessageNotificationWorker {
-	return &ChannelMessageNotificationWorker{queue: queue, prefs: prefs, users: users, hub: hub}
+func NewChannelMessageNotificationWorker(queue repository.ChannelMessageNotificationQueue, prefs repository.PreferencesBatchReader,
+	users repository.UserRepository, hub ws.Broadcaster, durablePublication bool) *ChannelMessageNotificationWorker {
+	return &ChannelMessageNotificationWorker{queue: queue, prefs: prefs, users: users, hub: hub, durablePublication: durablePublication}
 }
 
 // ProcessNextBatch performs at most one bounded page. Cursor advancement and
@@ -61,11 +55,7 @@ func (w *ChannelMessageNotificationWorker) ProcessNextBatch(ctx context.Context)
 	done := len(ids) < repository.ChannelMessageNotificationBatchSize
 	eligible := make([]*models.Notification, 0, len(ids))
 	if len(ids) > 0 {
-		reader, ok := w.prefs.(repository.PreferencesBatchReader)
-		if !ok {
-			return false, w.failBatch(ctx, job, fmt.Errorf("preferences repository lacks bounded batch reads"))
-		}
-		preferences, err := reader.GetMany(ctx, ids)
+		preferences, err := w.prefs.GetMany(ctx, ids)
 		if err != nil {
 			return false, w.failBatch(ctx, job, fmt.Errorf("read channel notification preferences: %w", err))
 		}

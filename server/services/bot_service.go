@@ -39,22 +39,19 @@ type BotService struct {
 	memberships  ApplicationMembershipRuntime
 }
 
-func NewBotService(repo *repository.BotRepository, disconnecter ...BotRuntimeDisconnecter) *BotService {
-	s := &BotService{repo: repo}
-	if len(disconnecter) > 0 {
-		s.disconnecter = disconnecter[0]
-		if broadcaster, ok := disconnecter[0].(ApplicationActionBroadcaster); ok {
-			s.broadcaster = broadcaster
-		}
-		if memberships, ok := disconnecter[0].(ApplicationMembershipRuntime); ok {
-			s.memberships = memberships
-		}
-	}
-	return s
+// BotRuntimeDependencies declares optional runtime integrations. Zero values
+// disable the corresponding standalone integration.
+type BotRuntimeDependencies struct {
+	Disconnecter BotRuntimeDisconnecter
+	Broadcaster  ApplicationActionBroadcaster
+	Permissions  ApplicationPermissionResolver
+	Memberships  ApplicationMembershipRuntime
 }
 
-func (s *BotService) SetApplicationPermissionResolver(resolver ApplicationPermissionResolver) {
-	s.permissions = resolver
+func NewBotService(repo *repository.BotRepository, runtime BotRuntimeDependencies) *BotService {
+	return &BotService{repo: repo, disconnecter: runtime.Disconnecter,
+		broadcaster: runtime.Broadcaster, permissions: runtime.Permissions,
+		memberships: runtime.Memberships}
 }
 
 var applicationActionName = regexp.MustCompile(`^[a-z0-9_]{1,32}$`)

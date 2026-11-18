@@ -18,11 +18,15 @@ for name in sorted(files):
     hourly = re.fullmatch(r"hourly/(\d{8}T\d{6}Z)\.dump\.age", name)
     daily = re.fullmatch(r"daily/(\d{8})\.dump\.age", name)
     expired = False
-    if hourly:
-        stamp = dt.datetime.strptime(hourly[1], "%Y%m%dT%H%M%SZ").replace(tzinfo=dt.timezone.utc)
-        expired = stamp < now - dt.timedelta(hours=24)
-    elif daily:
-        stamp = dt.datetime.strptime(daily[1], "%Y%m%d").date()
-        expired = stamp < now.date() - dt.timedelta(days=6)
+    try:
+        if hourly:
+            stamp = dt.datetime.strptime(hourly[1], "%Y%m%dT%H%M%SZ").replace(tzinfo=dt.timezone.utc)
+            expired = stamp < now - dt.timedelta(hours=24)
+        elif daily:
+            stamp = dt.datetime.strptime(daily[1], "%Y%m%d").date()
+            expired = stamp < now.date() - dt.timedelta(days=6)
+    except ValueError:
+        # A date-shaped key may still contain an invalid calendar date or time.
+        continue
     if expired and name not in expected:
         subprocess.run([HF, "buckets", "remove", f"{BUCKET}/{name}", "--yes", "--quiet"], check=True)

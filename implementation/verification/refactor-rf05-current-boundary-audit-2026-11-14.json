@@ -1,0 +1,29 @@
+{
+  "source": "b13b0ce8fca0ab4f742232a2a734d2d298ce47b5",
+  "task": "RF05",
+  "status": "partial_requirement_audit_open",
+  "current_boundary": "postgres_dialect.go has no regex/string-replacement SQL rewrite. postgresQuery preserves native CREATE/ALTER/DO and otherwise invokes lexical bindPostgres; PostgreSQL-specific repository queries stay explicit.",
+  "verified": {
+    "command": "go test ./database -run '^(TestBindPostgres|TestPostgresBind|TestPostgresNativeMigrationIsNotRewritten)' -count=1 -v",
+    "exit": 0,
+    "top_level_passed": [
+      "TestPostgresBindPreservesQuotedQuestionMarks",
+      "TestPostgresNativeMigrationIsNotRewritten",
+      "TestBindPostgresNestedComments",
+      "TestPostgresBindPositionBoundaries",
+      "TestBindPostgresEscapeString",
+      "TestBindPostgresDollarStrings",
+      "TestBindPostgresRejectsUnterminatedQuotedTokens",
+      "TestBindPostgresAcceptsCompleteQuotedTokens"
+    ],
+    "scope": "Local lexical and migration dispatch unit contracts; no native PostgreSQL claim"
+  },
+  "requirement_map": {
+    "placeholder_literal_comment_separation": "Existing tests cover quoted identifiers, regular/escape strings, nested comments, dollar strings, malformed tokens and bind position bounds.",
+    "logical_sqlite_postgres_equivalence": "Existing TestRepositoryDialectContracts plus cursor/list corpus, native execution belongs to source-bound CI; this local selection does not establish it.",
+    "all_used_query_families_positive_negative": "Not yet proved. Corpus explicitly representative, not a complete production SQL inventory.",
+    "unsupported_new_forms": "Malformed lexical forms rejected; arbitrary unsupported SQL semantics are not validated by this binder.",
+    "injection_claim": "No SQL injection vulnerability inferred from semantic coverage gaps."
+  },
+  "next": "Map production query families to positive/negative executable fixtures and native result-equivalence evidence before RF05 closure."
+}

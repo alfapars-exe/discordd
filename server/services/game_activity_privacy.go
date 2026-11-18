@@ -54,11 +54,12 @@ type gameActivityPresenceReader interface {
 }
 
 type gameActivityPrivacyPolicy struct {
-	prefs    gameActivityPreferenceReader
-	friends  gameActivityFriendshipReader
-	servers  gameActivityServerReader
-	presence gameActivityPresenceReader
-	bans     gameActivityBanReader
+	prefs     gameActivityPreferenceReader
+	friends   gameActivityFriendshipReader
+	servers   gameActivityServerReader
+	snapshots gameActivityMembershipAudienceReader
+	presence  gameActivityPresenceReader
+	bans      gameActivityBanReader
 }
 
 // NewGameActivityPrivacyPolicy creates the server-side policy. All readers
@@ -67,10 +68,11 @@ func NewGameActivityPrivacyPolicy(
 	prefs gameActivityPreferenceReader,
 	friends gameActivityFriendshipReader,
 	servers gameActivityServerReader,
+	snapshots gameActivityMembershipAudienceReader,
 	presence gameActivityPresenceReader,
 	banReaders ...gameActivityBanReader,
 ) GameActivityPrivacyPolicy {
-	policy := &gameActivityPrivacyPolicy{prefs: prefs, friends: friends, servers: servers, presence: presence}
+	policy := &gameActivityPrivacyPolicy{prefs: prefs, friends: friends, servers: servers, snapshots: snapshots, presence: presence}
 	if len(banReaders) > 0 {
 		policy.bans = banReaders[0]
 	}
@@ -165,11 +167,10 @@ func (p *gameActivityPrivacyPolicy) CanView(ctx context.Context, viewerID, targe
 	if override, exists := settings.ServerOverrides[serverID]; exists {
 		return override, nil
 	}
-	snapshotReader, ok := p.servers.(gameActivityMembershipAudienceReader)
-	if !ok {
+	if p.snapshots == nil {
 		return false, nil
 	}
-	snapshot, err := snapshotReader.GetMemberGameActivityAudience(ctx, serverID, targetID)
+	snapshot, err := p.snapshots.GetMemberGameActivityAudience(ctx, serverID, targetID)
 	if err != nil {
 		return false, fmt.Errorf("game activity privacy: read membership audience snapshot: %w", err)
 	}

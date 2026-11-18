@@ -1,0 +1,34 @@
+{
+  "source_parent": "797e5fce",
+  "scope": "RF11 remove friend-request graph adaptation from composition constructor",
+  "change": "Move existing list-to-ID projection and accepted-edge/error mapping into friendRequestGraphAdapter with a two-method reader. initServices only wires adapter methods into existing policy.",
+  "tests": [
+    "preserve request context and target identity",
+    "preserve friend ID order",
+    "list error propagation and nonnil empty-list contract",
+    "accepted versus pending/blocked pair status",
+    "wrapped ErrNotFound maps to false,nil; other errors propagate",
+    "pair context and participant identities preserved"
+  ],
+  "validation": [
+    {
+      "command": "go test . ./services -run 'TestFriendRequest|Test.*Wiring|TestServiceInitialization|TestAuthConstructor' -count=1 -timeout=3m",
+      "exit": 0,
+      "root_seconds": 1.986,
+      "services_seconds": 0.906
+    },
+    {
+      "command": "go build ./...",
+      "exit": 0
+    },
+    {
+      "command": "go vet . ./services",
+      "exit": 0
+    }
+  ],
+  "limits": [
+    "Behavior-preserving adapter extraction; no new friendship/privacy policy",
+    "Windows Go1.27.4 CGO0; full Linux race/current-source CI required",
+    "RF11 still has post-construction observer/resolver wiring to audit; not whole-card acceptance"
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "scope": "RF11 personal messaging composition validation",
+  "required_integrations": [
+    "Repositories",
+    "Permissions"
+  ],
+  "required_repositories": [
+    "Saved",
+    "Message",
+    "Channel",
+    "DM",
+    "Reminder",
+    "UserNote",
+    "User",
+    "Preferences",
+    "Server",
+    "Friendship"
+  ],
+  "regression": "23 invalid-input scenarios failed before implementation: two missing integrations, typed-nil permission resolver, and nil/typed-nil for ten repositories.",
+  "implementation": "Validate all required providers before constructing saved, reminder, note and personalization services. Preserve lower-level constructors and separately owned reminder worker.",
+  "checks": {
+    "root": "PASS personal/device/media/startup/rollback/routes/callback tests, 3.686s",
+    "services": "PASS saved/reminder/user-note/personalization tests, 0.672s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_manifest": "PASS 50 exact records"
+  },
+  "limits": [
+    "Composition presence validation, not full database/provider identity or physical acceptance.",
+    "Other domain grouping, lifecycle/optional inventory and full RF01-RF30 acceptance remain open.",
+    "Remote 4408d2f2 CI live with no observed failures; local changes excluded."
+  ]
+}

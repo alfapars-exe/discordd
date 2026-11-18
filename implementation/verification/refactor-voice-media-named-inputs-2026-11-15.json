@@ -1,0 +1,24 @@
+{
+  "scope": "RF11 named voice/media composition inputs",
+  "changes": "Replace eight positional composition arguments with voiceMediaDependencies; preserve constructor order and voice integration callback before fanout allocation.",
+  "checks": {
+    "root": "PASS friendship-DM, startup, rollback, route, callback and voice tests; 1.732s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_sql_manifest": "PASS 50 exact records"
+  },
+  "preceding_full_suite": {
+    "source": "6b65268f1a17b6b6674072c8333b12008b42b8c1",
+    "services": 95.485,
+    "handlers": 7.262,
+    "repository": 192.732,
+    "ws": 5.418,
+    "root": 24.717,
+    "result": "all PASS Windows non-race; does not cover later media extraction"
+  },
+  "remaining": [
+    "Required integration/repository matrix before entrance directory creation and music session read",
+    "Optional modes and resource lifecycle acceptance",
+    "Full RF11 and RF01-RF30 acceptance"
+  ]
+}

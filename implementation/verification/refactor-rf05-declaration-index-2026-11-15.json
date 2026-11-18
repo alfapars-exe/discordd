@@ -1,0 +1,3416 @@
+{
+  "date": "2026-11-15",
+  "repositoryTree": "557ae280a6fd08660c73394d67597642b87fa462",
+  "scope": "Non-test server/repository Go source; method-name candidates, not verified database receivers. Direct literals and same-file explicit string constants are resolved; mutable expressions remain unresolved.",
+  "summary": {
+    "parsed_files": 182,
+    "literal_calls": 659,
+    "constant_calls": 31,
+    "unresolved_calls": 273
+  },
+  "unresolvedDeclarationCount": 254,
+  "unresolvedDeclarations": [
+    {
+      "file": "server/repository/music_requester_privacy.go",
+      "receiver": "",
+      "function": "sanitizeMusicTracks",
+      "declaration_line": 60,
+      "sites": [
+        {
+          "line": 81,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/postgres_message_history.go",
+      "receiver": "*postgresMessageRepo",
+      "function": "GetByChannelID",
+      "declaration_line": 11,
+      "sites": [
+        {
+          "line": 20,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/postgres_message_history.go",
+      "receiver": "*postgresMessageRepo",
+      "function": "GetByChannelIDAfter",
+      "declaration_line": 26,
+      "sites": [
+        {
+          "line": 30,
+          "method": "QueryContext",
+          "expression_kind": "*ast.BinaryExpr"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/postgres_message_history.go",
+      "receiver": "*postgresMessageRepo",
+      "function": "GetByChannelIDAround",
+      "declaration_line": 36,
+      "sites": [
+        {
+          "line": 41,
+          "method": "QueryContext",
+          "expression_kind": "*ast.BinaryExpr"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/postgres_search.go",
+      "receiver": "*sqliteDMRepo",
+      "function": "searchPostgres",
+      "declaration_line": 75,
+      "sites": [
+        {
+          "line": 85,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.BinaryExpr"
+        },
+        {
+          "line": 92,
+          "method": "QueryContext",
+          "expression_kind": "*ast.BinaryExpr"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/postgres_search.go",
+      "receiver": "*sqliteSearchRepo",
+      "function": "searchPostgres",
+      "declaration_line": 35,
+      "sites": [
+        {
+          "line": 55,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.BinaryExpr"
+        },
+        {
+          "line": 62,
+          "method": "QueryContext",
+          "expression_kind": "*ast.BinaryExpr"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/server_cascade.go",
+      "receiver": "",
+      "function": "deleteServerCascadeWithDialect",
+      "declaration_line": 282,
+      "sites": [
+        {
+          "line": 297,
+          "method": "ExecContext",
+          "expression_kind": "*ast.SelectorExpr"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/server_membership_tx.go",
+      "receiver": "*ServerMembershipTransactions",
+      "function": "WithServerRoles",
+      "declaration_line": 47,
+      "sites": [
+        {
+          "line": 71,
+          "method": "ExecContext",
+          "expression_kind": "*ast.SelectorExpr"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_account_anonymization.go",
+      "receiver": "",
+      "function": "anonymizeIdentityTx",
+      "declaration_line": 74,
+      "sites": [
+        {
+          "line": 123,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_account_asset_cleanup.go",
+      "receiver": "*sqliteAccountAssetCleanupRepo",
+      "function": "Process",
+      "declaration_line": 42,
+      "sites": [
+        {
+          "line": 70,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_account_deletion_status.go",
+      "receiver": "*sqliteAccountDeletionStatusRepo",
+      "function": "Get",
+      "declaration_line": 19,
+      "sites": [
+        {
+          "line": 23,
+          "method": "QueryContext",
+          "expression_kind": "*ast.BinaryExpr"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_account_status.go",
+      "receiver": "*sqliteAccountStatusRepo",
+      "function": "Get",
+      "declaration_line": 20,
+      "sites": [
+        {
+          "line": 26,
+          "method": "QueryContext",
+          "expression_kind": "*ast.BinaryExpr"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_app_log.go",
+      "receiver": "*sqliteAppLogRepo",
+      "function": "InsertBatch",
+      "declaration_line": 28,
+      "sites": [
+        {
+          "line": 59,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_app_log.go",
+      "receiver": "*sqliteAppLogRepo",
+      "function": "List",
+      "declaration_line": 66,
+      "sites": [
+        {
+          "line": 105,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        },
+        {
+          "line": 129,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_attachment.go",
+      "receiver": "*sqliteAttachmentRepo",
+      "function": "Create",
+      "declaration_line": 33,
+      "sites": [
+        {
+          "line": 52,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_attachment.go",
+      "receiver": "*sqliteAttachmentRepo",
+      "function": "GetByFileURL",
+      "declaration_line": 111,
+      "sites": [
+        {
+          "line": 115,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_attachment.go",
+      "receiver": "*sqliteAttachmentRepo",
+      "function": "GetByMessageID",
+      "declaration_line": 70,
+      "sites": [
+        {
+          "line": 75,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_attachment.go",
+      "receiver": "*sqliteAttachmentRepo",
+      "function": "GetByMessageIDs",
+      "declaration_line": 83,
+      "sites": [
+        {
+          "line": 100,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_audit_log.go",
+      "receiver": "*sqliteAuditLogRepo",
+      "function": "Insert",
+      "declaration_line": 21,
+      "sites": [
+        {
+          "line": 59,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_audit_log.go",
+      "receiver": "*sqliteAuditLogRepo",
+      "function": "ListByServer",
+      "declaration_line": 71,
+      "sites": [
+        {
+          "line": 120,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_auth_session.go",
+      "receiver": "*sqliteAuthSessionRepo",
+      "function": "Revoke",
+      "declaration_line": 142,
+      "sites": [
+        {
+          "line": 149,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_auth_session.go",
+      "receiver": "*sqliteAuthSessionRepo",
+      "function": "UpdatePasswordAndRevoke",
+      "declaration_line": 203,
+      "sites": [
+        {
+          "line": 231,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_badge.go",
+      "receiver": "*sqliteBadgeRepo",
+      "function": "Assign",
+      "declaration_line": 106,
+      "sites": [
+        {
+          "line": 111,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_badge.go",
+      "receiver": "*sqliteBadgeRepo",
+      "function": "Create",
+      "declaration_line": 22,
+      "sites": [
+        {
+          "line": 27,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_badge.go",
+      "receiver": "*sqliteBadgeRepo",
+      "function": "GetByID",
+      "declaration_line": 37,
+      "sites": [
+        {
+          "line": 41,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_badge.go",
+      "receiver": "*sqliteBadgeRepo",
+      "function": "GetUserBadges",
+      "declaration_line": 137,
+      "sites": [
+        {
+          "line": 146,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_badge.go",
+      "receiver": "*sqliteBadgeRepo",
+      "function": "GetUserBadgesBatch",
+      "declaration_line": 155,
+      "sites": [
+        {
+          "line": 175,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_badge.go",
+      "receiver": "*sqliteBadgeRepo",
+      "function": "ListAll",
+      "declaration_line": 54,
+      "sites": [
+        {
+          "line": 57,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_badge.go",
+      "receiver": "*sqliteBadgeRepo",
+      "function": "Update",
+      "declaration_line": 77,
+      "sites": [
+        {
+          "line": 80,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_ban.go",
+      "receiver": "*sqliteBanRepo",
+      "function": "Create",
+      "declaration_line": 34,
+      "sites": [
+        {
+          "line": 48,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_ban.go",
+      "receiver": "*sqliteBanRepo",
+      "function": "Delete",
+      "declaration_line": 104,
+      "sites": [
+        {
+          "line": 107,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_ban.go",
+      "receiver": "*sqliteBanRepo",
+      "function": "Exists",
+      "declaration_line": 127,
+      "sites": [
+        {
+          "line": 135,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_ban.go",
+      "receiver": "*sqliteBanRepo",
+      "function": "GetAllByServer",
+      "declaration_line": 87,
+      "sites": [
+        {
+          "line": 97,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_ban.go",
+      "receiver": "*sqliteBanRepo",
+      "function": "GetByUserID",
+      "declaration_line": 65,
+      "sites": [
+        {
+          "line": 73,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_category.go",
+      "receiver": "*sqliteCategoryRepo",
+      "function": "Create",
+      "declaration_line": 30,
+      "sites": [
+        {
+          "line": 41,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_category.go",
+      "receiver": "*sqliteCategoryRepo",
+      "function": "GetAllByServer",
+      "declaration_line": 76,
+      "sites": [
+        {
+          "line": 81,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_category.go",
+      "receiver": "*sqliteCategoryRepo",
+      "function": "GetByID",
+      "declaration_line": 58,
+      "sites": [
+        {
+          "line": 62,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_category.go",
+      "receiver": "*sqliteCategoryRepo",
+      "function": "Update",
+      "declaration_line": 88,
+      "sites": [
+        {
+          "line": 91,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_category.go",
+      "receiver": "*sqliteCategoryRepo",
+      "function": "UpdatePositions",
+      "declaration_line": 126,
+      "sites": [
+        {
+          "line": 144,
+          "method": "ExecContext",
+          "expression_kind": "*ast.SelectorExpr"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_channel.go",
+      "receiver": "*sqliteChannelRepo",
+      "function": "Create",
+      "declaration_line": 39,
+      "sites": [
+        {
+          "line": 50,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_channel.go",
+      "receiver": "*sqliteChannelRepo",
+      "function": "GetAllByServer",
+      "declaration_line": 95,
+      "sites": [
+        {
+          "line": 100,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_channel.go",
+      "receiver": "*sqliteChannelRepo",
+      "function": "GetByCategoryID",
+      "declaration_line": 107,
+      "sites": [
+        {
+          "line": 112,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_channel.go",
+      "receiver": "*sqliteChannelRepo",
+      "function": "GetByID",
+      "declaration_line": 74,
+      "sites": [
+        {
+          "line": 80,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_channel.go",
+      "receiver": "*sqliteChannelRepo",
+      "function": "GetFileURLsByChannelID",
+      "declaration_line": 209,
+      "sites": [
+        {
+          "line": 213,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_channel.go",
+      "receiver": "*sqliteChannelRepo",
+      "function": "GetMaxPosition",
+      "declaration_line": 292,
+      "sites": [
+        {
+          "line": 296,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_channel.go",
+      "receiver": "*sqliteChannelRepo",
+      "function": "GetThreadsByParent",
+      "declaration_line": 119,
+      "sites": [
+        {
+          "line": 127,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_channel.go",
+      "receiver": "*sqliteChannelRepo",
+      "function": "Update",
+      "declaration_line": 153,
+      "sites": [
+        {
+          "line": 158,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_channel.go",
+      "receiver": "*sqliteChannelRepo",
+      "function": "UpdatePositions",
+      "declaration_line": 236,
+      "sites": [
+        {
+          "line": 269,
+          "method": "ExecContext",
+          "expression_kind": "*ast.SelectorExpr"
+        },
+        {
+          "line": 271,
+          "method": "ExecContext",
+          "expression_kind": "*ast.SelectorExpr"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_channel_message_notification_queue.go",
+      "receiver": "",
+      "function": "channelReadAccessInTx",
+      "declaration_line": 317,
+      "sites": [
+        {
+          "line": 354,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        },
+        {
+          "line": 378,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_channel_message_notification_queue.go",
+      "receiver": "*sqliteChannelMessageNotificationQueue",
+      "function": "CommitBatch",
+      "declaration_line": 157,
+      "sites": [
+        {
+          "line": 215,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        },
+        {
+          "line": 269,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_channel_message_notification_queue.go",
+      "receiver": "*sqliteChannelMessageNotificationQueue",
+      "function": "Enqueue",
+      "declaration_line": 32,
+      "sites": [
+        {
+          "line": 45,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_channel_message_notification_queue.go",
+      "receiver": "*sqliteChannelMessageNotificationQueue",
+      "function": "FailBatch",
+      "declaration_line": 299,
+      "sites": [
+        {
+          "line": 308,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_channel_message_notification_queue.go",
+      "receiver": "*sqliteChannelMessageNotificationQueue",
+      "function": "NextBatch",
+      "declaration_line": 59,
+      "sites": [
+        {
+          "line": 76,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        },
+        {
+          "line": 94,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_channel_message_notification_queue.go",
+      "receiver": "*sqliteChannelMessageNotificationQueue",
+      "function": "SuppressedRecipients",
+      "declaration_line": 110,
+      "sites": [
+        {
+          "line": 137,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_channel_mute.go",
+      "receiver": "*sqliteChannelMuteRepo",
+      "function": "Delete",
+      "declaration_line": 34,
+      "sites": [
+        {
+          "line": 36,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_channel_mute.go",
+      "receiver": "*sqliteChannelMuteRepo",
+      "function": "GetMutedChannelIDs",
+      "declaration_line": 44,
+      "sites": [
+        {
+          "line": 50,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_channel_mute.go",
+      "receiver": "*sqliteChannelMuteRepo",
+      "function": "Upsert",
+      "declaration_line": 19,
+      "sites": [
+        {
+          "line": 27,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_channel_permission.go",
+      "receiver": "*sqliteChannelPermRepo",
+      "function": "Delete",
+      "declaration_line": 109,
+      "sites": [
+        {
+          "line": 112,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_channel_permission.go",
+      "receiver": "*sqliteChannelPermRepo",
+      "function": "DeleteAllByChannel",
+      "declaration_line": 128,
+      "sites": [
+        {
+          "line": 131,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_channel_permission.go",
+      "receiver": "*sqliteChannelPermRepo",
+      "function": "GetByChannel",
+      "declaration_line": 31,
+      "sites": [
+        {
+          "line": 34,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_channel_permission.go",
+      "receiver": "*sqliteChannelPermRepo",
+      "function": "GetByChannelAndRoles",
+      "declaration_line": 41,
+      "sites": [
+        {
+          "line": 59,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_channel_permission.go",
+      "receiver": "*sqliteChannelPermRepo",
+      "function": "GetByRoles",
+      "declaration_line": 67,
+      "sites": [
+        {
+          "line": 84,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_channel_permission.go",
+      "receiver": "*sqliteChannelPermRepo",
+      "function": "Set",
+      "declaration_line": 91,
+      "sites": [
+        {
+          "line": 99,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_cosmetic.go",
+      "receiver": "*sqliteCosmeticRepo",
+      "function": "exists",
+      "declaration_line": 423,
+      "sites": [
+        {
+          "line": 425,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_cosmetic.go",
+      "receiver": "*sqliteCosmeticRepo",
+      "function": "queryEquipped",
+      "declaration_line": 103,
+      "sites": [
+        {
+          "line": 104,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_cosmetic.go",
+      "receiver": "*sqliteCosmeticRepo",
+      "function": "queryItems",
+      "declaration_line": 83,
+      "sites": [
+        {
+          "line": 84,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_data_export.go",
+      "receiver": "*sqliteDataExportRepo",
+      "function": "Create",
+      "declaration_line": 66,
+      "sites": [
+        {
+          "line": 74,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        },
+        {
+          "line": 220,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_device.go",
+      "receiver": "*sqliteDeviceRepo",
+      "function": "ConsumePrekey",
+      "declaration_line": 204,
+      "sites": [
+        {
+          "line": 216,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_device.go",
+      "receiver": "*sqliteDeviceRepo",
+      "function": "CountPrekeys",
+      "declaration_line": 228,
+      "sites": [
+        {
+          "line": 231,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_device.go",
+      "receiver": "*sqliteDeviceRepo",
+      "function": "Delete",
+      "declaration_line": 139,
+      "sites": [
+        {
+          "line": 141,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_device.go",
+      "receiver": "*sqliteDeviceRepo",
+      "function": "GetByUserAndDevice",
+      "declaration_line": 61,
+      "sites": [
+        {
+          "line": 70,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_device.go",
+      "receiver": "*sqliteDeviceRepo",
+      "function": "GetPrekeyBundle",
+      "declaration_line": 239,
+      "sites": [
+        {
+          "line": 247,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_device.go",
+      "receiver": "*sqliteDeviceRepo",
+      "function": "ListByUser",
+      "declaration_line": 84,
+      "sites": [
+        {
+          "line": 93,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_device.go",
+      "receiver": "*sqliteDeviceRepo",
+      "function": "ListPublicByUser",
+      "declaration_line": 114,
+      "sites": [
+        {
+          "line": 121,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_device.go",
+      "receiver": "*sqliteDeviceRepo",
+      "function": "Register",
+      "declaration_line": 22,
+      "sites": [
+        {
+          "line": 43,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_device.go",
+      "receiver": "*sqliteDeviceRepo",
+      "function": "UpdateLastSeen",
+      "declaration_line": 179,
+      "sites": [
+        {
+          "line": 181,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_device.go",
+      "receiver": "*sqliteDeviceRepo",
+      "function": "UpdateSignedPrekey",
+      "declaration_line": 155,
+      "sites": [
+        {
+          "line": 162,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_device.go",
+      "receiver": "*sqliteDeviceRepo",
+      "function": "UploadPrekeys",
+      "declaration_line": 189,
+      "sites": [
+        {
+          "line": 194,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_device.go",
+      "receiver": "*sqliteDeviceRepo",
+      "function": "listDeviceRowsForBundles",
+      "declaration_line": 275,
+      "sites": [
+        {
+          "line": 283,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_dm_attachments.go",
+      "receiver": "*sqliteDMRepo",
+      "function": "GetAttachmentByFileURL",
+      "declaration_line": 131,
+      "sites": [
+        {
+          "line": 135,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_dm_attachments.go",
+      "receiver": "*sqliteDMRepo",
+      "function": "GetAttachmentFileURLsByChannelID",
+      "declaration_line": 102,
+      "sites": [
+        {
+          "line": 106,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_dm_attachments.go",
+      "receiver": "*sqliteDMRepo",
+      "function": "GetAttachmentsByMessageIDs",
+      "declaration_line": 55,
+      "sites": [
+        {
+          "line": 74,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_dm_channels.go",
+      "receiver": "*sqliteDMRepo",
+      "function": "ListChannels",
+      "declaration_line": 72,
+      "sites": [
+        {
+          "line": 99,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_dm_decline.go",
+      "receiver": "*sqliteDMRepo",
+      "function": "DeclinePending",
+      "declaration_line": 16,
+      "sites": [
+        {
+          "line": 94,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_dm_messages.go",
+      "receiver": "*sqliteDMRepo",
+      "function": "GetMessageByID",
+      "declaration_line": 198,
+      "sites": [
+        {
+          "line": 227,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_dm_messages.go",
+      "receiver": "*sqliteDMRepo",
+      "function": "GetMessages",
+      "declaration_line": 19,
+      "sites": [
+        {
+          "line": 60,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_dm_messages.go",
+      "receiver": "*sqliteDMRepo",
+      "function": "SearchMessages",
+      "declaration_line": 420,
+      "sites": [
+        {
+          "line": 444,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        },
+        {
+          "line": 469,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_dm_messages.go",
+      "receiver": "*sqliteDMRepo",
+      "function": "queryDMHistory",
+      "declaration_line": 116,
+      "sites": [
+        {
+          "line": 118,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_dm_pins.go",
+      "receiver": "*sqliteDMRepo",
+      "function": "GetPinnedMessages",
+      "declaration_line": 56,
+      "sites": [
+        {
+          "line": 71,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_dm_reactions.go",
+      "receiver": "*sqliteDMRepo",
+      "function": "GetReactionsByMessageID",
+      "declaration_line": 92,
+      "sites": [
+        {
+          "line": 100,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_dm_reactions.go",
+      "receiver": "*sqliteDMRepo",
+      "function": "GetReactionsByMessageIDs",
+      "declaration_line": 110,
+      "sites": [
+        {
+          "line": 130,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_dm_reactions.go",
+      "receiver": "*sqliteDMRepo",
+      "function": "toggleReaction",
+      "declaration_line": 45,
+      "sites": [
+        {
+          "line": 53,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        },
+        {
+          "line": 69,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_dm_read.go",
+      "receiver": "*sqliteDMReadRepo",
+      "function": "IncrementUnread",
+      "declaration_line": 79,
+      "sites": [
+        {
+          "line": 86,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_dm_settings.go",
+      "receiver": "*sqliteDMSettingsRepo",
+      "function": "DeleteMute",
+      "declaration_line": 89,
+      "sites": [
+        {
+          "line": 95,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_dm_settings.go",
+      "receiver": "*sqliteDMSettingsRepo",
+      "function": "GetMutedChannelIDs",
+      "declaration_line": 126,
+      "sites": [
+        {
+          "line": 133,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_dm_settings.go",
+      "receiver": "*sqliteDMSettingsRepo",
+      "function": "GetPinnedChannelIDs",
+      "declaration_line": 102,
+      "sites": [
+        {
+          "line": 107,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_dm_settings.go",
+      "receiver": "*sqliteDMSettingsRepo",
+      "function": "IsHidden",
+      "declaration_line": 25,
+      "sites": [
+        {
+          "line": 31,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_dm_settings.go",
+      "receiver": "*sqliteDMSettingsRepo",
+      "function": "SetHidden",
+      "declaration_line": 38,
+      "sites": [
+        {
+          "line": 49,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_dm_settings.go",
+      "receiver": "*sqliteDMSettingsRepo",
+      "function": "SetMutedUntil",
+      "declaration_line": 75,
+      "sites": [
+        {
+          "line": 82,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_dm_settings.go",
+      "receiver": "*sqliteDMSettingsRepo",
+      "function": "SetPinned",
+      "declaration_line": 56,
+      "sites": [
+        {
+          "line": 67,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_e2ee_backup.go",
+      "receiver": "*sqliteE2EEBackupRepo",
+      "function": "Delete",
+      "declaration_line": 66,
+      "sites": [
+        {
+          "line": 68,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_e2ee_backup.go",
+      "receiver": "*sqliteE2EEBackupRepo",
+      "function": "GetByUser",
+      "declaration_line": 43,
+      "sites": [
+        {
+          "line": 51,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_e2ee_backup.go",
+      "receiver": "*sqliteE2EEBackupRepo",
+      "function": "Upsert",
+      "declaration_line": 20,
+      "sites": [
+        {
+          "line": 34,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_email_unsubscribe.go",
+      "receiver": "*sqliteEmailUnsubscribeRepo",
+      "function": "Consume",
+      "declaration_line": 134,
+      "sites": [
+        {
+          "line": 178,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        },
+        {
+          "line": 204,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_email_unsubscribe.go",
+      "receiver": "*sqliteEmailUnsubscribeRepo",
+      "function": "issue",
+      "declaration_line": 62,
+      "sites": [
+        {
+          "line": 86,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_entrance.go",
+      "receiver": "*sqliteEntranceRepo",
+      "function": "exists",
+      "declaration_line": 370,
+      "sites": [
+        {
+          "line": 372,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_entrance.go",
+      "receiver": "*sqliteEntranceRepo",
+      "function": "queryStrings",
+      "declaration_line": 350,
+      "sites": [
+        {
+          "line": 351,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_feedback.go",
+      "receiver": "*sqliteFeedbackRepo",
+      "function": "CreateAttachment",
+      "declaration_line": 221,
+      "sites": [
+        {
+          "line": 223,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_feedback.go",
+      "receiver": "*sqliteFeedbackRepo",
+      "function": "CreateReply",
+      "declaration_line": 168,
+      "sites": [
+        {
+          "line": 170,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        },
+        {
+          "line": 181,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_feedback.go",
+      "receiver": "*sqliteFeedbackRepo",
+      "function": "CreateTicket",
+      "declaration_line": 22,
+      "sites": [
+        {
+          "line": 25,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_feedback.go",
+      "receiver": "*sqliteFeedbackRepo",
+      "function": "GetAttachmentByFileURL",
+      "declaration_line": 254,
+      "sites": [
+        {
+          "line": 258,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_feedback.go",
+      "receiver": "*sqliteFeedbackRepo",
+      "function": "GetAttachmentsByTicketID",
+      "declaration_line": 230,
+      "sites": [
+        {
+          "line": 233,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_feedback.go",
+      "receiver": "*sqliteFeedbackRepo",
+      "function": "GetRepliesByTicketID",
+      "declaration_line": 186,
+      "sites": [
+        {
+          "line": 195,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_feedback.go",
+      "receiver": "*sqliteFeedbackRepo",
+      "function": "GetTicketByID",
+      "declaration_line": 34,
+      "sites": [
+        {
+          "line": 45,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_feedback.go",
+      "receiver": "*sqliteFeedbackRepo",
+      "function": "ListAll",
+      "declaration_line": 79,
+      "sites": [
+        {
+          "line": 94,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_feedback.go",
+      "receiver": "*sqliteFeedbackRepo",
+      "function": "ListByUser",
+      "declaration_line": 59,
+      "sites": [
+        {
+          "line": 62,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_feedback.go",
+      "receiver": "*sqliteFeedbackRepo",
+      "function": "UpdateStatus",
+      "declaration_line": 142,
+      "sites": [
+        {
+          "line": 144,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_feedback.go",
+      "receiver": "*sqliteFeedbackRepo",
+      "function": "scanTickets",
+      "declaration_line": 112,
+      "sites": [
+        {
+          "line": 113,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_friend_anniversary_delivery.go",
+      "receiver": "*sqliteFriendAnniversaryDeliveryRepo",
+      "function": "DueCandidates",
+      "declaration_line": 22,
+      "sites": [
+        {
+          "line": 36,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_friendship.go",
+      "receiver": "*sqliteFriendshipRepo",
+      "function": "Create",
+      "declaration_line": 27,
+      "sites": [
+        {
+          "line": 31,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_friendship.go",
+      "receiver": "*sqliteFriendshipRepo",
+      "function": "GetByID",
+      "declaration_line": 38,
+      "sites": [
+        {
+          "line": 43,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_friendship.go",
+      "receiver": "*sqliteFriendshipRepo",
+      "function": "GetByPair",
+      "declaration_line": 56,
+      "sites": [
+        {
+          "line": 65,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_friendship.go",
+      "receiver": "*sqliteFriendshipRepo",
+      "function": "IsBlocked",
+      "declaration_line": 255,
+      "sites": [
+        {
+          "line": 264,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_friendship.go",
+      "receiver": "*sqliteFriendshipRepo",
+      "function": "ListBlockedUserIDs",
+      "declaration_line": 271,
+      "sites": [
+        {
+          "line": 290,
+          "method": "QueryContext",
+          "expression_kind": "*ast.BinaryExpr"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_friendship.go",
+      "receiver": "*sqliteFriendshipRepo",
+      "function": "ListFriends",
+      "declaration_line": 79,
+      "sites": [
+        {
+          "line": 98,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_friendship.go",
+      "receiver": "*sqliteFriendshipRepo",
+      "function": "UpdateStatus",
+      "declaration_line": 159,
+      "sites": [
+        {
+          "line": 167,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_friendship.go",
+      "receiver": "*sqliteFriendshipRepo",
+      "function": "scanFriendshipList",
+      "declaration_line": 322,
+      "sites": [
+        {
+          "line": 323,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_group_dm.go",
+      "receiver": "*sqliteGroupDMRepo",
+      "function": "GetAttachments",
+      "declaration_line": 612,
+      "sites": [
+        {
+          "line": 627,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_group_dm.go",
+      "receiver": "*sqliteGroupDMRepo",
+      "function": "GetMessagesAround",
+      "declaration_line": 386,
+      "sites": [
+        {
+          "line": 399,
+          "method": "QueryContext",
+          "expression_kind": "*ast.BinaryExpr"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_group_dm.go",
+      "receiver": "*sqliteGroupDMRepo",
+      "function": "GetReactions",
+      "declaration_line": 526,
+      "sites": [
+        {
+          "line": 541,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_group_dm.go",
+      "receiver": "*sqliteGroupDMRepo",
+      "function": "ListMessages",
+      "declaration_line": 358,
+      "sites": [
+        {
+          "line": 368,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_group_session.go",
+      "receiver": "*sqliteGroupSessionRepo",
+      "function": "DeleteByChannel",
+      "declaration_line": 158,
+      "sites": [
+        {
+          "line": 160,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_group_session.go",
+      "receiver": "*sqliteGroupSessionRepo",
+      "function": "DeleteByUser",
+      "declaration_line": 168,
+      "sites": [
+        {
+          "line": 170,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_group_session.go",
+      "receiver": "*sqliteGroupSessionRepo",
+      "function": "GetForRecipient",
+      "declaration_line": 129,
+      "sites": [
+        {
+          "line": 137,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_group_session.go",
+      "receiver": "*sqliteGroupSessionRepo",
+      "function": "Upsert",
+      "declaration_line": 22,
+      "sites": [
+        {
+          "line": 54,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        },
+        {
+          "line": 112,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_invite.go",
+      "receiver": "*sqliteInviteRepo",
+      "function": "Create",
+      "declaration_line": 78,
+      "sites": [
+        {
+          "line": 89,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_invite.go",
+      "receiver": "*sqliteInviteRepo",
+      "function": "Delete",
+      "declaration_line": 106,
+      "sites": [
+        {
+          "line": 109,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_invite.go",
+      "receiver": "*sqliteInviteRepo",
+      "function": "GetByCode",
+      "declaration_line": 21,
+      "sites": [
+        {
+          "line": 27,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_invite.go",
+      "receiver": "*sqliteInviteRepo",
+      "function": "IncrementUses",
+      "declaration_line": 125,
+      "sites": [
+        {
+          "line": 128,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_invite.go",
+      "receiver": "*sqliteInviteRepo",
+      "function": "ListByServer",
+      "declaration_line": 43,
+      "sites": [
+        {
+          "line": 52,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_livekit_instances.go",
+      "receiver": "*sqliteLiveKitRepo",
+      "function": "Create",
+      "declaration_line": 16,
+      "sites": [
+        {
+          "line": 47,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_livekit_instances.go",
+      "receiver": "*sqliteLiveKitRepo",
+      "function": "DecrementServerCount",
+      "declaration_line": 143,
+      "sites": [
+        {
+          "line": 146,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_livekit_instances.go",
+      "receiver": "*sqliteLiveKitRepo",
+      "function": "GetByID",
+      "declaration_line": 64,
+      "sites": [
+        {
+          "line": 68,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_livekit_instances.go",
+      "receiver": "*sqliteLiveKitRepo",
+      "function": "GetByServerID",
+      "declaration_line": 80,
+      "sites": [
+        {
+          "line": 88,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_livekit_instances.go",
+      "receiver": "*sqliteLiveKitRepo",
+      "function": "GetLeastLoadedPlatformInstance",
+      "declaration_line": 102,
+      "sites": [
+        {
+          "line": 112,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_livekit_instances.go",
+      "receiver": "*sqliteLiveKitRepo",
+      "function": "IncrementServerCount",
+      "declaration_line": 124,
+      "sites": [
+        {
+          "line": 127,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_livekit_instances.go",
+      "receiver": "*sqliteLiveKitRepo",
+      "function": "ListPlatformInstances",
+      "declaration_line": 214,
+      "sites": [
+        {
+          "line": 217,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_livekit_instances.go",
+      "receiver": "*sqliteLiveKitRepo",
+      "function": "Update",
+      "declaration_line": 162,
+      "sites": [
+        {
+          "line": 171,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_livekit_quota.go",
+      "receiver": "*sqliteLiveKitRepo",
+      "function": "GetNextAutoSwitchInstance",
+      "declaration_line": 121,
+      "sites": [
+        {
+          "line": 146,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_livekit_quota.go",
+      "receiver": "*sqliteLiveKitRepo",
+      "function": "IncrementMonthlyUsage",
+      "declaration_line": 22,
+      "sites": [
+        {
+          "line": 33,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_livekit_quota.go",
+      "receiver": "*sqliteLiveKitRepo",
+      "function": "ListInstancesWithQuota",
+      "declaration_line": 62,
+      "sites": [
+        {
+          "line": 75,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_livekit_quota.go",
+      "receiver": "*sqliteLiveKitRepo",
+      "function": "UpdateQuotaSettings",
+      "declaration_line": 159,
+      "sites": [
+        {
+          "line": 199,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_media_asset.go",
+      "receiver": "*sqliteMediaAssetRepo",
+      "function": "IsPublicAsset",
+      "declaration_line": 40,
+      "sites": [
+        {
+          "line": 49,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_media_label.go",
+      "receiver": "*MediaLabelRepository",
+      "function": "Delete",
+      "declaration_line": 80,
+      "sites": [
+        {
+          "line": 103,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_member_timeout.go",
+      "receiver": "*sqliteMemberTimeoutRepo",
+      "function": "Get",
+      "declaration_line": 48,
+      "sites": [
+        {
+          "line": 55,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_member_timeout.go",
+      "receiver": "*sqliteMemberTimeoutRepo",
+      "function": "Upsert",
+      "declaration_line": 25,
+      "sites": [
+        {
+          "line": 34,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_mention.go",
+      "receiver": "*sqliteMentionRepo",
+      "function": "GetByMessageIDs",
+      "declaration_line": 82,
+      "sites": [
+        {
+          "line": 99,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_mention.go",
+      "receiver": "*sqliteMentionRepo",
+      "function": "SaveMentions",
+      "declaration_line": 21,
+      "sites": [
+        {
+          "line": 38,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_message.go",
+      "receiver": "*sqliteMessageRepo",
+      "function": "Create",
+      "declaration_line": 26,
+      "sites": [
+        {
+          "line": 38,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_message.go",
+      "receiver": "*sqliteMessageRepo",
+      "function": "GetByChannelID",
+      "declaration_line": 168,
+      "sites": [
+        {
+          "line": 221,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_message.go",
+      "receiver": "*sqliteMessageRepo",
+      "function": "GetByChannelIDAfter",
+      "declaration_line": 332,
+      "sites": [
+        {
+          "line": 343,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_message.go",
+      "receiver": "*sqliteMessageRepo",
+      "function": "GetByChannelIDAround",
+      "declaration_line": 273,
+      "sites": [
+        {
+          "line": 286,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        },
+        {
+          "line": 307,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_message.go",
+      "receiver": "*sqliteMessageRepo",
+      "function": "GetByID",
+      "declaration_line": 61,
+      "sites": [
+        {
+          "line": 88,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_message.go",
+      "receiver": "*sqliteMessageRepo",
+      "function": "Update",
+      "declaration_line": 361,
+      "sites": [
+        {
+          "line": 369,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        },
+        {
+          "line": 374,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_metrics_history.go",
+      "receiver": "*sqliteMetricsHistoryRepo",
+      "function": "GetSummary",
+      "declaration_line": 51,
+      "sites": [
+        {
+          "line": 79,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_metrics_history.go",
+      "receiver": "*sqliteMetricsHistoryRepo",
+      "function": "GetTimeSeries",
+      "declaration_line": 107,
+      "sites": [
+        {
+          "line": 154,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_metrics_history.go",
+      "receiver": "*sqliteMetricsHistoryRepo",
+      "function": "Insert",
+      "declaration_line": 20,
+      "sites": [
+        {
+          "line": 28,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_metrics_history.go",
+      "receiver": "*sqliteMetricsHistoryRepo",
+      "function": "PurgeOlderThan",
+      "declaration_line": 188,
+      "sites": [
+        {
+          "line": 191,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_mfa.go",
+      "receiver": "*sqliteMFARepo",
+      "function": "update",
+      "declaration_line": 26,
+      "sites": [
+        {
+          "line": 27,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_notification.go",
+      "receiver": "*sqliteNotificationRepo",
+      "function": "List",
+      "declaration_line": 191,
+      "sites": [
+        {
+          "line": 212,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_notification.go",
+      "receiver": "*sqliteNotificationRepo",
+      "function": "markUnreadByRef",
+      "declaration_line": 380,
+      "sites": [
+        {
+          "line": 381,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        },
+        {
+          "line": 408,
+          "method": "ExecContext",
+          "expression_kind": "*ast.BinaryExpr"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_pin.go",
+      "receiver": "*sqlitePinRepo",
+      "function": "GetByChannelID",
+      "declaration_line": 80,
+      "sites": [
+        {
+          "line": 93,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_pin.go",
+      "receiver": "*sqlitePinRepo",
+      "function": "Pin",
+      "declaration_line": 111,
+      "sites": [
+        {
+          "line": 122,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_preferences.go",
+      "receiver": "*sqlitePreferencesRepo",
+      "function": "GetMany",
+      "declaration_line": 122,
+      "sites": [
+        {
+          "line": 147,
+          "method": "QueryContext",
+          "expression_kind": "*ast.BinaryExpr"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_preferences.go",
+      "receiver": "*sqlitePreferencesRepo",
+      "function": "GetManyStrict",
+      "declaration_line": 56,
+      "sites": [
+        {
+          "line": 79,
+          "method": "QueryContext",
+          "expression_kind": "*ast.BinaryExpr"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_reaction.go",
+      "receiver": "*sqliteReactionRepo",
+      "function": "GetByMessageID",
+      "declaration_line": 72,
+      "sites": [
+        {
+          "line": 80,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_reaction.go",
+      "receiver": "*sqliteReactionRepo",
+      "function": "GetByMessageIDs",
+      "declaration_line": 91,
+      "sites": [
+        {
+          "line": 111,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_reaction.go",
+      "receiver": "*sqliteReactionRepo",
+      "function": "Toggle",
+      "declaration_line": 24,
+      "sites": [
+        {
+          "line": 32,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        },
+        {
+          "line": 48,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_read_state.go",
+      "receiver": "*sqliteReadStateRepo",
+      "function": "DecrementUnreadForDeleted",
+      "declaration_line": 116,
+      "sites": [
+        {
+          "line": 127,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_read_state.go",
+      "receiver": "*sqliteReadStateRepo",
+      "function": "GetUnreadCounts",
+      "declaration_line": 140,
+      "sites": [
+        {
+          "line": 173,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_read_state.go",
+      "receiver": "*sqliteReadStateRepo",
+      "function": "IncrementUnreadCounts",
+      "declaration_line": 100,
+      "sites": [
+        {
+          "line": 106,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_read_state.go",
+      "receiver": "*sqliteReadStateRepo",
+      "function": "MarkAllRead",
+      "declaration_line": 205,
+      "sites": [
+        {
+          "line": 223,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_read_state.go",
+      "receiver": "*sqliteReadStateRepo",
+      "function": "MarkUnreadFrom",
+      "declaration_line": 65,
+      "sites": [
+        {
+          "line": 80,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_read_state.go",
+      "receiver": "*sqliteReadStateRepo",
+      "function": "Upsert",
+      "declaration_line": 45,
+      "sites": [
+        {
+          "line": 55,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_report.go",
+      "receiver": "*sqliteReportRepo",
+      "function": "Create",
+      "declaration_line": 22,
+      "sites": [
+        {
+          "line": 31,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_report.go",
+      "receiver": "*sqliteReportRepo",
+      "function": "CreateAttachment",
+      "declaration_line": 263,
+      "sites": [
+        {
+          "line": 274,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_report.go",
+      "receiver": "*sqliteReportRepo",
+      "function": "GetAttachmentByFileURL",
+      "declaration_line": 321,
+      "sites": [
+        {
+          "line": 325,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_report.go",
+      "receiver": "*sqliteReportRepo",
+      "function": "GetAttachmentsByReportID",
+      "declaration_line": 285,
+      "sites": [
+        {
+          "line": 292,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_report.go",
+      "receiver": "*sqliteReportRepo",
+      "function": "GetByID",
+      "declaration_line": 45,
+      "sites": [
+        {
+          "line": 58,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_report.go",
+      "receiver": "*sqliteReportRepo",
+      "function": "HasPendingReport",
+      "declaration_line": 230,
+      "sites": [
+        {
+          "line": 238,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_report.go",
+      "receiver": "*sqliteReportRepo",
+      "function": "UpdateStatus",
+      "declaration_line": 208,
+      "sites": [
+        {
+          "line": 214,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_report.go",
+      "receiver": "*sqliteReportRepo",
+      "function": "listByStatus",
+      "declaration_line": 96,
+      "sites": [
+        {
+          "line": 115,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        },
+        {
+          "line": 150,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_reset_token.go",
+      "receiver": "*sqliteResetTokenRepo",
+      "function": "Create",
+      "declaration_line": 22,
+      "sites": [
+        {
+          "line": 33,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_reset_token.go",
+      "receiver": "*sqliteResetTokenRepo",
+      "function": "GetByTokenHash",
+      "declaration_line": 41,
+      "sites": [
+        {
+          "line": 46,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_reset_token.go",
+      "receiver": "*sqliteResetTokenRepo",
+      "function": "GetLatestByUserID",
+      "declaration_line": 84,
+      "sites": [
+        {
+          "line": 90,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_role.go",
+      "receiver": "*sqliteRoleRepo",
+      "function": "AssignToUser",
+      "declaration_line": 322,
+      "sites": [
+        {
+          "line": 332,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_role.go",
+      "receiver": "*sqliteRoleRepo",
+      "function": "Create",
+      "declaration_line": 213,
+      "sites": [
+        {
+          "line": 237,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_role.go",
+      "receiver": "*sqliteRoleRepo",
+      "function": "Delete",
+      "declaration_line": 261,
+      "sites": [
+        {
+          "line": 265,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_role.go",
+      "receiver": "*sqliteRoleRepo",
+      "function": "GetAllByServer",
+      "declaration_line": 83,
+      "sites": [
+        {
+          "line": 88,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_role.go",
+      "receiver": "*sqliteRoleRepo",
+      "function": "GetByID",
+      "declaration_line": 62,
+      "sites": [
+        {
+          "line": 67,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_role.go",
+      "receiver": "*sqliteRoleRepo",
+      "function": "GetByUserIDAndServer",
+      "declaration_line": 116,
+      "sites": [
+        {
+          "line": 124,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_role.go",
+      "receiver": "*sqliteRoleRepo",
+      "function": "GetDefaultByServer",
+      "declaration_line": 95,
+      "sites": [
+        {
+          "line": 101,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_role.go",
+      "receiver": "*sqliteRoleRepo",
+      "function": "GetRolesForUsers",
+      "declaration_line": 135,
+      "sites": [
+        {
+          "line": 152,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_role.go",
+      "receiver": "*sqliteRoleRepo",
+      "function": "RemoveFromUser",
+      "declaration_line": 339,
+      "sites": [
+        {
+          "line": 344,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_role.go",
+      "receiver": "*sqliteRoleRepo",
+      "function": "UpdatePositions",
+      "declaration_line": 282,
+      "sites": [
+        {
+          "line": 300,
+          "method": "ExecContext",
+          "expression_kind": "*ast.SelectorExpr"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_role.go",
+      "receiver": "*sqliteRoleRepo",
+      "function": "lockWriteRow",
+      "declaration_line": 33,
+      "sites": [
+        {
+          "line": 37,
+          "method": "ExecContext",
+          "expression_kind": "*ast.BinaryExpr"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_role_mention.go",
+      "receiver": "*sqliteRoleMentionRepo",
+      "function": "GetByMessageIDs",
+      "declaration_line": 52,
+      "sites": [
+        {
+          "line": 69,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_role_mention.go",
+      "receiver": "*sqliteRoleMentionRepo",
+      "function": "SaveRoleMentions",
+      "declaration_line": 19,
+      "sites": [
+        {
+          "line": 36,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_runtime_telemetry.go",
+      "receiver": "*sqliteRuntimeTelemetryRepo",
+      "function": "Insert",
+      "declaration_line": 20,
+      "sites": [
+        {
+          "line": 35,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_runtime_telemetry.go",
+      "receiver": "*sqliteRuntimeTelemetryRepo",
+      "function": "PurgeOlderThan",
+      "declaration_line": 47,
+      "sites": [
+        {
+          "line": 50,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_saved.go",
+      "receiver": "*sqliteSavedRepo",
+      "function": "query",
+      "declaration_line": 75,
+      "sites": [
+        {
+          "line": 79,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_search.go",
+      "receiver": "*sqliteSearchRepo",
+      "function": "Search",
+      "declaration_line": 65,
+      "sites": [
+        {
+          "line": 97,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        },
+        {
+          "line": 117,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_server.go",
+      "receiver": "",
+      "function": "serverFileURLs",
+      "declaration_line": 139,
+      "sites": [
+        {
+          "line": 149,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_server.go",
+      "receiver": "*sqliteServerRepo",
+      "function": "AddMember",
+      "declaration_line": 194,
+      "sites": [
+        {
+          "line": 199,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_server.go",
+      "receiver": "*sqliteServerRepo",
+      "function": "AddMemberWithGameActivityAudience",
+      "declaration_line": 209,
+      "sites": [
+        {
+          "line": 212,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_server.go",
+      "receiver": "*sqliteServerRepo",
+      "function": "CountOwnedMqviHostedServers",
+      "declaration_line": 653,
+      "sites": [
+        {
+          "line": 660,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_server.go",
+      "receiver": "*sqliteServerRepo",
+      "function": "Create",
+      "declaration_line": 34,
+      "sites": [
+        {
+          "line": 45,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_server.go",
+      "receiver": "*sqliteServerRepo",
+      "function": "GetByID",
+      "declaration_line": 59,
+      "sites": [
+        {
+          "line": 65,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_server.go",
+      "receiver": "*sqliteServerRepo",
+      "function": "GetMaxMemberPosition",
+      "declaration_line": 477,
+      "sites": [
+        {
+          "line": 481,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_server.go",
+      "receiver": "*sqliteServerRepo",
+      "function": "GetMemberCount",
+      "declaration_line": 365,
+      "sites": [
+        {
+          "line": 369,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_server.go",
+      "receiver": "*sqliteServerRepo",
+      "function": "GetUserServers",
+      "declaration_line": 172,
+      "sites": [
+        {
+          "line": 181,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_server.go",
+      "receiver": "*sqliteServerRepo",
+      "function": "IsMember",
+      "declaration_line": 349,
+      "sites": [
+        {
+          "line": 353,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_server.go",
+      "receiver": "*sqliteServerRepo",
+      "function": "ListAllWithStats",
+      "declaration_line": 492,
+      "sites": [
+        {
+          "line": 528,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_server.go",
+      "receiver": "*sqliteServerRepo",
+      "function": "ListSmallSharedServerUserIDs",
+      "declaration_line": 567,
+      "sites": [
+        {
+          "line": 594,
+          "method": "QueryContext",
+          "expression_kind": "*ast.BinaryExpr"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_server.go",
+      "receiver": "*sqliteServerRepo",
+      "function": "Update",
+      "declaration_line": 80,
+      "sites": [
+        {
+          "line": 85,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_server.go",
+      "receiver": "*sqliteServerRepo",
+      "function": "UpdateLastVoiceActivity",
+      "declaration_line": 544,
+      "sites": [
+        {
+          "line": 546,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_server.go",
+      "receiver": "*sqliteServerRepo",
+      "function": "UpdateMemberPositions",
+      "declaration_line": 447,
+      "sites": [
+        {
+          "line": 465,
+          "method": "ExecContext",
+          "expression_kind": "*ast.SelectorExpr"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_server.go",
+      "receiver": "*sqliteServerRepo",
+      "function": "queryStringColumn",
+      "declaration_line": 630,
+      "sites": [
+        {
+          "line": 631,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_server_event.go",
+      "receiver": "*sqliteServerEventRepo",
+      "function": "List",
+      "declaration_line": 135,
+      "sites": [
+        {
+          "line": 148,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_server_event_delivery.go",
+      "receiver": "*sqliteServerEventDeliveryRepo",
+      "function": "DueCandidates",
+      "declaration_line": 23,
+      "sites": [
+        {
+          "line": 29,
+          "method": "QueryContext",
+          "expression_kind": "*ast.BinaryExpr"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_server_mute.go",
+      "receiver": "*sqliteServerMuteRepo",
+      "function": "Delete",
+      "declaration_line": 34,
+      "sites": [
+        {
+          "line": 36,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_server_mute.go",
+      "receiver": "*sqliteServerMuteRepo",
+      "function": "GetMutedServerIDs",
+      "declaration_line": 44,
+      "sites": [
+        {
+          "line": 50,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_server_mute.go",
+      "receiver": "*sqliteServerMuteRepo",
+      "function": "Upsert",
+      "declaration_line": 19,
+      "sites": [
+        {
+          "line": 27,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_server_ownership.go",
+      "receiver": "*sqliteServerOwnershipRepo",
+      "function": "Transfer",
+      "declaration_line": 25,
+      "sites": [
+        {
+          "line": 109,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_session.go",
+      "receiver": "*sqliteSessionRepo",
+      "function": "Create",
+      "declaration_line": 35,
+      "sites": [
+        {
+          "line": 66,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_session.go",
+      "receiver": "*sqliteSessionRepo",
+      "function": "GetByRefreshToken",
+      "declaration_line": 86,
+      "sites": [
+        {
+          "line": 97,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_spam.go",
+      "receiver": "*SpamInboxRepository",
+      "function": "page",
+      "declaration_line": 73,
+      "sites": [
+        {
+          "line": 98,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_sticker.go",
+      "receiver": "*sqliteStickerRepo",
+      "function": "GetByID",
+      "declaration_line": 115,
+      "sites": [
+        {
+          "line": 117,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_user.go",
+      "receiver": "*sqliteUserRepo",
+      "function": "Create",
+      "declaration_line": 32,
+      "sites": [
+        {
+          "line": 43,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_user.go",
+      "receiver": "*sqliteUserRepo",
+      "function": "Delete",
+      "declaration_line": 75,
+      "sites": [
+        {
+          "line": 78,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_user_admin.go",
+      "receiver": "*sqliteUserRepo",
+      "function": "ListAllUsersWithStats",
+      "declaration_line": 14,
+      "sites": [
+        {
+          "line": 48,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_user_lookup.go",
+      "receiver": "*sqliteUserRepo",
+      "function": "GetAll",
+      "declaration_line": 132,
+      "sites": [
+        {
+          "line": 140,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_user_lookup.go",
+      "receiver": "*sqliteUserRepo",
+      "function": "GetByEmail",
+      "declaration_line": 159,
+      "sites": [
+        {
+          "line": 168,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_user_lookup.go",
+      "receiver": "*sqliteUserRepo",
+      "function": "GetByID",
+      "declaration_line": 17,
+      "sites": [
+        {
+          "line": 26,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_user_lookup.go",
+      "receiver": "*sqliteUserRepo",
+      "function": "GetByUsername",
+      "declaration_line": 47,
+      "sites": [
+        {
+          "line": 60,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_user_moderation.go",
+      "receiver": "*sqliteUserRepo",
+      "function": "IsEmailPlatformBanned",
+      "declaration_line": 71,
+      "sites": [
+        {
+          "line": 75,
+          "method": "QueryRowContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_user_moderation.go",
+      "receiver": "*sqliteUserRepo",
+      "function": "PlatformBan",
+      "declaration_line": 13,
+      "sites": [
+        {
+          "line": 28,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_user_moderation.go",
+      "receiver": "*sqliteUserRepo",
+      "function": "PlatformUnban",
+      "declaration_line": 44,
+      "sites": [
+        {
+          "line": 53,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_user_profile.go",
+      "receiver": "*sqliteUserRepo",
+      "function": "Update",
+      "declaration_line": 29,
+      "sites": [
+        {
+          "line": 35,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_user_profile.go",
+      "receiver": "*sqliteUserRepo",
+      "function": "UpdateEmail",
+      "declaration_line": 153,
+      "sites": [
+        {
+          "line": 156,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_user_profile.go",
+      "receiver": "*sqliteUserRepo",
+      "function": "UpdatePassword",
+      "declaration_line": 133,
+      "sites": [
+        {
+          "line": 136,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_user_profile.go",
+      "receiver": "*sqliteUserRepo",
+      "function": "UpdatePrefStatus",
+      "declaration_line": 81,
+      "sites": [
+        {
+          "line": 84,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/sqlite_user_profile.go",
+      "receiver": "*sqliteUserRepo",
+      "function": "UpdateStatus",
+      "declaration_line": 54,
+      "sites": [
+        {
+          "line": 65,
+          "method": "ExecContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    },
+    {
+      "file": "server/repository/voice_access.go",
+      "receiver": "*postgresVoiceChannelRepo",
+      "function": "VoiceVisibleUsers",
+      "declaration_line": 69,
+      "sites": [
+        {
+          "line": 85,
+          "method": "QueryContext",
+          "expression_kind": "*ast.Ident"
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "method-name and lexical receiver syntax only;not verified DB receiver types",
+    "nested closures are attributed to outer declarations,not call-graph execution",
+    "full fixture/query-family/dialect equivalence mapping remains open"
+  ]
+}

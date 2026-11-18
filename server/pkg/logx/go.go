@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"runtime/debug"
-
-	"github.com/argeinfina/hichat/pkg"
 )
 
 // Go runs fn in a new goroutine with panic recovery.
@@ -23,22 +21,23 @@ import (
 // callers whose loop must keep running across transient failures should wrap
 // the per-iteration work instead of the whole loop.
 func Go(component string, fn func()) {
-	go func() {
-		defer func() {
-			r := recover()
-			if r == nil {
-				return
-			}
-			panicMsg := fmt.Sprintf("%v", r)
-			if err, ok := r.(error); ok {
-				panicMsg = pkg.ErrText(err)
-			}
-			slog.LogAttrs(context.Background(), slog.LevelError, "goroutine panic recovered",
-				slog.String("component", component),
-				slog.String("panic", panicMsg),
-				slog.String("stack", string(debug.Stack())),
-			)
-		}()
-		fn()
+	go Run(component, fn)
+}
+
+// Run contains a panic in synchronous work without terminating its caller.
+// Worker loops can guard individual tasks so one failure does not strand their
+// remaining queue. The failed callback is logged and is not retried.
+func Run(component string, fn func()) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			return
+		}
+		slog.LogAttrs(context.Background(), slog.LevelError, "goroutine panic recovered",
+			slog.String("component", component),
+			slog.String("panic_type", fmt.Sprintf("%T", r)),
+			slog.String("stack", string(debug.Stack())),
+		)
 	}()
+	fn()
 }

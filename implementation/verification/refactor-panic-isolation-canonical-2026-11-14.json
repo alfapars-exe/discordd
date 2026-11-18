@@ -1,0 +1,21 @@
+{
+  "date": "2026-11-14",
+  "scope": "Canonical voice task panic isolation preserving existing canonical log fields",
+  "canonical_head": "3a16b9108100f7c6b3a83e8f42c6870e22d76cbb",
+  "checks": {
+    "host_repetitions": 10,
+    "services_exit": 0,
+    "services_seconds": 0.998,
+    "logx_exit": 0,
+    "logx_seconds": 1.032,
+    "full_vet_exit": 0,
+    "full_build_exit": 0,
+    "full_lint_issues": 0
+  },
+  "transfer_correction": "Initial whole-file transfer imported integration panic_type policy and failed canonical Go recovery-log tests. Rebuilt Run from canonical HEAD recovery body, preserving panic field and pkg.ErrText error redaction; tests unchanged and passed.",
+  "limitations": [
+    "Current-head CI/native race pending; priorfbf36/36 receipt is distinct.",
+    "Panic attempt is logged and not retried; successful credit/media not implied.",
+    "Active process SIGTERM remains blocked by local Docker, physical acceptance and full-project refactor open."
+  ]
+}

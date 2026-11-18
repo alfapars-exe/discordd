@@ -1,0 +1,34 @@
+{
+  "date": "2026-11-14",
+  "scope": "Late committed member revocation usage accounting",
+  "source_sha256": {
+    "server/services/voice_usage_operations.go": "7b8ecb1d77145b17c88cb3e8573f139642d6b20b1eac36f71a660c099d715692",
+    "server/services/voice_usage_operations_test.go": "0a5d30e634c1fdd0e108f55e5b2fa8593baab45feb1325312f35b59ba95c6536",
+    "server/services/voice_usage_replay_test.go": "753f2a21c7483167c45ebb90705f97180f47e062474ca9d32989447996ade58c"
+  },
+  "before": {
+    "test": "TestVoiceUsageLateMemberRevocationPreservesCredit",
+    "exit": 1,
+    "failure": "committed late member revocation dropped usage credit"
+  },
+  "after": {
+    "usage_unit_count": 10,
+    "unit_exit": 0,
+    "unit_seconds": 3.402,
+    "usage_linux_race_count": 10,
+    "race_exit": 0,
+    "race_seconds": 5.447,
+    "verified_mtls_postgres_count": 3,
+    "postgres_exit": 0,
+    "postgres_seconds": 2.858,
+    "verified_mtls_postgres_linux_race_count": 3,
+    "postgres_race_exit": 0,
+    "postgres_race_seconds": 5.377,
+    "final_services_lint_issues": 0
+  },
+  "limitations": [
+    "Integration-only member revocation API; not yet published to canonical PR.",
+    "Database must remain available; no claim after database close or crash before first durable enqueue.",
+    "Physical media/active-session shutdown and final whole-project acceptance remain open."
+  ]
+}

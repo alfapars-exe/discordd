@@ -1,0 +1,65 @@
+{
+  "baselineRevision": "98118271bb00221acb9402382f62ffe72b802d07",
+  "characterizationCommit": "343f52a1",
+  "sourceRevision": "3a23a1ecdaac8287de4f86c9fd782ad30e9d1e76",
+  "runtimeRevision": "995d4bf5fd4da6f27eecb56b5ea5d171f724da24",
+  "scope": "RF10/RF26 music audience recipient authorization and publisher enqueue phases",
+  "sonarBefore": {
+    "key": "AaHYWql8d7dyvm3wYSoa",
+    "rule": "go:S3776",
+    "function": "broadcastMusicAudience",
+    "complexity": 25,
+    "threshold": 15,
+    "after": "Original issue CLOSED/FIXED aftercb516f2f delivery. Source API matches all107 runtime code lines plus one empty EOF line. No exact after complexity score claimed."
+  },
+  "behavior": {
+    "authorization": "Retain membership, fresh ViewChannel permission and current voice incarnation checks in that order; dependencies captured once per broadcast. Helper receives only candidates already validated against requested server/channel.",
+    "enqueue": "Retain publisher identity/final/fatal/stopping decisions under the service read lock immediately around enqueue; database lookups remain outside that lock. No preliminary all-recipient authorization or broad broadcast fallback.",
+    "loop": "Preserve deadline scope, candidate order, invalid/duplicate filtering and seen insertion before authorization. Publisher retirement stops later recipient lookups while returning prior successful delivery.",
+    "contracts": "No public interface names, WebSocket event or payload fields, queue publication ordering or repository-call budgets changed. Existing N-recipient component fixture still requires4N+1 repository calls; no latency improvement claimed."
+  },
+  "characterization": {
+    "additionalCases": 11,
+    "publisherMatrix": "9cases:active,stopping,fatal-stopping,final-current,final-removed,final-replaced,active-removed,fatal-removed,active-replaced",
+    "partialDelivery": "2cases:active/final publisher replacement during second recipient authorization; first delivery retained, later/third recipient not delivered and third permission lookup never started",
+    "interpretation": "New cases pass on original source. This is a behavior-preserving refactor,not a pre-existing vulnerability fix. Actual music service with fixture membership/voice/permission/broadcaster boundaries; not real WebSocket transport or physical media acceptance."
+  },
+  "validation": {
+    "targetedBefore": "PASS5.933s; TEMP/hichat-music-audience-phases-before.log",
+    "targetedAfter": "Same selection PASS5.938s; TEMP/hichat-music-audience-phases-after.log",
+    "windowsServices": "PASS1932tests inclsubtests,41skipped,0failed88.411s; Go1.27.4windows/amd64CGO0. TEMP/hichat-music-audience-phases-services.jsonl. Local skips are not required PostgreSQL acceptance.",
+    "vetAndBuild": "PASS go vet ./services and go build ./...",
+    "targetedCoverage": "ownsDelivery100%,musicAudienceRecipientCurrent100%,enqueueMusicAudienceRecipient100%,broadcastMusicAudience96% statements. Selected tests only,not whole-service coverage. TEMP/hichat-music-audience-phases.cover",
+    "linuxRaceTargeted": "PASS20repeats3.360s; Go1.26.11linux/amd64CGO1. TEMP/hichat-music-audience-phases-linux-race.log",
+    "linuxRaceFull": "FAIL package default10m timeout after602.272s:994subtests passed,19skipped,no individual test failure or DATA RACE warning before package timeout. Full source not accepted by this run. Raw: TEMP/hichat-refactor-go-linux-cache/music-audience-phases-full-race.jsonl. Source and host module cache read-only,container-owned cache writable,--rm cleanup.",
+    "timeoutFollowup": "PASS all8cases of TestMusicAccessScopeDeniedAfterExtractionNeverConnects under Linuxrace55.923s with2m package budget; TEMP/hichat-music-audience-timeout-victim-race.log. Full timeout stack was still inside newMusicScopeFixture/boundAuthHarness before case logic. Canonical whole-service race gate uses8CI shards,each15m,with Test/Example/Fuzz discovery. Full new-head shard results required; focused pass is not full-source acceptance.",
+    "linuxSetup": "Two setup attempts stopped before tests: login shell lost Go PATH; image default GOTOOLCHAIN=local rejected required1.26.11. Canonical run uses sh -c and GOTOOLCHAIN=auto with cached toolchain.",
+    "runtimeScan": "PASS immutable995d4bf5 exit0:51 exact reviewed-source records,480reviewlines,0blockingpatterns; TEMP/hichat-music-audience-scan.log. Pattern scan does not prove absence of vulnerabilities.",
+    "immutableScan": "PASS final3a23a1ec exit0:51 exact reviewed-source records,480reviewlines,0blockingpatterns; TEMP/hichat-music-audience-test-helpers-scan.log. Pattern scan does not prove absence of vulnerabilities.",
+    "fixtureProfileEvidence": "Full timeout stack traverses database.execStatementsTx/applyMigrationFile/runMigrations/NewLegacy -> newMFAHarness:33 -> boundAuthHarness -> musicPrivacyFixture -> newMusicScopeFixture. Repeated full schema setup remains a measured test-profile followup; no fixture optimization claimed."
+  },
+  "testHelperFollowup": {
+    "baseline": "cb516f2f Sonar introduced two test-body S3776 issues: AaHhFOdChH817EjyMxPc23 and AaHhFOdChH817EjyMxPd18. Production25 issue already closed.",
+    "change": "3a23a1ec moves each scenario body into a named t.Helper function; same11 scenarios and assertion order. Runtime music source unchanged.",
+    "equivalence": "Scenario bodies equal cb516f2f after indentation normalization,excluding added t.Helper. SHA256 matrix67c6da8800cce098e1aec78de864b405b1c63214bb371647ffdb908169bd3e6c; partial074f610076506903c7d51ffbfea8fec902c5d21dcfe7098b2f8dba6120c3179b. TEMP/hichat-verify-music-test-helper-bodies.py.",
+    "validation": "Same targeted selection PASS5.920s; Go vet PASS; LinuxGo1.26.11CGO1race20repeatsPASS3.363s. TEMP/hichat-music-audience-test-helpers.log; TEMP/hichat-music-audience-test-helpers-race.log.",
+    "sonarAfter": "bd8b9652 analysis:CLOSED/FIXED for both exact test issue keys; no open issues returned for the test file. Source API matches all110 code lines plus one empty EOF line. No exact after complexity score claimed.",
+    "remaining": "Required bd8b9652CI completed36/36SUCCESS; broaderRF10 acceptance remains open"
+  },
+  "fixtureCPUProfile": {
+    "sourceRevision": "bd8b9652aef14a5888125a08fc65f5ae19828188",
+    "target": "TestMusicAccessScopeDeniedAfterExtractionNeverConnects/leave only",
+    "environment": "LinuxGo1.26.11CGO1race; same read-only source/module mounts and writable task cache",
+    "result": "PASS10.136s; TEMP/hichat-music-fixture-cpu-profile.log",
+    "binaryBuildID": "b624f21c9d58846b1c602dba86d62992b7df3ba5",
+    "profile": "TEMP/hichat-refactor-go-linux-cache/music-fixture-profile.cpu",
+    "durationSeconds": 6.9,
+    "totalCPUSamplesSeconds": 6.85,
+    "runMigrationsCumulativeSeconds": 4.68,
+    "runMigrationsCumulativePercent": 68.32,
+    "interpretation": "One instrumented diagnostic sample,not production latency or a performance gain claim. Repeated schema fixture initialization is a concrete RF03/RF04 test-profile followup; no fixture optimization implemented."
+  },
+  "runtimeCI": { "revision": "cb516f2f67558d10802de34ebfac8793c9e55cce", "result": "36/36 terminalSUCCESS including8servicesrace shards", "serverRun": 43762840813, "serverConclusion": "success", "rawChecks": "refactor-cb51-terminal-ci-2026-11-16.json", "scope": "Runtime995d4bf5 accepted in requiredshardedCI. Latest3a23a1ec test-helper source still requires its ownCI/Sonar." },
+  "finalCI": { "revision": "bd8b9652aef14a5888125a08fc65f5ae19828188", "result": "36/36 terminalSUCCESS", "serverRun": 43764312293, "rawChecks": "refactor-bd8b-terminal-ci-2026-11-16.json" },
+  "remaining": ["MusicAudienceFreshPermissions interface naming issue S8196 remains separate", "Complete RF10 concurrency/runtime/provider acceptance", "Whole-project RF01-RF30 acceptance"]
+}

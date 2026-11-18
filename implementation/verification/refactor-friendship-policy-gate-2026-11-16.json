@@ -1,0 +1,89 @@
+{
+  "source": "cc9760ea",
+  "characterization": "18bbfe14",
+  "sonarIssue": "AaHYWqnZd7dyvm3wYSod",
+  "originalCognitiveComplexity": 17,
+  "change": "Separate request-policy authorization from existing-relationship resolution and persistence/publication",
+  "invariants": [
+    "Existing accepted/outgoing/mutual/blocked paths resolve before policy evaluation",
+    "Blocked state remains undisclosed through ErrNotFound",
+    "Policy backend errors preserve wrapped cause and stop before writes/publication",
+    "Allowed policy runs with resolved actor/target before persistence",
+    "Nil optional policy and public API/error text unchanged"
+  ],
+  "validation": {
+    "beforeAfterMatchedPassRecords": 48,
+    "fullWindowsServices": {
+      "passRecords": 1941,
+      "skipRecords": 41,
+      "failRecords": 0,
+      "seconds": 54.432
+    },
+    "vet": "PASS ./services",
+    "build": "PASS ./...",
+    "linuxRace": {
+      "source": "cc9760ea",
+      "go": "1.26.11 Linux CGO1",
+      "command": "go test -mod=readonly -race ./services -run ^TestFriendship -count=20 -timeout=15m -json",
+      "passRecords": 960,
+      "skipRecords": 0,
+      "failRecords": 0,
+      "seconds": 4.256,
+      "same48TestRecordsEachRepeat": true
+    },
+    "targetedStatementCoverage": {
+      "SendRequest": 91.9,
+      "checkRequestPolicy": 100,
+      "limit": "Go function statement coverage from TestFriendship selection; not branch or whole-package acceptance"
+    }
+  },
+  "pending": [
+    "Whole RF26 remaining static debt and combined RF01–RF30 acceptance"
+  ],
+  "evidence": {
+    "before": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-friendship-policy-before.jsonl",
+      "sha256": "9a7fde023552801358a2e9952db887225b795ffd10b0e683388ab3b955ec0c04"
+    },
+    "after": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-friendship-policy-after.jsonl",
+      "sha256": "7af0855a88a2db5839f971302dcce1366f21f7e4dba34965ca4f421e1405f437"
+    },
+    "full": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-friendship-policy-full.jsonl",
+      "sha256": "db92d9854e27941ba1473c410ad847091ced9a298e020e0b673b6b4b53280141"
+    },
+    "linuxRace": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-refactor-go-linux-cache\\friendship-policy-race.jsonl",
+      "sha256": "4d0f8582d44db1ff890d36fe824a79e537c5795447b58885a2af0858b38a6b2e"
+    }
+  },
+  "selfScan": {
+    "source": "cc9760ea",
+    "result": "PASS",
+    "reviewedExactSourceRecords": 51,
+    "reviewLines": 481,
+    "blockingPatternHits": 0,
+    "newReview": "Raw err.Error() used only to assert the existing wrapped error prefix for two synthetic test errors; no runtime logging change or user data",
+    "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-friendship-cc9760ea-scan.log",
+    "sha256": "6141dfb633dad20f652ba8b9577a061f1de7175a91b4f3a8d2a595b146ac8897"
+  },
+  "sonar": {
+    "issue": "AaHYWqnZd7dyvm3wYSod",
+    "status": "CLOSED",
+    "resolution": "FIXED",
+    "analyzedChangedRegion": {
+      "from": 90,
+      "to": 240,
+      "lines": 151,
+      "sourceMismatches": 0
+    },
+    "limit": "Changed request/policy region matched; not a claim of full-file API source capture"
+  },
+  "ci": {
+    "head": "a4525d6e",
+    "checks": "36/36 SUCCESS",
+    "serverRun": 43777960656,
+    "receipt": "refactor-a452-terminal-ci-2026-11-16.json"
+  }
+}

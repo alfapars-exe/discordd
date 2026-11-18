@@ -32,6 +32,16 @@ describe("MFASettings", () => {
     expect(screen.queryByText("PRIVATE-KEY")).not.toBeInTheDocument();
     expect(document.getElementById("mfa-password")).toHaveValue("");
   });
+  it("keeps refreshed MFA status when an older request finishes last", async () => {
+    let finish!: (value: unknown) => void;
+    mocks.status.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    mocks.status.mockResolvedValueOnce({ success: true, data: { enabled: true, recovery_remaining: 9 } });
+    render(<MFASettings userID="a" />);
+    fireEvent.click(button("mfa.refresh"));
+    await screen.findByText("mfa.enabled");
+    await act(async () => finish({ success: true, data: { enabled: false, recovery_remaining: 0 } }));
+    expect(screen.getByRole("status")).toHaveTextContent("mfa.enabled");
+  });
   it("cancels the pending setup on the server, not just in the UI", async () => {
     render(<MFASettings userID="a" />); await screen.findByText("mfa.disabled");
     fill("mfa-password", "current"); fireEvent.click(button("mfa.begin")); await screen.findByText("PRIVATE-KEY");

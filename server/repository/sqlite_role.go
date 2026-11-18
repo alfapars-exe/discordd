@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -136,21 +137,17 @@ func (r *sqliteRoleRepo) GetRolesForUsers(ctx context.Context, serverID string, 
 		return map[string][]models.Role{}, nil
 	}
 
-	placeholders := strings.Repeat("?,", len(userIDs))
-	placeholders = placeholders[:len(placeholders)-1]
+	filter, args, err := roleAudienceFilter(serverID, userIDs)
+	if err != nil {
+		return nil, err
+	}
 
 	query := fmt.Sprintf(`
 		SELECT ur.user_id, r.id, r.server_id, r.name, r.color, r.position, r.permissions, r.is_default, r.is_owner, r.mentionable, r.created_at
 		FROM roles r
 		INNER JOIN user_roles ur ON r.id = ur.role_id
 		WHERE ur.server_id = ? AND ur.user_id IN (%s)
-		ORDER BY r.position DESC`, placeholders)
-
-	args := make([]any, 0, len(userIDs)+1)
-	args = append(args, serverID)
-	for _, id := range userIDs {
-		args = append(args, id)
-	}
+		ORDER BY r.position DESC`, filter)
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -174,6 +171,29 @@ func (r *sqliteRoleRepo) GetRolesForUsers(ctx context.Context, serverID string, 
 		return nil, fmt.Errorf("error iterating roles for users rows: %w", err)
 	}
 	return out, nil
+}
+
+func roleAudienceFilter(serverID string, userIDs []string) (string, []any, error) {
+	// Reserve one of SQLite's legacy 999 bind slots for the server ID.
+	if len(userIDs) < 999 {
+		args := make([]any, 1, len(userIDs)+1)
+		args[0] = serverID
+		for _, id := range userIDs {
+			args = append(args, id)
+		}
+		return strings.TrimSuffix(strings.Repeat("?,", len(userIDs)), ","), args, nil
+	}
+	// Both engines expose object keys through json_each. A single statement
+	// reads all assignments from the same snapshot, including in a transaction.
+	ids := make(map[string]int, len(userIDs))
+	for _, id := range userIDs {
+		ids[id] = 1
+	}
+	payload, err := json.Marshal(ids)
+	if err != nil {
+		return "", nil, fmt.Errorf("encode role audience: %w", err)
+	}
+	return "SELECT key FROM json_each(?)", []any{serverID, string(payload)}, nil
 }
 
 func (r *sqliteRoleRepo) GetMaxPosition(ctx context.Context, serverID string) (int, error) {

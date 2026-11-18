@@ -49,12 +49,12 @@ SUPPRESSION_LINT = [
 ]
 
 PATHS = {
-    "js": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"],
+    "js": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"],
     "go": ["**/*.go"],
     "ci": ["**/*.yml", "**/*.yaml"],
     "sh": ["**/*.sh"],
     # katlanmış çok dilli kurallar (FOLD sonucu)
-    "any": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.go", "**/*.sh"],
+    "any": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs", "**/*.go", "**/*.sh"],
 }
 # build/ dışlanmaz: electron-builder hook'ları (build/after-pack.js) birinci
 # taraf koddur; CI self-scan da build/'i tarar (EXC listesinden çıkarıldı).
@@ -170,6 +170,7 @@ KLASS = {"blok": "BLOK", "blok_go": "BLOK", "incele": "İNCELEME", "incele_go": 
 # mapping explicit so malformed IDs or accidental label/rule drift fails the
 # generator rather than silently removing an editor-time protection.
 REVIEWED_RULES = {
+    "js.fixture-cookie-proxy": ("Set-Cookie ham header", "js"),
     "js.innerhtml-assignment": ("innerHTML/outerHTML ataması", "js"),
     "js.webstorage-sensitive-key": ("Web storage'da hassas veri", "js"),
     "go.sql-sprintf": ("SQL Sprintf ile kuruluyor", "go"),

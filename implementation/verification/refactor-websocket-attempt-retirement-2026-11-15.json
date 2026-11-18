@@ -1,0 +1,103 @@
+{
+  "source_commit": "d10f0faed6ce2ce1179c9f5147dc9cc3991fef90",
+  "client_git_tree": "ef1abf4a246a3701039e98587a1d09cbb34614d2",
+  "source_sha256": {
+    "client/src/hooks/useWebSocket.ts": "641056ae813f57c1b7c583799ede6a120b0bbdf4792efb0381d0b1573024de4b",
+    "client/src/hooks/useWebSocket.offline.test.ts": "fbf46bc590229a435d81c99c94e7e11c0d4a5614192ad213d047e61b2981ddda"
+  },
+  "red_proof": {
+    "log": "hichat-ws-attempt-retirement-red.log",
+    "result": "3failed17passed",
+    "failures": [
+      "offline retired frames and close callback still active",
+      "stalled token response opens socket while offline",
+      "overlapping same-account reconnect superseded token closes current socket and creates third socket"
+    ]
+  },
+  "behavior": [
+    "Each connection attempt receives a fresh monotonic identity before token/ticket awaits",
+    "Retired socket and timers disposed at attempt start; offline invalidates pending attempt before closing",
+    "Explicit offline state pauses resume/account-triggered attempts until online",
+    "Stale timer callbacks return without clearing timers belonging to replacement socket",
+    "Wire events,payloads,public hook actions and backoff constants unchanged"
+  ],
+  "checks": {
+    "targeted": "23passed",
+    "full_coverage": "485files;5032passed;1skipped;113.77s",
+    "coverage": {
+      "lines": {
+        "total": 38046,
+        "covered": 25951,
+        "skipped": 0,
+        "pct": 68.2
+      },
+      "statements": {
+        "total": 52010,
+        "covered": 34933,
+        "skipped": 0,
+        "pct": 67.16
+      },
+      "functions": {
+        "total": 12148,
+        "covered": 7464,
+        "skipped": 0,
+        "pct": 61.44
+      },
+      "branches": {
+        "total": 39621,
+        "covered": 25537,
+        "skipped": 0,
+        "pct": 64.45
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "changed_module_coverage": {
+      "C:\\Users\\PARS\\Desktop\\PROJELER\\HiChat\\refactor-integration\\client\\src\\hooks\\useWebSocket.ts": {
+        "lines": {
+          "total": 269,
+          "covered": 201,
+          "skipped": 0,
+          "pct": 74.72
+        },
+        "functions": {
+          "total": 45,
+          "covered": 27,
+          "skipped": 0,
+          "pct": 60
+        },
+        "statements": {
+          "total": 311,
+          "covered": 211,
+          "skipped": 0,
+          "pct": 67.84
+        },
+        "branches": {
+          "total": 186,
+          "covered": 99,
+          "skipped": 0,
+          "pct": 53.22
+        }
+      }
+    },
+    "general_lint": "0errors;2existing TanStack warnings",
+    "changed_files_lint": "pass",
+    "production_build": "npm run build executes actual tsc -b then Vite;PASS3.30s;existing chunk warning"
+  },
+  "logs": {
+    "full_coverage": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-ws-attempt-retirement-full-coverage.log",
+    "targeted": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-ws-attempt-retirement-final.log",
+    "build": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-ws-attempt-retirement-build.log",
+    "lint": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-ws-attempt-retirement-full-lint.log"
+  },
+  "limits": [
+    "Hook regression uses fake WebSocket/network collaborators; not a real browser or native socket soak",
+    "RF14 long-session/negotiation/physical media and full-project acceptance remain open",
+    "Token-refresh retry sleep ownership remains an RF14 follow-up",
+    "New delivery must run independent remote CI; c853ee50 green belongs to earlier source"
+  ]
+}

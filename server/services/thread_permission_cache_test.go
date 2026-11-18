@@ -52,6 +52,7 @@ func TestParentOverrideInvalidatesWarmThreadReaders(t *testing.T) {
 		DeleteFn: func(_ context.Context, id, _ string) error { delete(overrides, id); return nil },
 	}
 	svc := NewChannelPermissionService(permRepo, roles, channels, &testutil.MockBroadcaster{})
+	t.Cleanup(svc.(*cachingPermResolver).permCache.Close)
 	assertSingle := func(user, channel string, want bool) {
 		t.Helper()
 		perms, err := svc.ResolveChannelPermissions(ctx, user, channel)

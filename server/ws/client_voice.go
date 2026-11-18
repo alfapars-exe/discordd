@@ -3,8 +3,6 @@ package ws
 
 import (
 	"encoding/json"
-
-	"github.com/argeinfina/hichat/pkg/logx"
 )
 
 // ─── Voice Event Handlers ───
@@ -34,7 +32,7 @@ func (c *Client) handleVoiceJoin(event Event) {
 
 	if c.hub.onVoiceJoin != nil {
 		info := c.hub.getUserInfo(c.userID)
-		logx.Go("ws.voice_join", func() {
+		c.dispatchOwnedCallback("ws.voice_join", func() {
 			c.hub.onVoiceJoin(c.userID, info.Username, info.DisplayName, info.AvatarURL, data.ChannelID, data.IsMuted, data.IsDeafened)
 		})
 	}
@@ -42,13 +40,13 @@ func (c *Client) handleVoiceJoin(event Event) {
 
 func (c *Client) handleVoiceLeave() {
 	if c.hub.onVoiceLeave != nil {
-		logx.Go("ws.voice_leave", func() { c.hub.onVoiceLeave(c.userID) })
+		c.dispatchOwnedCallback("ws.voice_leave", func() { c.hub.onVoiceLeave(c.userID) })
 	}
 }
 
 func (c *Client) handleVoiceActivity() {
 	if c.hub.onVoiceActivity != nil {
-		logx.Go("ws.voice_activity", func() { c.hub.onVoiceActivity(c.userID) })
+		c.dispatchOwnedCallback("ws.voice_activity", func() { c.hub.onVoiceActivity(c.userID) })
 	}
 }
 
@@ -64,7 +62,7 @@ func (c *Client) handleVoiceStateUpdate(event Event) {
 	}
 
 	if c.hub.onVoiceStateUpdate != nil {
-		logx.Go("ws.voice_state_update", func() { c.hub.onVoiceStateUpdate(c.userID, data.IsMuted, data.IsDeafened, data.IsStreaming) })
+		c.dispatchOwnedCallback("ws.voice_state_update", func() { c.hub.onVoiceStateUpdate(c.userID, data.IsMuted, data.IsDeafened, data.IsStreaming) })
 	}
 }
 
@@ -87,13 +85,11 @@ func (c *Client) handleVoiceAdminStateUpdate(event Event) {
 	// Defense-in-depth: reject at the WS layer if the actor isn't allowed
 	// to moderate the target. The service callback enforces this too, but
 	// failing closed here means a forgotten check in the service can't
-	// degrade into a moderation bypass. The gate runs INSIDE the goroutine:
-	// handlers dispatch synchronously on this client's read pump, and the
-	// authorizer's DB-backed resolve (up to 5 s on a wedged DB) must not
-	// stall inbound processing — the check is equally effective here, still
-	// ahead of the service call in the same goroutine.
+	// degrade into a moderation bypass. Resolve authorization in the owned
+	// callback before invoking the service. The bounded dispatcher can apply
+	// backpressure at admission instead of creating unlimited goroutines.
 	if c.hub.onVoiceAdminStateUpdate != nil {
-		logx.Go("ws.voice_admin_state_update", func() {
+		c.dispatchOwnedCallback("ws.voice_admin_state_update", func() {
 			if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "mute") {
 				dispatchLogger.Warn("voice_admin_state_update denied: insufficient perms",
 					"actor_id", c.userID, "target_id", data.TargetUserID)
@@ -120,9 +116,9 @@ func (c *Client) handleVoiceMoveUser(event Event) {
 		return
 	}
 
-	// Gate inside the goroutine — see handleVoiceAdminStateUpdate for why.
+	// Authorize in the owned callback before invoking the service.
 	if c.hub.onVoiceMoveUser != nil {
-		logx.Go("ws.voice_move_user", func() {
+		c.dispatchOwnedCallback("ws.voice_move_user", func() {
 			if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "move") {
 				dispatchLogger.Warn("voice_move_user denied: insufficient perms",
 					"actor_id", c.userID, "target_id", data.TargetUserID)
@@ -149,9 +145,9 @@ func (c *Client) handleVoiceDisconnectUser(event Event) {
 		return
 	}
 
-	// Gate inside the goroutine — see handleVoiceAdminStateUpdate for why.
+	// Authorize in the owned callback before invoking the service.
 	if c.hub.onVoiceDisconnectUser != nil {
-		logx.Go("ws.voice_disconnect_user", func() {
+		c.dispatchOwnedCallback("ws.voice_disconnect_user", func() {
 			if !c.hub.authorizeVoiceModeration(c.userID, data.TargetUserID, "disconnect") {
 				dispatchLogger.Warn("voice_disconnect_user denied: insufficient perms",
 					"actor_id", c.userID, "target_id", data.TargetUserID)
@@ -179,6 +175,6 @@ func (c *Client) handleScreenShareWatch(event Event) {
 	}
 
 	if c.hub.onScreenShareWatch != nil {
-		logx.Go("ws.screen_share_watch", func() { c.hub.onScreenShareWatch(c.userID, data.StreamerUserID, data.Watching) })
+		c.dispatchOwnedCallback("ws.screen_share_watch", func() { c.hub.onScreenShareWatch(c.userID, data.StreamerUserID, data.Watching) })
 	}
 }

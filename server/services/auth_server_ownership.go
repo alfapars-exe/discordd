@@ -16,8 +16,9 @@ func WithServerOwnership(repo repository.ServerOwnershipRepository) AuthOption {
 	return func(s *authService) { s.serverOwnership = repo }
 }
 
-func (s *authService) SetOwnershipInvalidator(inv PermissionInvalidator) {
-	s.ownershipInvalidator = inv
+// WithAuthOwnershipInvalidator binds both permission caches before requests.
+func WithAuthOwnershipInvalidator(inv PermissionInvalidator) AuthOption {
+	return func(s *authService) { s.ownershipInvalidator = inv }
 }
 
 // TransferServerOwnership requires fresh credential proof. HTTP callers must

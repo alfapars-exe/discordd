@@ -1,0 +1,49 @@
+{
+  "scope": "Controlled backpressure isolation over two real localhost upgraded WebSockets. Production Hub.Run/ReadPump/WritePump and256-slot queue; injected blocked network Write on one peer only.",
+  "assertions": [
+    "Slow write explicitly reached before queue-filling broadcasts",
+    "Healthy peer receives259 exact message_create frames in sequence",
+    "Overflow removes only slow peer via real Hub.Run; test never manually removes it before assertions",
+    "Both slow pumps join within1s, before unchanged10s server write deadline",
+    "Healthy peer remains the sole registered client"
+  ],
+  "linuxRace": {
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "testElapsedSeconds": [
+      0.04,
+      0.03,
+      0.03
+    ],
+    "sha256": "c6b55b0dae2bf593ab5bbaa1b51c8d41a802d564be2d1d0e40e7103414099a65"
+  },
+  "windows": {
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "testElapsedSeconds": [
+      0.07
+    ],
+    "sha256": "326176ed222ae6ec32330ed2a9bba012997447f96ceeceb6da8c813966fa5b3c"
+  },
+  "toolchains": [
+    "Go1.26.11 Linux amd64 CGO1 race",
+    "Go1.27.4 Windows amd64 CGO0"
+  ],
+  "vet": "PASS: go vet -mod=readonly -p=2 ./ws",
+  "negativeControl": {
+    "source": "Separate G: snapshot of f04e3cfe, actual product worktree unchanged",
+    "mutation": "Only remove h.queueUnregister(client) in deliver default branch",
+    "sameTestSource": true,
+    "result": "Expected FAIL: backpressured socket retained a read/write pump",
+    "logSha256": "a52ba70567d045b6275fb355d0a7f2b39ed77e7debaf8273a07e2fb026f984e9"
+  },
+  "testSourceSha256": "63bae1d657444bdbae05e0309f42dd29cdb8864394a637cf0585e983864e108a",
+  "limitations": [
+    "Injected stalled Write; not natural TCP receive-window saturation",
+    "Manual fixture registration; not authenticated Go/PG permission/audience delivery",
+    "Does not close real slow-consumer, capacity, pool-budget, long-soak or physical acceptance",
+    "No product runtime behavior or server timing constants changed"
+  ]
+}

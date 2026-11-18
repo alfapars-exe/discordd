@@ -32,6 +32,12 @@ function assertNoSecretSubstring(haystack: string, secret: string): void {
 }
 
 describe("redactSecrets", () => {
+  it("masks escaped JSON credential values and bearer tokens in free text", () => {
+    const json = JSON.stringify({ password: 'prefix"private-tail', detail: "visible" });
+    expect(redactSecrets(json)).toBe(JSON.stringify({ password: "***", detail: "visible" }));
+    expect(redactSecrets("Bearer\tprivate-token")).toBe("Bearer ***");
+  });
+
   it("redacts a simple ASCII key=value pair", () => {
     expect(redactSecrets("token=SECRET&next=/x")).toBe("token=***&next=/x");
   });
@@ -88,6 +94,30 @@ describe("redactSecrets", () => {
   it("passes clean strings through unchanged", () => {
     const clean = "UNIQUE constraint failed: users.username";
     expect(redactSecrets(clean)).toBe(clean);
+  });
+});
+
+describe("structured Sentry credentials", () => {
+  it("redacts deeply nested credentials even when metadata refers to itself", () => {
+    const leaf = { token: "nested-secret", state: "ready" };
+    let nested: unknown = leaf;
+    for (let i = 0; i < 50; i++) nested = [nested];
+    const extra: Record<string, unknown> = { nested };
+    extra.self = extra;
+    scrubErrorEvent({ type: undefined, extra });
+    expect(leaf).toEqual({ token: "***", state: "ready" });
+  });
+
+  it("scrubs credentials in extra fields, tags and contexts before sending an error", () => {
+    const event = scrubErrorEvent({
+      type: undefined,
+      extra: { authorization: "private-auth", nested: [{ refresh_token: "private-refresh" }] },
+      tags: { stage: "testing", apiKey: "private-key" },
+      contexts: { custom: { "client-secret": "private-secret", ok: true } },
+    });
+    expect(JSON.stringify(event)).not.toContain("private-");
+    expect(event.tags?.stage).toBe("testing");
+    expect(event.contexts?.custom?.ok).toBe(true);
   });
 });
 

@@ -1,0 +1,40 @@
+{
+  "scope": "Repository-owned Windows launcher for the unchanged bounded 20 healthy plus one non-reading peer profile. Real end-to-end execution of this new launcher is still pending.",
+  "contracts": {
+    "allLoadtestTestsPassed": 100,
+    "newFixtureTestsPassed": 13,
+    "failed": 0,
+    "skipped": 0,
+    "logSha256": "bce9456dc478fc311fa6eebb6d1f93eb03d53e1421101e82a53fc8337297b931"
+  },
+  "negativeControl": {
+    "mutation": "Kill children without awaiting close, in isolated copy only",
+    "sameTestSource": true,
+    "expectedFailure": "children.every(child => child.stdout.closed && child.stderr.closed)",
+    "logSha256": "e3160206f4b24ec2d1b0371b7e7831892da3096b7c9d095fb5e6fe877ae5c43c"
+  },
+  "syntax": {
+    "nodeCheck": "PASS",
+    "powershellParserErrors": 0
+  },
+  "boundaries": [
+    "Loopback control DSN, verify-full client certificates, exact owned container ID and unique owner label required before seeding",
+    "Archive committed source; reject filesystem links or changed inputs",
+    "Join every registered child even if another child fails; preserve workload, cleanup and report failures",
+    "Log I/O errors enter cleanup; credential-file cleanup is explicit and scoped, with no recursive host deletion",
+    "Docker build context excludes archived source and private credentials"
+  ],
+  "sources": {
+    "loadtest/local-fanout-runner.mjs": "2ab8304dc6f4eaaf9a990ef0acf718c142bce6aea76b7ead59b706908f1f2a18",
+    "loadtest/local-profile-fixture.mjs": "ae3fb189c3076e80b3fc4ca5dd41177109ab7f695433c8114dc06edda4c0dcac",
+    "loadtest/local-profile-fixture.test.mjs": "0c8ec13a6e97e324e1d492598e1231e45e393647261274b9d1d2b805facfb2b4",
+    "loadtest/run-local-fanout.ps1": "cb7298b8a4f59d9e5d46c27a31d1dbb82ccf4e3832391c1eeec14c19bcab1fc1",
+    "loadtest/LOCAL_PROFILE.md": "0d4926d528a65abe370e52f842640b41270d98ede94eaeef1b20b014c97301c1"
+  },
+  "limits": [
+    "Windows-native collector only",
+    "Historical independent Python audit/telemetry observer are separate; new launcher does not silently claim their evidence",
+    "No new real PostgreSQL profile acceptance yet",
+    "Capacity, variance, churn, long-soak, native, physical/media and general RF gates remain open"
+  ]
+}

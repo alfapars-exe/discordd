@@ -1,0 +1,35 @@
+{
+  "source": "5d2d1aea",
+  "same_database_restart_cycles": [
+    {
+      "cycle": 1,
+      "healthy": true,
+      "contender_rejected": true,
+      "exit_code": 0,
+      "shutdown_seconds": 0.187,
+      "graceful_log": true
+    },
+    {
+      "cycle": 2,
+      "healthy": true,
+      "contender_rejected": true,
+      "exit_code": 0,
+      "shutdown_seconds": 0.156,
+      "graceful_log": true
+    },
+    {
+      "cycle": 3,
+      "healthy": true,
+      "contender_rejected": true,
+      "exit_code": 0,
+      "shutdown_seconds": 0.156,
+      "graceful_log": true
+    }
+  ],
+  "scope": "Linux real processes, verified-mTLS isolated PostgreSQL, idle shutdown; no active media",
+  "fixture_cleanup": "Unique database dropped and owned container removed; orchestration exited 0.",
+  "limitations": [
+    "Idle Linux processes only. No active media, in-flight workload drain or Windows platform acceptance.",
+    "Contender refusal and healthy successor prove database-owner exclusion and release for these three real-process cycles."
+  ]
+}

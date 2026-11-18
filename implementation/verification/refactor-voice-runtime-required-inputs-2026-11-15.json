@@ -1,0 +1,38 @@
+{
+  "scope": "RF11 voice runtime provider validation",
+  "integrations": [
+    "Repositories",
+    "Hub",
+    "Permissions",
+    "Audit",
+    "Logger",
+    "Config"
+  ],
+  "repositories": [
+    "Channel",
+    "LiveKit",
+    "Server",
+    "MemberTimeout",
+    "Ban",
+    "Entrance",
+    "Role",
+    "User",
+    "MusicSession"
+  ],
+  "optional_voice_access": "SQLite deliberately provides nil VoiceAccess to select portable admission/visibility. Preserve nil; reject typed-nil interface.",
+  "regression": "Corrected 29 invalid scenarios replayed against HEAD old helper and failed as expected; final fixed matrix passes. Initial draft wrongly required VoiceAccess and interrupted on nil-interface reflection; not acceptance evidence.",
+  "configuration": "Early config failure now expects explicit voice runtime requires Config instead of runtime nil dereference; worker cleanup assertion retained.",
+  "checks": {
+    "root": "PASS voice matrix, ServiceInitialization/cache/routes/callback/real permission/auth-cache and friendship-DM, 5.319s",
+    "matrix_recheck": "PASS 2.209s after old-source replay restored implementation",
+    "valid": "Three runtime owners retained and cleaned up",
+    "invalid": "Upload directory remains absent; cache-worker count unchanged",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_manifest": "PASS 50 exact records"
+  },
+  "limits": [
+    "Cache count does not prove every possible non-cache worker failure; full fanout/resource matrix remains open.",
+    "Physical media, combined race/current-source CI and RF01-RF30 completion remain open."
+  ]
+}

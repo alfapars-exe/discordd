@@ -1,0 +1,76 @@
+{
+  "refactor_source": "fd07cfe5",
+  "scope": "RF08/RF11 partial limiter construction ownership",
+  "configuration_preservation": "All 18 field/constructor/argument mappings compared with source 047a9837 and matched.",
+  "before": {
+    "failure_positions": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+    ],
+    "retained_workers_by_failure_position": {
+      "2": 1,
+      "3": 2,
+      "4": 3,
+      "5": 4,
+      "6": 5,
+      "7": 6,
+      "8": 7,
+      "9": 8,
+      "10": 9,
+      "11": 10,
+      "12": 11,
+      "13": 12,
+      "14": 13,
+      "15": 14,
+      "16": 15,
+      "17": 16,
+      "18": 17
+    },
+    "constructor_failure_position_1": "No prior allocation; passes.",
+    "successful_transfer": "Passes with 18 live workers."
+  },
+  "fix": "Track each allocation in its bundle immediately. Defer bundle Stop until successful return. Assemble limiters only after the service bundle is complete so no subsequent service constructor can fail after limiter handoff.",
+  "after": {
+    "targeted_tests_count_5": "PASS main, ratelimit, handlers",
+    "targeted_race_count_5": "PASS main 3.500s, ratelimit 1.041s, handlers 3.496s",
+    "full_go_vet_and_build": "PASS",
+    "golangci_lint": "0 issues",
+    "panic_identity": "Preserved at all 18 constructor failure positions",
+    "successful_transfer": "18 live workers, caller cleanup returns to baseline",
+    "integrated_targeted_tests_count_5": "PASS main 1.100s, handlers 0.576s, ratelimit 0.461s",
+    "integrated_targeted_race_count_5": "PASS main 3.621s, handlers 3.572s, ratelimit 1.048s",
+    "integrated_full_go_vet_and_build": "PASS",
+    "new_initRateLimiters_statement_coverage_percent": 100,
+    "isolated_main_package_statement_coverage_percent": 1.9,
+    "integrated_full_main_race": {
+      "status": "PASS",
+      "exit_code": 0,
+      "seconds": 202.971,
+      "source": "12548e22",
+      "command": "go test -race . -count=1 -timeout=5m",
+      "log": "%TEMP%/hichat-integrated-startup-main-race-12548e22.log"
+    }
+  },
+  "limitations": [
+    "Failure injection throws before each constructor; catastrophic allocation failure inside Go runtime is not modeled.",
+    "Combined service rollback depends on PR294; canonical PR293 does not independently fix permission-cache rollback.",
+    "No full live-process shutdown, packaged platform or final-source whole-project acceptance is claimed."
+  ],
+  "canonical_source": "3d39a3a3",
+  "integrated_source": "12548e22"
+}

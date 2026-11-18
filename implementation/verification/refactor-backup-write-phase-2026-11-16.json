@@ -1,0 +1,27 @@
+{
+  "baselineCommit": "8072cd04",
+  "scope": "Separate ten lazy synchronous crypto restore write sites; retain caller-owned awaitScoped boundaries, deletion-intent preservation before writes, cache merge afterwards and best-effort rollback.",
+  "validation": {
+    "beforeAndAfter": "72 tests in four crypto backup files PASS",
+    "typescript": "PASS",
+    "targetedEslint": "PASS",
+    "viteBuild": "PASS with existing chunk-size warning",
+    "structuralParity": {
+      "fullSourceParity": true,
+      "method": "Canonical TypeScript statements after reconstructing each yielded callback as the original awaitScoped write",
+      "writeSites": 10,
+      "writePhaseParity": true
+    }
+  },
+  "remaining": [
+    "Final-source scan/CI/Sonar",
+    "Historical backup corpus",
+    "Cross-store crash/atomicity and complete RF16 acceptance"
+  ],
+  "sourceScan": {
+    "sourceCommit": "b4ac50b5",
+    "exactReviewedRecords": 51,
+    "reviewLines": 482,
+    "blockingPatterns": 0
+  }
+}

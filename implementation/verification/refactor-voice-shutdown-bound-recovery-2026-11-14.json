@@ -1,0 +1,33 @@
+{
+  "date": "2026-11-14",
+  "scope": "Active shutdown media worker bound and durable application-failure recovery",
+  "checks": {
+    "two_tests_host_count": 3,
+    "host_exit": 0,
+    "host_seconds": 3.473,
+    "verified_mtls_linux_race_count": 3,
+    "race_exit": 0,
+    "race_seconds": 6.33,
+    "services_vet_exit": 0,
+    "services_lint_issues": 0,
+    "runner_tests": 14,
+    "runner_exit": 0
+  },
+  "worker_bound_negative_control": {
+    "mechanism": "Go overlay replaces min(4,len(channels)) with len(channels)",
+    "exit": 1,
+    "failure": "fifth media worker started before release"
+  },
+  "recovery_evidence": [
+    "Aggregate trigger rejects application after successful durable enqueue",
+    "Final ledger remains pending after shutdown",
+    "Fresh repository and owned recovery worker apply pending credit",
+    "No second pending application and monthly sum equals saved seconds"
+  ],
+  "limitations": [
+    "Does not cover failure before initial enqueue or database unavailable at handoff.",
+    "Recovery is fresh service/repository worker, not separate OS process crash.",
+    "Actual LiveKit/device, active process-signal and full-project acceptance remain open.",
+    "Local integration only."
+  ]
+}

@@ -1,4 +1,4 @@
-import { cleanup, renderHook } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type SyncState = { syncStatus: string; hasPendingChanges: boolean };
@@ -25,6 +25,9 @@ vi.mock("../stores/preferencesStore", () => ({
 }));
 vi.mock("../stores/toastStore", () => ({ useToastStore: { getState: () => ({ addToast: mocks.toast }) } }));
 import { usePreferencesSync } from "./usePreferencesSync";
+import { logToServer } from "../api/clientLog";
+import { retirePreferenceScope } from "../stores/preferenceScope";
+vi.mock("../api/clientLog",()=>({logToServer:vi.fn()}));
 
 function setStatus(syncStatus: string) {
   const previous = mocks.state;
@@ -136,4 +139,15 @@ describe("preference synchronization lifecycle", () => {
     expect(mocks.retry).toHaveBeenCalledTimes(1);
     expect(mocks.fetch).toHaveBeenCalledTimes(1);
   });
+  it.each((["focus","online"] as const).flatMap(source=>[false,true].map(retired=>({source,retired}))))("observes $source task failure (retired=$retired)",async({source,retired})=>{
+    let reject!:(error:Error)=>void;
+    const method=source==="focus"?mocks.fetch:mocks.retry;
+    method.mockReturnValueOnce(new Promise((_resolve,fail)=>{reject=fail;}));
+    renderHook(()=>usePreferencesSync());
+    window.dispatchEvent(new Event(source));
+    if(retired)retirePreferenceScope();
+    await act(async()=>{reject(new Error("private preference error"));await Promise.resolve();});
+    expect(vi.mocked(logToServer).mock.calls).toEqual(retired?[]:[["error","preferences_background_failed",{source}]]);
+  });
+
 });

@@ -1,0 +1,18 @@
+{
+  "source": "bd1ca40a255cd880147c4c7aa35629b5f9704a1d",
+  "scope": "Clean git archive, tracked files only",
+  "scan_exit": 0,
+  "blocking_matches": 0,
+  "review_rows": 435,
+  "manifest_records": 50,
+  "validator_tests": 6,
+  "changed_records": [
+    "server/database/postgres_import_test.go",
+    "server/database/postgres_thread_migration_test.go",
+    "server/database/migration_049_channel_delivery_test.go"
+  ],
+  "review": "Each exact cleanup line uses a fixed test-only prefix and local Unix nanoseconds; loopback guard retained. No rule, path exclusion or matching tolerance was relaxed.",
+  "review_report_sha256": "2e12915370c2ba32cd8a87cee2729fa10d8b28eff9d04bb2d190d38368441714",
+  "report": "G:\\hichat-verification-overflow-20261114\\self-scan-postgres-review-fix\\clean-review.txt",
+  "limits": "Review rows remain review rows; this is not an exhaustive vulnerability assessment."
+}

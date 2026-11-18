@@ -54,40 +54,57 @@ export function createTypingHandler(
     }
   ) => void
 ) {
-  const timers = new Map<string, ReturnType<typeof setTimeout>>();
+  type PendingTyping = { channelId: string; timer?: ReturnType<typeof setTimeout> };
+  const timers = new Map<string, PendingTyping>();
 
-  return (channelId: string, username: string) => {
-    set((state) => {
-      const current = state.typingUsers[channelId] ?? [];
-      if (current.includes(username)) return state as { typingUsers: Record<string, string[]> };
-
-      return {
-        typingUsers: {
-          ...state.typingUsers,
-          [channelId]: [...current, username],
-        },
-      };
-    });
-
-    const key = `${channelId}:${username}`;
-    const existingTimer = timers.get(key);
-    if (existingTimer) clearTimeout(existingTimer);
-
-    timers.set(
-      key,
-      setTimeout(() => {
-        set((state) => ({
-          typingUsers: {
-            ...state.typingUsers,
-            [channelId]: (state.typingUsers[channelId] ?? []).filter(
-              (u) => u !== username
-            ),
-          },
-        }));
-        timers.delete(key);
-      }, TYPING_TIMEOUT)
-    );
+  const clear = (channelId?: string) => {
+    for (const [key, entry] of timers) {
+      if (channelId !== undefined && entry.channelId !== channelId) continue;
+      if (entry.timer !== undefined) clearTimeout(entry.timer);
+      timers.delete(key);
+    }
   };
+
+  const handle = (channelId: string, username: string) => {
+    const key = JSON.stringify([channelId, username]);
+    const previous = timers.get(key);
+    if (previous?.timer !== undefined) clearTimeout(previous.timer);
+    const entry: PendingTyping = { channelId };
+    // Reserve before notifying observers: a reset may retire this work while
+    // set is still publishing. Only its surviving owner may install the timer.
+    timers.set(key, entry);
+    try {
+      set((state) => {
+        const current = state.typingUsers[channelId] ?? [];
+        if (current.includes(username)) return state;
+        return { typingUsers: { ...state.typingUsers, [channelId]: [...current, username] } };
+      });
+    } finally {
+      if (timers.get(key) === entry) {
+        entry.timer = setTimeout(() => {
+          if (timers.get(key) !== entry) return;
+          timers.delete(key);
+          set((state) => ({
+            typingUsers: {
+              ...state.typingUsers,
+              [channelId]: (state.typingUsers[channelId] ?? []).filter(user => user !== username),
+            },
+          }));
+        }, TYPING_TIMEOUT);
+      }
+    }
+  };
+  return Object.assign(handle, { clear });
+}
+
+/** Keep loaded copies and admit only the first occurrence of each new id. */
+export function unseenMessages<T extends { id: string }>(loaded: readonly T[], incoming: readonly T[]): T[] {
+  const seen = new Set(loaded.map(message => message.id));
+  return incoming.filter(message => {
+    if (seen.has(message.id)) return false;
+    seen.add(message.id);
+    return true;
+  });
 }
 
 // ─── Generic WS Message Handlers ───

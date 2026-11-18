@@ -1,0 +1,102 @@
+{
+  "baselineCommit": "cd842e5b",
+  "scope": "Extract synchronous DM channel-list snapshot classification, local unread delta reconciliation and missing self-channel retention from fetchChannels. Account/request/metadata fences and store publication remain in the action.",
+  "validation": {
+    "originalStoreTests": 115,
+    "finalTests": 125,
+    "newPureContracts": 10,
+    "typescript": "PASS",
+    "targetedEslint": "PASS",
+    "structuralParity": {
+      "method": "Canonical TypeScript statement printing after substituting store-local inputs with pure function parameters",
+      "selfAdditionParity": true,
+      "unreadMergeParity": true,
+      "selfRetentionParity": true,
+      "readTiming": "Current unread state is read immediately before pure server-count seeding rather than after it, within the same synchronous no-await/no-publication interval."
+    },
+    "moduleCoverage": {
+      "total": {
+        "lines": {
+          "total": 20,
+          "covered": 20,
+          "skipped": 0,
+          "pct": 100
+        },
+        "statements": {
+          "total": 25,
+          "covered": 25,
+          "skipped": 0,
+          "pct": 100
+        },
+        "functions": {
+          "total": 8,
+          "covered": 8,
+          "skipped": 0,
+          "pct": 100
+        },
+        "branches": {
+          "total": 15,
+          "covered": 15,
+          "skipped": 0,
+          "pct": 100
+        },
+        "branchesTrue": {
+          "total": 0,
+          "covered": 0,
+          "skipped": 0,
+          "pct": "Unknown"
+        }
+      },
+      "C:\\Users\\PARS\\Desktop\\PROJELER\\HiChat\\refactor-integration\\client\\src\\stores\\shared\\dmChannelSnapshot.ts": {
+        "lines": {
+          "total": 20,
+          "covered": 20,
+          "skipped": 0,
+          "pct": 100
+        },
+        "functions": {
+          "total": 8,
+          "covered": 8,
+          "skipped": 0,
+          "pct": 100
+        },
+        "statements": {
+          "total": 25,
+          "covered": 25,
+          "skipped": 0,
+          "pct": 100
+        },
+        "branches": {
+          "total": 15,
+          "covered": 15,
+          "skipped": 0,
+          "pct": 100
+        }
+      }
+    },
+    "coverageScope": "Only src/stores/shared/dmChannelSnapshot.ts included for this diagnostic. Not whole-client coverage. Existing global thresholds were not edited.",
+    "coverageGateChanges": "No changes to client/vitest.config.ts or CI coverage commands between 338e2d71 and 42512f2a."
+  },
+  "timingDetail": "Current unread state is read before pure server-count seeding instead of after it. Both remain in one synchronous continuation, with no await, external call or store write in the seed loop.",
+  "remaining": [
+    "Final integrated CI/Sonar; immutable source4251 scan PASS",
+    "Full-client coverage at final integrated head",
+    "Full reconnect/offline/account/permission runtime and RF07/RF15 acceptance"
+  ],
+  "sourceCommit": "42512f2a",
+  "sourceBlobOids": {
+    "client/src/stores/dmStore.ts": "d26969af3ad5068ca5221ff0d8bd0e81c6f28e54",
+    "client/src/stores/shared/dmChannelSnapshot.ts": "3ec317c339df7ab04af35e36aaadebba9b4cb1f8",
+    "client/src/stores/shared/dmChannelSnapshot.test.ts": "60270364aafe96f080f17d234371639bf11c1ffc"
+  },
+  "sourceScan": {
+    "sourceCommit": "42512f2a",
+    "exactReviewedRecords": 51,
+    "reviewLines": 482,
+    "blockingPatterns": 0,
+    "normalizedDeltaVs60b6": {
+      "added": 0,
+      "removed": 0
+    }
+  }
+}

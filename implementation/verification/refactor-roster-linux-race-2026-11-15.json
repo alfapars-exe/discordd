@@ -1,0 +1,15 @@
+{
+  "source": "3df659dc0df9d2789e64dbd0a3329c7b1c5f341b",
+  "runtime": "Go1.27.4 linux/amd64, CGO_ENABLED=1",
+  "image": "sha256:4fa7c968ba93f1635670522dbb01a2c78150443e1385746924566079f36570ea",
+  "method": "Immutable git archive HEAD server, extracted into unique TEMP directory, readonly Docker mount; 2 CPUs/4GiB; existing QA build/module volumes",
+  "command": "go test -race ./handlers ./services -run \"Test(DMDeviceRoster|GroupDeviceRoster)\" -count=10 -timeout=3m",
+  "result": {
+    "exitCode": 0,
+    "handlersSeconds": 3.419,
+    "servicesSeconds": 3.286
+  },
+  "logSha256": "d2025649cdf522c6de0a7ea005022d07558e0d6a2339d521b0bdd5dbf546fb5a",
+  "cleanup": "Owned --rm hichat-roster-race-3df6 completed and absent",
+  "scope": "DM and group metadata/access/epoch regression tests, ten repetitions. Not full-package race or concurrent transport soak."
+}

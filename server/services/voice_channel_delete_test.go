@@ -71,11 +71,11 @@ func TestDeleteVoiceChannelClearsStateAndRejectsLateJoin(t *testing.T) {
 				return []string{"joining-user"}, nil
 			},
 		},
-		nil, nil, nil, nil,
+		nil, nil, nil, nil, VoiceRuntimeDependencies{},
 	).(*voiceService)
 	t.Cleanup(svc.ShutdownVoiceStateFanout)
 	musicHook := &deletionMusicBotHook{stopped: make(chan string, 1)}
-	svc.SetMusicBotHook(musicHook)
+	testVoiceState(svc).musicBotHook = musicHook
 	// Include an existing occupant, viewer bookkeeping, and a room key so this
 	// verifies the full in-memory cleanup path as well as the late-join fence.
 	svc.states["occupant"] = &models.VoiceState{
@@ -163,7 +163,7 @@ func TestJoinWebhookEvictsStaleTokenForDeletedChannel(t *testing.T) {
 		getter,
 		&testutil.MockChannelPermResolver{},
 		&voiceTestBroadcaster{&testutil.MockBroadcaster{}},
-		nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, VoiceRuntimeDependencies{},
 	).(*voiceService)
 	t.Cleanup(svc.ShutdownVoiceStateFanout)
 
@@ -181,5 +181,55 @@ func TestJoinWebhookEvictsStaleTokenForDeletedChannel(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Fatalf("received %d LiveKit eviction lookups, want voice and screen-share identities", i)
 		}
+	}
+}
+
+type panickingChannelCleanupGetter struct {
+	mockConfigurableLiveKitGetter
+	credits     chan string
+	panicCredit bool
+}
+
+func (g *panickingChannelCleanupGetter) RecordVoiceUsage(_ context.Context, id, _ string, _, _, _ int) error {
+	g.credits <- id
+	if g.panicCredit {
+		panic("credit fixture")
+	}
+	return nil
+}
+
+func TestDeleteVoiceChannelContinuesAfterCleanupPanic(t *testing.T) {
+	for _, stage := range []string{"credit", "eviction", "late-music"} {
+		t.Run(stage, func(t *testing.T) {
+			lookups := make(chan string, 16)
+			getter := &panickingChannelCleanupGetter{credits: make(chan string, 8), panicCredit: stage == "credit"}
+			getter.GetByServerIDFn = func(context.Context, string) (*models.LiveKitInstance, error) {
+				lookups <- "lookup"
+				if stage == "eviction" {
+					panic("eviction fixture")
+				}
+				return nil, errors.New("fixture has no media")
+			}
+			svc, _ := newTestVoiceServiceWithLiveKitGetter(getter, getter.RecordVoiceUsage)
+			s := svc.(*voiceService)
+			for _, id := range []string{"a", "b", "c", "d", "e", "f", "g", "h"} {
+				s.states[id] = &models.VoiceState{UserID: id, ServerID: "server", ChannelID: "channel", UsageSessionID: id, LiveKitInstanceID: "instance", LiveKitIsCloud: true, JoinedAt: time.Now().Add(-time.Minute)}
+			}
+			if stage == "late-music" {
+				s.ShutdownUsageProducers()
+				s.musicBotHook = &mockMusicBotHook{StopAllForChannelFn: func(string) { panic("late music fixture") }}
+			}
+			s.DeleteVoiceChannel(context.Background(), "server", "channel")
+			done := make(chan struct{})
+			go func() { s.ShutdownUsageProducers(); close(done) }()
+			select {
+			case <-done:
+			case <-time.After(time.Second):
+				t.Fatal("panicking cleanup stranded channel deletion queue")
+			}
+			if len(getter.credits) != 8 || len(lookups) != 16 {
+				t.Fatalf("cleanup attempts missing: credits=%d identities=%d", len(getter.credits), len(lookups))
+			}
+		})
 	}
 }

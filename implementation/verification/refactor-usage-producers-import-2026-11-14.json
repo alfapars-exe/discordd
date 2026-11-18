@@ -1,0 +1,161 @@
+{
+  "canonical_source": "14a965eac31a7ae5ab94bb4f7079e9e77a6eb685",
+  "canonical_import_compatibility": "77272d28",
+  "integrated_parent": "e7ca8bef",
+  "integrated_source_hashes": {
+    "server/main.go": "0b9b4b72c9618042652029288c2db1afb5adf29744d9217082f5750b7853bff8",
+    "server/services/voice_service.go": "c51d3c122ba85c3029b15f05c8cacadb3b56fc0e1f6342d3b7a7ce90359b5c38",
+    "server/services/voice_state.go": "6175b07f348bad272e4b3009eb9d9d620475b09d4fdaa5191aa38f81eeda2a6a",
+    "server/services/voice_admin.go": "5de5082308dda60d456aebc17f68b4a65cfc5b0d254beae7b79c3f1603aecfa9",
+    "server/services/voice_channel_delete.go": "28e21dedbd0edfcb405e3081b2cc5fbedd6a11acce3d38b129adff2e3abc627f",
+    "server/services/voice_lifecycle.go": "6141c3c3e0696b8d870c781d69d8e1b9d508e7ce96de4a7c2f3ab70afc9de905",
+    "server/services/voice_usage_operations.go": "00517af62da74e2821e178fa5ed07d94adfbe1b8367abf8a7157183b1c676937",
+    "server/services/voice_usage_operations_test.go": "b195c3225368d123cd1ac9467a65bd04472d9de8654944b69f181c8b5a70e146",
+    "server/services/voice_usage_replay_test.go": "c2cb7a03c0c5831c2cdace02e9dc379f86fe1d71f048376a0136513da8fee1b0",
+    "server/voice_usage_delivery_wiring_test.go": "7c1c35474b8f7f45472ce8936a6819ecf6b0295bd78a3b420b3369720ee4ea06"
+  },
+  "canonical_targeted_race": {
+    "passes": [
+      "TestVoiceUsageDeliveryJoinsAfterHTTPBeforeLogs",
+      "TestVoiceUsageProducersJoinBeforeDeliveryStops",
+      "TestChannelDeleteCleansVoiceOnlyAfterRepositoryDeleteSucceeds",
+      "TestDeleteVoiceChannelClearsStateAndRejectsLateJoin",
+      "TestJoinWebhookEvictsStaleTokenForDeletedChannel",
+      "TestVoiceMaintenanceHasOwnedShutdown",
+      "TestVoiceMaintenanceStopJoinsSweepAndConcurrentOwners",
+      "TestVoiceMaintenanceStopBeforeStart",
+      "TestVoiceMaintenancePublicOwnersJoin",
+      "TestVoiceMaintenanceAFKStopCancelsLookup",
+      "TestVoiceMaintenanceAFKPostgresCancellation",
+      "TestAdminDisconnectUser_CreditsUsage",
+      "TestVoiceUsageDeliveryStopCancelsAndJoins",
+      "TestVoiceUsageDeliveryBatchIsBounded",
+      "TestVoiceUsageIdentitySurvivesRejoinAndReachesRecorder",
+      "TestVoiceUsageHandoffFailureNeverFallsBackToIncrement",
+      "TestVoiceUsageCreditHasBoundedContext",
+      "TestVoiceUsageCreditPostgresDeadline",
+      "TestVoiceUsageCreditPostgresAdditiveWrites",
+      "TestVoiceUsageCreditUsesCapturedSessionEnd",
+      "TestVoiceUsageOperationsDrainChildrenAfterAdmissionCloses",
+      "TestVoiceUsageOperationsConcurrentShutdown",
+      "TestVoiceUsageShutdownWaitsForAcceptedLeaveCredit",
+      "TestVoiceUsageClosedAdmissionStillCleansDeletedChannel",
+      "TestVoiceUsagePostgresReplayTransaction",
+      "TestVoiceUsagePostgresPendingRecovery",
+      "TestVoiceUsagePostgresServiceHandoffSurvivesApplyFailure",
+      "TestPostgresImportPreservesDataAndRejectsReuse",
+      "TestVoiceUsageLegacyBootstrapCreatesImportLedger",
+      "TestPostgresVoiceUsageMigrationPreservesTotals"
+    ],
+    "packages": [
+      {
+        "Time": "2026-11-13T21:02:54.987981664Z",
+        "Action": "pass",
+        "Package": "github.com/argeinfina/hichat",
+        "Elapsed": 3.4779999999999998
+      },
+      {
+        "Time": "2026-11-13T21:03:13.99883027Z",
+        "Action": "pass",
+        "Package": "github.com/argeinfina/hichat/services",
+        "Elapsed": 17.313
+      },
+      {
+        "Time": "2026-11-13T21:03:15.696357277Z",
+        "Action": "pass",
+        "Package": "github.com/argeinfina/hichat/database",
+        "Elapsed": 19.01
+      }
+    ]
+  },
+  "accepted_postgres_credit_race": {
+    "passes": [
+      "TestVoiceUsagePostgresShutdownJoinsAcceptedCredit",
+      "TestVoiceUsagePostgresShutdownJoinsAcceptedCredit",
+      "TestVoiceUsagePostgresShutdownJoinsAcceptedCredit",
+      "TestVoiceUsagePostgresShutdownJoinsAcceptedCredit",
+      "TestVoiceUsagePostgresShutdownJoinsAcceptedCredit"
+    ],
+    "packages": [
+      {
+        "Time": "2026-11-13T21:09:51.290958003Z",
+        "Action": "pass",
+        "Package": "github.com/argeinfina/hichat/services",
+        "Elapsed": 6.322
+      }
+    ]
+  },
+  "integrated_corrected_scope": {
+    "passes": [
+      "TestVoiceUsageOperationsDrainChildrenAfterAdmissionCloses",
+      "TestVoiceUsageOperationsConcurrentShutdown",
+      "TestVoiceUsageShutdownWaitsForAcceptedLeaveCredit",
+      "TestVoiceUsageClosedAdmissionStillCleansDeletedChannel",
+      "TestVoiceUsageProducersJoinBeforeDeliveryStops",
+      "TestVoiceUsagePostgresShutdownJoinsAcceptedCredit",
+      "TestPostgresImportPreservesDataAndRejectsReuse",
+      "TestVoiceUsageLegacyBootstrapCreatesImportLedger"
+    ],
+    "packages": [
+      {
+        "Time": "2026-11-14T00:13:37.832683+03:00",
+        "Action": "pass",
+        "Package": "github.com/argeinfina/hichat",
+        "Elapsed": 0.641
+      },
+      {
+        "Time": "2026-11-14T00:13:38.6321252+03:00",
+        "Action": "pass",
+        "Package": "github.com/argeinfina/hichat/services",
+        "Elapsed": 1.439
+      },
+      {
+        "Time": "2026-11-14T00:13:41.5244997+03:00",
+        "Action": "pass",
+        "Package": "github.com/argeinfina/hichat/database",
+        "Elapsed": 4.332
+      }
+    ]
+  },
+  "other_validation": {
+    "admission_and_service_shutdown_unit_count_100": "PASS 0.913s",
+    "admission_and_service_shutdown_race_count_100": "PASS 4.249s before final music-hook assertion",
+    "final_late_channel_delete_unit_count_100": "PASS 0.670s",
+    "canonical_wiring_unit_count_100": "PASS 0.723s",
+    "canonical_import_contract": "PASS 2.430s",
+    "portable_historical_bootstrap_count_3": "PASS 4.855s",
+    "portable_historical_bootstrap_race_count_1": "PASS 11.091s",
+    "canonical_lint": "0 issues on final source",
+    "full_integrated_vet_build": "PASS",
+    "manifest_verifier_tests": "6 PASS 28.975s",
+    "runner_contract_tests": {
+      "canonical": 9,
+      "integrated": 14
+    }
+  },
+  "negative_control": "Restoring untracked leave credit dispatch fails shutdown returned before accepted credit finished; original bytes restored.",
+  "import_safety": "Integrated fingerprint guard unchanged. A minimal artificial schema was rejected; fixture now uses clean actual migration150 history before upgrading to151. No new fingerprint or missing-table bypass added.",
+  "remote_status": {
+    "bb848eaa_sonar": "completed SUCCESS",
+    "bb848eaa_postgres": "FAIL missing legacy voice_usage_credits source table, fixed by compatibility commit",
+    "14a965ea_checks": "pending; do not inherit prior-head checks"
+  },
+  "mandatory_self_scan": {
+    "source": "14a965ea",
+    "exit_code": 0,
+    "blocking_matches": 0,
+    "review_rows": 421,
+    "status": "completed; review queue is not blanket security acceptance"
+  },
+  "limitations": [
+    "Accepted usage roots and registered credit/deletion children are drained; remaining non-usage media work and active-session final credit acceptance remain open.",
+    "Process crash before first durable enqueue is still not covered.",
+    "Late committed channel deletion remains synchronous/caller-owned after admission closes, preserving memory cleanup, media eviction attempt and music cleanup.",
+    "No whole-project race/coverage, release downgrade, real backup restore or physical media acceptance claim."
+  ],
+  "source_scope_notes": [
+    "Thirty-test canonical race scope preceded the final historical-bootstrap fixture and late-music assertion; these were verified separately with portable bootstrap race and late-deletion100-repeat tests.",
+    "Final source lint and source-wide self-scan passed after the last code change.",
+    "Integrated eight-test corrected scope includes actual historical150 upgrade and accepted PostgreSQL credit shutdown; original underspecified-fixture failure remains recorded in chronology."
+  ]
+}

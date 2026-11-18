@@ -1,0 +1,16 @@
+{
+  "source_parent": "76243775",
+  "scope": "Require named PostgreSQL dialect and DM search passes in native CI runner",
+  "regression": "Missing native dialect PASS event was accepted when packages passed; wrong-package same-name events must not count. Regression failed before fix.",
+  "change": "Track package/test pass pairs and require TestRepositoryDialectContracts/Postgres plus repository TestDMSearchDialectContractChannelCountAndPages. Existing package/skip/failure/DSN checks retained.",
+  "validation": {
+    "command": "python -m unittest discover -s scripts -p test_run_postgres_tests.py",
+    "tests": 16,
+    "exit": 0
+  },
+  "limits": [
+    "Runner synthetic-event tests validate fail-closed gating; not a new full native suite run",
+    "Existing named tests separately passed actual SQLite/PostgreSQL in previous receipt",
+    "Fresh source-bound CI still required"
+  ]
+}

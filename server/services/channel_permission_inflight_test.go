@@ -41,7 +41,7 @@ func TestChannelInvalidationSupersedesInflightGrant(t *testing.T) {
 					},
 				}
 				parentID := "parent"
-				svc := newTestChannelPermService(&testutil.MockChannelPermRepo{}, rr, &testutil.MockChannelRepo{GetByIDFn: func(_ context.Context, id string) (*models.Channel, error) {
+				svc := newTestChannelPermService(t, &testutil.MockChannelPermRepo{}, rr, &testutil.MockChannelRepo{GetByIDFn: func(_ context.Context, id string) (*models.Channel, error) {
 					if id == "c" && mode == "parent" {
 						return &models.Channel{ID: id, ServerID: "s", Type: models.ChannelTypeThread, ParentChannelID: &parentID}, nil
 					}
@@ -109,7 +109,7 @@ func TestChannelInvalidationChurnFailsClosedAndBounded(t *testing.T) {
 			rr := &testutil.MockRoleRepo{GetByUserIDAndServerFn: func(context.Context, string, string) ([]models.Role, error) { return roles(), nil }, GetRolesForUsersFn: func(context.Context, string, []string) (map[string][]models.Role, error) {
 				return map[string][]models.Role{"u": roles()}, nil
 			}}
-			svc = newTestChannelPermService(&testutil.MockChannelPermRepo{}, rr, &testutil.MockChannelRepo{GetByIDFn: func(context.Context, string) (*models.Channel, error) {
+			svc = newTestChannelPermService(t, &testutil.MockChannelPermRepo{}, rr, &testutil.MockChannelRepo{GetByIDFn: func(context.Context, string) (*models.Channel, error) {
 				return &models.Channel{ID: "c", ServerID: "s"}, nil
 			}}, nil).(*cachingPermResolver)
 			var err error
@@ -137,7 +137,7 @@ func TestChannelBulkInvalidationDiscardsMixedCachedAndFreshSnapshot(t *testing.T
 	fixture := permFixture{serverID: "s", channelID: "c", roles: map[string][]models.Role{
 		"alice": {{Permissions: models.PermAdmin}}, "bob": {{Permissions: models.PermAdmin}},
 	}}
-	svc := fixture.newService(&bulkRepoCounter{}).(*cachingPermResolver)
+	svc := fixture.newService(t, &bulkRepoCounter{}).(*cachingPermResolver)
 	if p, err := svc.ResolveChannelPermissions(context.Background(), "alice", "c"); err != nil || p != models.PermAll {
 		t.Fatal("warm cache", p, err)
 	}

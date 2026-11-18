@@ -1,0 +1,92 @@
+{
+  "sourceCommit": "b9df71a3",
+  "platform": "Two isolated Chromium browser contexts on Windows",
+  "fixture": "Local HiChat Go API, PostgreSQL 18.6 with mTLS, LiveKit v1.9.12, two authenticated group members",
+  "outage": "Paused the isolated LiveKit process for 24 seconds after both clients navigated to Friends, then resumed it.",
+  "audio": "Chromium synthetic 440 Hz microphone file, music profile, noise reduction disabled. Both remote receiver tracks sampled with Web Audio FFT size 4096. Values are peak linear magnitudes within one bin of the tone.",
+  "before": [
+    {
+      "receivedPacketDelta": 26,
+      "toneMagnitude": 0.013266
+    },
+    {
+      "receivedPacketDelta": 25,
+      "toneMagnitude": 0.013311
+    }
+  ],
+  "after": [
+    {
+      "receivedPacketDelta": 21,
+      "toneMagnitude": 0.013301
+    },
+    {
+      "receivedPacketDelta": 24,
+      "toneMagnitude": 0.013308
+    }
+  ],
+  "bothClients": {
+    "sameCallNonce": true,
+    "sameGroup": true,
+    "sameDestinationURL": true,
+    "sameSelectedInputDevice": true,
+    "sameSelectedOutputDevice": true
+  },
+  "remaining": [
+    "Installed Windows client reconnect with navigation and selected devices",
+    "Physical capture and playback acceptance tracked separately"
+  ],
+  "windowsPackagedRun": {
+    "sourceCommit": "329ca8fd",
+    "version": "2.11.130",
+    "entryPoint": "win-unpacked/HiChat.exe",
+    "installerSha256": "eb1b999556933472b811115bee76c971c6ec560600009f0549e9637cc434e3c4",
+    "fixture": "Two packaged Electron processes, independently verified temporary profiles, packaged app:// renderer, test API through local TLS, synthetic 440 Hz input",
+    "outageSeconds": 24,
+    "bothDestinationURLsUnchanged": true,
+    "before": [
+      {
+        "receivedPacketDelta": 23,
+        "toneMagnitude": 0.013287
+      },
+      {
+        "receivedPacketDelta": 25,
+        "toneMagnitude": 0.013287
+      }
+    ],
+    "after": [
+      {
+        "receivedPacketDelta": 21,
+        "toneMagnitude": 0.013315
+      },
+      {
+        "receivedPacketDelta": 24,
+        "toneMagnitude": 0.013295
+      }
+    ],
+    "limits": [
+      "NSIS installation was not exercised",
+      "No physical microphones or speakers were used"
+    ],
+    "deviceSelectionRepeat": {
+      "method": "Selected enumerated synthetic input and output in Voice & Video in both packaged clients. Reopened the settings after the outage and checked each selection against its original value.",
+      "pauseSeconds": 24,
+      "matchingInputAndOutputOnBothClients": true,
+      "beforePacketDeltas": [
+        25,
+        23
+      ],
+      "afterPacketDeltas": [
+        26,
+        26
+      ],
+      "beforeToneMagnitudes": [
+        0.013305,
+        0.0133
+      ],
+      "afterToneMagnitudes": [
+        0.01329,
+        0.013286
+      ]
+    }
+  }
+}

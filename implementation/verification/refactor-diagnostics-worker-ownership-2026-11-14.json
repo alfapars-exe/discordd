@@ -1,0 +1,39 @@
+{
+  "state": "published_draft_current_ci_pending",
+  "before": "TestDiagnosticsStopJoinsAcceptedEmail failed: no worker shutdown owner",
+  "behavior": "close admission, cancel accepted email, join send and logging before app log closes; four-slot limit and204 preserved",
+  "local": {
+    "diagnostics_repetitions": 20,
+    "canonical_targeted_seconds": 9.296,
+    "integrated_targeted_seconds": 9.769,
+    "canonical_full_handlers_seconds": 5.614,
+    "canonical_full_logx_seconds": 1.464,
+    "canonical_vet_build": "passed",
+    "canonical_windows_lint": "passed",
+    "canonical_linux_lint": "passed",
+    "integrated_vet_build": "passed",
+    "integrated_lint": "passed"
+  },
+  "compatibility": "canonical logx.Run extracts existing panic handling without changing its logging policy; integrated existing stronger redaction preserved",
+  "remaining": [
+    "Linux race and current source CI",
+    "real provider acceptance not claimed"
+  ],
+  "source_head": "c5eb283fd4d5957940a33001f5e636a06df13aeb",
+  "pr": "https://github.com/alfapars-exe/discordd/pull/303",
+  "completion_log_followup": {
+    "local_head": "c5eb283fd4d5957940a33001f5e636a06df13aeb",
+    "state": "published after39a1476b completed36/36",
+    "positive": "blocked completion logging keeps Stop waiting; failure completion logged once",
+    "counterfactual": "overlay ends worker ownership before completion log; regression fails Stop escaped completion logging",
+    "canonical_stop_repetitions": 30,
+    "canonical_seconds": 2.047,
+    "canonical_full_handlers_seconds": 5.805,
+    "canonical_full_logx": "cached pass",
+    "canonical_vet_lint": "passed",
+    "integrated_stop_repetitions": 30,
+    "integrated_seconds": 2.56,
+    "integrated_logx_filter": "no matching TestRun cases; not counted as additional logx verification"
+  },
+  "previous_source_head": "39a1476b12e59702582cd3c9b37000a6369f3052"
+}

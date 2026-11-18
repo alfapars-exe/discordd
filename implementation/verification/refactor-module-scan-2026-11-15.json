@@ -1,0 +1,57 @@
+{
+  "sourceCommit": "5ba8a9b3",
+  "date": "2026-11-15",
+  "scope": "Add .mjs/.cjs to existing JS/TS self-scan and generated editor paths; keep rule severities and existing output/dependency exclusions.",
+  "regression": {
+    "commit": "390a6b93",
+    "log": "TEMP/hichat-module-scan-red.log",
+    "result": "FAIL: unsafe ESM/CJS were not scanned"
+  },
+  "tests": {
+    "python": "13 passed,71.290s",
+    "log": "TEMP/hichat-module-scan-reviewed-tests.log",
+    "nodeFixture": "3 passed",
+    "generatorDrift": "PASS"
+  },
+  "review": {
+    "rule": "js.fixture-cookie-proxy",
+    "path": "migration/scripts/qa-http.mjs",
+    "boundTo": "Exact file/line SHA256; unlisted copy and source mutations block",
+    "reason": "Disposable QA transport forwards session cookies unchanged from fixed loopback Go upstream; redirects rejected; proof host is loopback-only.",
+    "proof": [
+      "migration/scripts/qa-http.test.mjs",
+      "migration/scripts/proof-server.mjs"
+    ],
+    "records": 51
+  },
+  "fullScan": {
+    "initialSource": "adf06e89",
+    "initialLog": "TEMP/hichat-module-scan-full.log",
+    "initialHandle": 62178,
+    "finalSource": "5ba8a9b3",
+    "finalLog": "TEMP/hichat-module-scan-final.log",
+    "finalHandle": 40910,
+    "status": "PASS: terminal log confirms0blocking/51reviewed source records/478review lines",
+    "initialResult": "Terminal FAIL: Set-Cookie raw-header rule matched qa-http.mjs;477 review lines. Wrapper shell exit0 came from final Get-Content, not scanner success; script terminal log is authoritative.",
+    "finalResult": {
+      "blockingMatches": 0,
+      "reviewedSourceRecords": 51,
+      "reviewLines": 478,
+      "newModuleReviewLines": 30
+    },
+    "reviewQueue": "Includes vendored ONNX runtime fetch/message patterns, owned audio probes and fixture scripts; review-only hits remain visible. Not a claim of complete vulnerability audit."
+  },
+  "remaining": [
+    "New-head CI after push",
+    "RF01-RF30 project acceptance"
+  ],
+  "priorCI": {
+    "sourceCommit": "41e0fdae6a2a2fc72e6b2824eaa9b1129374286f",
+    "checks": 36,
+    "success": 36,
+    "serverRun": 43731575019,
+    "mobileRun": 43731575007,
+    "frontendRun": 43731575025,
+    "archive": "refactor-41e-terminal-ci-2026-11-15.json"
+  }
+}

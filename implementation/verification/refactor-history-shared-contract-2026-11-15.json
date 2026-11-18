@@ -1,0 +1,107 @@
+{
+  "sourceRevision": "7a857281",
+  "regressionCommit": "748ecd2c",
+  "behaviorFixCommit": "c0d5e3a0",
+  "scope": "RF15 common channel/DM history contracts and pure unseen-message selection. Channel older-page overlap now preserves already-loaded edits/reactions;DM behavior preserved.",
+  "baseline": {
+    "source": "caac0d77",
+    "result": "14 shared cases:1failed channel older-page edit preservation,13passed. Loaded content changed from edited loaded row to stale live after overlap.",
+    "log": "TEMP/hichat-history-contract-pagination.log"
+  },
+  "sharedFixture": {
+    "domains": [
+      "real channel Zustand store",
+      "real DM Zustand store"
+    ],
+    "casesPerDomain": [
+      "pending snapshot with live create/edit/reaction/delete",
+      "duplicate replay and overlapping snapshot",
+      "old-account pending response",
+      "late aborted response after newer request",
+      "foreign-conversation rows",
+      "older-page overlap retains loaded edit/reactions and deduplicates incoming ids",
+      "forward paging drains edited/reacted detached live events at tail"
+    ],
+    "admission": "Each fetch asserts its domain API mock was invoked,including both overlapping requests. Exact ids/content/reactions and API before/after cursors checked.",
+    "readCursor": "Initial/overlapping/late/foreign responses assert expected read ids;old-account response does not advance read. Forward channel store leaves view-owned cursor publication unchanged;DM tail drain advances its explicit read cursor.",
+    "adapters": "API/decryption mocked;real auth generation via clearTokens/publishAuthOwnerChange. DM live-event adapter invokes real observeDMMessage before store actions,as the production event boundary does.",
+    "limits": "Not a crypto/permission/real-browser/HTTP/WebSocket acceptance test. Detached state is seeded to exercise paging,not navigation. Domain-specific sequencing and read publication remain separate."
+  },
+  "refactor": "Move existing DM first-new-id selection verbatim into generic pure unseenMessages. Use it in channel older paging and DM older/newer paging;leave sorting/auth/crypto decisions in domain stores.",
+  "validation": {
+    "afterBehaviorFix": "177tests3filesPASS3.76s;TEMP/hichat-history-contract-fixed.log",
+    "afterPureExtraction": "191tests5filesPASS4.25s;TEMP/hichat-history-contract-shared.log",
+    "build": "PASS actual tsc-b/Vite1.62s;TEMP/hichat-history-contract-build.log",
+    "fullClientCoverage": "PASS499files5359passed1skipped;TEMP/hichat-history-contract-coverage.log",
+    "lint": "PASS0errors2existingwarnings;TEMP/hichat-history-contract-lint.log",
+    "selfScan": "PASS immutable7a857281;51exact reviewed-source records,478reviewlines,0blockingpatterns. Pattern scan is not proof of absence of vulnerabilities. TEMP/hichat-history-contract-final-scan.log",
+    "coverageTotal": {
+      "lines": {
+        "total": 38521,
+        "covered": 26547,
+        "skipped": 0,
+        "pct": 68.91
+      },
+      "statements": {
+        "total": 52762,
+        "covered": 35806,
+        "skipped": 0,
+        "pct": 67.86
+      },
+      "functions": {
+        "total": 12325,
+        "covered": 7649,
+        "skipped": 0,
+        "pct": 62.06
+      },
+      "branches": {
+        "total": 39949,
+        "covered": 25929,
+        "skipped": 0,
+        "pct": 64.9
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "coverageSharedMessageUtils": {
+      "lines": {
+        "total": 61,
+        "covered": 53,
+        "skipped": 0,
+        "pct": 86.88
+      },
+      "functions": {
+        "total": 20,
+        "covered": 18,
+        "skipped": 0,
+        "pct": 90
+      },
+      "statements": {
+        "total": 75,
+        "covered": 65,
+        "skipped": 0,
+        "pct": 86.66
+      },
+      "branches": {
+        "total": 36,
+        "covered": 30,
+        "skipped": 0,
+        "pct": 83.33
+      }
+    },
+    "ci": {
+      "revision": "49c36d999c0156f1d78c0b152e1327584bb48fcb",
+      "checks": 36,
+      "success": 36,
+      "runtimeEquivalence": "git diff 7a857281..49c36d99 -- client server electron e2e is empty",
+      "receipt": "refactor-49c36-terminal-ci-2026-11-15.json"
+    }
+  },
+  "remaining": [
+    "RF15 full history/read/permission/encryption runtime acceptance;RF01-RF30 remain open"
+  ]
+}

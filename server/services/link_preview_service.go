@@ -40,6 +40,13 @@ type LinkPreviewService interface {
 	GetPreview(ctx context.Context, rawURL string) (*models.LinkPreview, error)
 }
 
+// LinkPreviewRuntime gives the composition root explicit cleanup ownership.
+// Request consumers continue to use the narrower LinkPreviewService interface.
+type LinkPreviewRuntime interface {
+	LinkPreviewService
+	Stop()
+}
+
 const cacheTTL = 24 * time.Hour
 const maxBodySize = 512 * 1024
 const maxRedirects = 3
@@ -64,7 +71,7 @@ type linkPreviewService struct {
 
 // NewLinkPreviewService creates a service with an SSRF-safe HTTP client.
 // DNS resolution results are checked against private IP ranges.
-func NewLinkPreviewService(repo repository.LinkPreviewRepository) LinkPreviewService {
+func NewLinkPreviewService(repo repository.LinkPreviewRepository) LinkPreviewRuntime {
 	safeDialer := &net.Dialer{Timeout: 5 * time.Second}
 
 	transport := &http.Transport{
@@ -171,7 +178,22 @@ func (s *linkPreviewService) initialize() {
 		s.lifecycle, s.stop = context.WithCancel(context.Background())
 	})
 }
-func (s *linkPreviewService) Stop() { s.initialize(); s.stop() }
+func (s *linkPreviewService) Stop() {
+	s.initialize()
+	s.mu.Lock()
+	// Cancel admission under the same lock used to register accepted flights.
+	// Every concurrent stopper joins those workers before database teardown.
+	s.stop()
+	pending := make([]<-chan struct{}, 0, len(s.pending))
+	for _, flight := range s.pending {
+		pending = append(pending, flight.done)
+	}
+	s.mu.Unlock()
+	// Workers need mu to remove themselves and close done; never join locked.
+	for _, done := range pending {
+		<-done
+	}
+}
 
 func (s *linkPreviewService) GetPreview(ctx context.Context, rawURL string) (*models.LinkPreview, error) {
 	if ctx.Err() != nil {

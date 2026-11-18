@@ -1,3 +1,4 @@
+import { VOICE_PEER_VOLUME_RANGE, voicePeerVolume } from "../../stores/voicePreferenceMaps";
 /**
  * ScreenShareContextMenu — Independent volume control for screen share audio.
  *
@@ -41,7 +42,7 @@ function ScreenShareContextMenu({
 
   const screenShareVolumes = useVoiceStore((s) => s.screenShareVolumes);
   const setScreenShareVolume = useVoiceStore((s) => s.setScreenShareVolume);
-  const currentVolume = screenShareVolumes[userId] ?? 100;
+  const currentVolume = voicePeerVolume(screenShareVolumes, userId);
   const [preMuteVolume, setPreMuteVolume] = useState(currentVolume || 100);
 
   // Close on outside click or Escape
@@ -195,13 +196,13 @@ function ScreenShareContextMenu({
           </svg>
           <input
             type="range"
-            min={0}
-            max={200}
+            min={VOICE_PEER_VOLUME_RANGE[0]}
+            max={VOICE_PEER_VOLUME_RANGE[1]}
             value={currentVolume}
             onChange={handleVolumeChange}
             className="voice-ctx-range"
             style={{
-              background: `linear-gradient(to right, var(--primary) ${(currentVolume / 200) * 100}%, var(--bg-5) ${(currentVolume / 200) * 100}%)`,
+              background: `linear-gradient(to right, var(--primary) ${(currentVolume / VOICE_PEER_VOLUME_RANGE[1]) * 100}%, var(--bg-5) ${(currentVolume / VOICE_PEER_VOLUME_RANGE[1]) * 100}%)`,
             }}
           />
           <span className="voice-ctx-vol-value">{currentVolume}%</span>

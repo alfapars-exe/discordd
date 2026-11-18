@@ -1,0 +1,146 @@
+{
+  "scope": "Actual production React/native Chromium IndexedDB with controlled providers. Completed snapshot handoff is gated before adoption; 10000 distinct missing-ID store events. Single diagnostic run, not nine-sample latency or full WebSocket/cache writer pipeline.",
+  "baseline": [
+    {
+      "variant": "after",
+      "react": "19.3.1",
+      "productionBuild": true,
+      "historicalOverrides": 0
+    },
+    {
+      "variant": "after",
+      "kind": "channel",
+      "pendingSearchFrontier": [
+        {
+          "events": 1000,
+          "retainedGrowthBytes": 152024
+        },
+        {
+          "events": 5000,
+          "retainedGrowthBytes": 705960
+        },
+        {
+          "events": 10000,
+          "retainedGrowthBytes": 1387600
+        }
+      ],
+      "releaseToObservedResultsMs": 7162.800000011921,
+      "settledHeapBytes": 4695344,
+      "disposedHeapBytes": 3541420,
+      "matches": 267,
+      "correctPage": true,
+      "indexDisposalDrained": true,
+      "scope": "Single diagnostic run of actual production React panel/native IndexedDB;ready snapshot handoff deliberately gated before adoption;10000distinct missing-ID store events;post-GC JS heap deltas while gated;release-to-observed DOM includes Playwright polling,excludes later assertions/disposal;controlled providers,not full WS/cache writer pipeline or a physical memory bound."
+    },
+    {
+      "variant": "after",
+      "kind": "dm",
+      "pendingSearchFrontier": [
+        {
+          "events": 1000,
+          "retainedGrowthBytes": 144028
+        },
+        {
+          "events": 5000,
+          "retainedGrowthBytes": 695780
+        },
+        {
+          "events": 10000,
+          "retainedGrowthBytes": 1377352
+        }
+      ],
+      "releaseToObservedResultsMs": 7607.299999982119,
+      "settledHeapBytes": 4963904,
+      "disposedHeapBytes": 3728744,
+      "matches": 267,
+      "correctPage": true,
+      "indexDisposalDrained": true,
+      "scope": "Single diagnostic run of actual production React panel/native IndexedDB;ready snapshot handoff deliberately gated before adoption;10000distinct missing-ID store events;post-GC JS heap deltas while gated;release-to-observed DOM includes Playwright polling,excludes later assertions/disposal;controlled providers,not full WS/cache writer pipeline or a physical memory bound."
+    }
+  ],
+  "candidate": [
+    {
+      "variant": "after",
+      "react": "19.3.1",
+      "productionBuild": true,
+      "historicalOverrides": 0
+    },
+    {
+      "variant": "after",
+      "kind": "channel",
+      "pendingSearchFrontier": [
+        {
+          "events": 1000,
+          "retainedGrowthBytes": 45908
+        },
+        {
+          "events": 5000,
+          "retainedGrowthBytes": 214188
+        },
+        {
+          "events": 10000,
+          "retainedGrowthBytes": 416060
+        }
+      ],
+      "releaseToObservedResultsMs": 7255.9000000059605,
+      "settledHeapBytes": 3402836,
+      "disposedHeapBytes": 3415304,
+      "matches": 267,
+      "correctPage": true,
+      "indexDisposalDrained": true,
+      "scope": "Single diagnostic run of actual production React panel/native IndexedDB;ready snapshot handoff deliberately gated before adoption;10000distinct missing-ID store events;post-GC JS heap deltas while gated;release-to-observed DOM includes Playwright polling,excludes later assertions/disposal;controlled providers,not full WS/cache writer pipeline or a physical memory bound."
+    },
+    {
+      "variant": "after",
+      "kind": "dm",
+      "pendingSearchFrontier": [
+        {
+          "events": 1000,
+          "retainedGrowthBytes": 49536
+        },
+        {
+          "events": 5000,
+          "retainedGrowthBytes": 217084
+        },
+        {
+          "events": 10000,
+          "retainedGrowthBytes": 418700
+        }
+      ],
+      "releaseToObservedResultsMs": 7046.199999988079,
+      "settledHeapBytes": 3749208,
+      "disposedHeapBytes": 3677424,
+      "matches": 267,
+      "correctPage": true,
+      "indexDisposalDrained": true,
+      "scope": "Single diagnostic run of actual production React panel/native IndexedDB;ready snapshot handoff deliberately gated before adoption;10000distinct missing-ID store events;post-GC JS heap deltas while gated;release-to-observed DOM includes Playwright polling,excludes later assertions/disposal;controlled providers,not full WS/cache writer pipeline or a physical memory bound."
+    }
+  ],
+  "red": "hichat-search-active-panel-retention-red.log: assertion failed above 512KiB settled-panel versus disposed-panel JS heap",
+  "command": "node e2e/scripts/benchmark-search-panels.mjs --after-only --pending-frontier-only --assert-pending-panel-budget",
+  "acceptance": "Both panels preserve 267 matches and exact first25 rows, drain disposal, and retain less than512KiB settled versus disposed panel. Post-GC JS heap diagnostic, not physical bound.",
+  "limitations": [
+    "Unique pending deletion IDs still grow linearly while search is pending.",
+    "No blind restart: real WS handlers deliver deletion events before awaited cache cleanup.",
+    "Release-to-observed DOM includes Playwright polling; no latency improvement claim."
+  ],
+  "sha256": {
+    "client/src/components/chat/SearchPanel.tsx": "bb5de00108b36de71fc3384d0fc17f63e7a9651ae6b3cb8ee94284749455179a",
+    "client/src/components/dm/DMSearchPanel.tsx": "e159781c6f4fd450353b57840393f750831c1ca498196587c76c7993f59a14c2",
+    "e2e/scripts/benchmark-search-panels.mjs": "53eeab9ecd6adca99ba067d99d4728c3eb850171b0b20c955777a8b9c5c4e17c"
+  },
+  "targetedTests": "37 passed,2 files,3.67s",
+  "typeAndBuild": "tsc -b and Vite passed; Vite2.12s; existing chunk-size warning",
+  "changedFilesLint": "passed",
+  "sourceRevision": "adb2543edee5c8effdecafa17e779b0097f14ded",
+  "fullClientCoverage": {
+    "files": 485,
+    "passed": 5050,
+    "skipped": 1,
+    "statementPercent": 67.28,
+    "branchPercent": 64.52,
+    "functionPercent": 61.49,
+    "linePercent": 68.35,
+    "log": "hichat-search-panel-retention-coverage.log"
+  }
+}

@@ -1,3 +1,5 @@
+import { cacheChannelMessage } from "../../crypto/channelMessageCache";
+import { completeMessageDeletion } from "../../utils/completeMessageDeletion";
 import i18n from "../../i18n";
 /**
  * Channel-domain WS event handlers.
@@ -121,12 +123,9 @@ export async function handleChannelEvent(msg: WSMessage, isCurrent: () => boolea
           if (!eventSessionCurrent()) return true;
           message = { ...message, content: payload?.content ?? null, e2ee_file_keys: payload?.file_keys };
 
-          if (payload?.content) {
+          if (payload && (payload.content || payload.file_keys?.length)) {
             if (!eventSessionCurrent()) return true;
-            keyStorage.cacheDecryptedMessage({
-              messageId: message.id, channelId: message.channel_id, dmChannelId: null,
-              content: payload.content, timestamp: new Date(message.created_at).getTime(),
-            }).catch(() => {});
+            cacheChannelMessage(message, payload, eventSessionCurrent).catch(() => {});
           }
         } catch (err) {
           if (!eventSessionCurrent()) return true;
@@ -245,12 +244,9 @@ export async function handleChannelEvent(msg: WSMessage, isCurrent: () => boolea
           if (!eventSessionCurrent()) return true;
           updatedMsg = { ...updatedMsg, content: payload?.content ?? null, e2ee_file_keys: payload?.file_keys };
 
-          if (payload?.content) {
+          if (payload && (payload.content || payload.file_keys?.length)) {
             if (!eventSessionCurrent()) return true;
-            keyStorage.cacheDecryptedMessage({
-              messageId: updatedMsg.id, channelId: updatedMsg.channel_id, dmChannelId: null,
-              content: payload.content, timestamp: new Date(updatedMsg.created_at).getTime(),
-            }).catch(() => {});
+            cacheChannelMessage(updatedMsg, payload, eventSessionCurrent).catch(() => {});
           }
         } catch (err) {
           if (!eventSessionCurrent()) return true;
@@ -266,20 +262,31 @@ export async function handleChannelEvent(msg: WSMessage, isCurrent: () => boolea
     }
 
     case "message_delete": {
+      if (!isCurrent()) return true;
       const delData = msg.d;
-
-      const unreadCount = useReadStateStore.getState().unreadCounts[delData.channel_id] ?? 0;
-      if (unreadCount > 0) {
-        const channelMessages = useMessageStore.getState().messagesByChannel[delData.channel_id];
-        const deletedMsg = channelMessages?.find((m) => m.id === delData.id);
-        const myId = useAuthStore.getState().user?.id;
-        const isOwnMessage = deletedMsg?.user_id === myId || deletedMsg?.author?.id === myId;
-        if (!isOwnMessage) {
-          useReadStateStore.getState().decrementUnread(delData.channel_id);
+      const owner = getAuthSessionOwner();
+      const generation = getAuthGeneration();
+      const current = () => isCurrent() && getAuthSessionOwner() === owner && getAuthGeneration() === generation;
+      await completeMessageDeletion([() => {
+        const unreadCount = useReadStateStore.getState().unreadCounts[delData.channel_id] ?? 0;
+        if (unreadCount > 0) {
+          const channelMessages = useMessageStore.getState().messagesByChannel[delData.channel_id];
+          const deletedMsg = channelMessages?.find((m) => m.id === delData.id);
+          const myId = useAuthStore.getState().user?.id;
+          const isOwnMessage = deletedMsg?.user_id === myId || deletedMsg?.author?.id === myId;
+          if (deletedMsg && !isOwnMessage) {
+            useReadStateStore.getState().decrementUnread(delData.channel_id);
+          }
         }
-      }
-
-      useMessageStore.getState().handleMessageDelete(delData);
+      }, () => useMessageStore.getState().handleMessageDelete(delData)], async () => {
+        if (owner) {
+          try {
+            await keyStorage.deleteCachedChannelMessage(delData.id, delData.channel_id, current);
+          } catch {
+            if (current()) console.warn("[ws] Channel deleted-message cache cleanup failed");
+          }
+        }
+      }, current, { kind: "channel", channelId: delData.channel_id });
       return true;
     }
 

@@ -1,0 +1,29 @@
+{
+  "date": "2026-11-15",
+  "base": "d62bd97b",
+  "remoteHead": "c2baaec19c2a963e4e9efed6a5e5afb298d78fbd",
+  "sources": {
+    "client/src/stores/slices/voiceSettingsSlice.ts": "38d5bd446b8b0f8affb0ed5e9f1595132776082e51882cc82f3d435207e94e15",
+    "client/src/stores/slices/voiceSettingsSlice.noise.test.ts": "8711ea92b940efba8f41d06ee1abc07a885440630b8fe1f555a94364735f8055"
+  },
+  "before": "three new regressions failed: inputDevice/outputDevice invalid types and truthy nonboolean muteHotkeyGlobal",
+  "fix": "Require string input/output/camera IDs and boolean device-global mute scope; preserve valid IDs/true opt-in",
+  "validation": {
+    "targeted": "six suites220tests passed",
+    "fullCoverage": "482files;5014passed;1skipped;114.70s",
+    "coverage": {
+      "statements": 66.99,
+      "branches": 64.36,
+      "functions": 61.28,
+      "lines": 67.98
+    },
+    "typescript": "npx tsc -b passed",
+    "lint": "changed voice source and noise tests passed",
+    "build": "Vite production build passed"
+  },
+  "delivery": "Held locally while remote-head CI runs; latest observed19success15pending0failed, not terminal evidence",
+  "limits": [
+    "physical hardware/native hotkey acceptance not performed",
+    "remaining RF13 and whole-project acceptance open"
+  ]
+}

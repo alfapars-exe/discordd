@@ -1,0 +1,124 @@
+{
+  "moduleExtraction": "2863f403",
+  "phaseExtraction": "35de691d",
+  "originalSonarIssue": "AaHfuK2q4B142AX0cP6A",
+  "originalCognitiveComplexity": 21,
+  "publicAPI": "deleteCachedDMMessage and deleteCachedChannelMessage remain in keyStorage with unchanged arguments/results",
+  "change": "Dedicated cachedMessageDeletion module owns durable intent preparation, atomic eviction, and matching-record deletion",
+  "invariants": [
+    "Journal intent commits before source eviction",
+    "Journal failure still permits best-effort source cleanup",
+    "Retire only the exact write token; preserve a newer accepted deletion",
+    "Owner guards, transaction abort and AggregateError failure ordering retained",
+    "Database transaction creation remains outside the transaction error handler"
+  ],
+  "validation": {
+    "targetedBefore": 92,
+    "targetedAfter": 92,
+    "typecheck": "PASS",
+    "fullClient": "5532 passed / 1 skipped / 0 failed; 505 files, 123.58s",
+    "lintBuild": "Initial global lint: 1 new useless-assignment error / 2 existing warnings; build PASS 2.66s. Useless initial assignment removed; final global lint running.",
+    "coverage": {
+      "lines": 100,
+      "statements": 84.9,
+      "branches": 87.87,
+      "functions": 66.66,
+      "scope": "Measured before the subsequent removal of the useless initial assignment; not a final-source coverage claim"
+    },
+    "finalTargeted": 92,
+    "fullRunScope": "Full suite preceded final useless-assignment cleanup; final targeted run 92 passes follows cleanup.",
+    "finalTypecheck": "PASS",
+    "finalGlobalLint": "PASS 0 errors / 2 existing warnings",
+    "ownerBoundaryContracts": {
+      "commit": "f6d6e764",
+      "cases": 4,
+      "baselineSource": "e4ffe714:keyStorage.ts",
+      "baselineTotal": 96,
+      "candidateTotal": 96,
+      "assertions": "Late owner retirement at messageCache/metadata response preserves source row and committed intent for channel/DM",
+      "sourceRestoredAndGitDiffEmpty": true
+    },
+    "finalCoverage": {
+      "lines": 100,
+      "functions": 100,
+      "statements": 98.03,
+      "branches": 96.96
+    },
+    "finalFullWithOwnerCases": "5536 passed / 1 skipped / 0 failed; 505 files",
+    "finalBuild": "PASS TypeScript + Vite build (7.29s)"
+  },
+  "pending": [
+    "Whole RF17 first-query/physical/runtime budgets and project acceptance"
+  ],
+  "evidence": {
+    "before": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-message-deletion-before.log",
+      "sha256": "8a883126a25134b864b51596d02943f6294d0c8f91f46da93039b5c2a48a2137"
+    },
+    "after": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-message-deletion-after.log",
+      "sha256": "a1df8e4d9acd5ff48a58c53c0400f9932f2df5fb6cd51582905d00112262ae59"
+    },
+    "full": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-message-deletion-full.log",
+      "sha256": "601822569b6e791567075cb3f7f5874febb779c3d15344c248a314df6233846f"
+    },
+    "finalTargeted": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-message-deletion-final-target.log",
+      "sha256": "a2635a6705782be4fb71245960d3955316f123a49942aab2277756d90649050f"
+    },
+    "ownerBefore": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-message-deletion-owner-before.log",
+      "sha256": "1b38f45891f76cedf7d3215e84e6a5fdb20cabf474d2f39a3cc9d8f62c5c991f"
+    },
+    "ownerAfter": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-message-deletion-owner-after.log",
+      "sha256": "9843787ec97f6649e30946a6d891a1c921d0fcd15d67b0c51ae6c70ee49d89de"
+    },
+    "finalOwnerFull": {
+      "path": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-message-deletion-owner-full.log",
+      "sha256": "aef72c01bd2267643ac8a05370dad1c4d37e7e895c80d50d6739ec78b95e9bc5"
+    }
+  },
+  "published": "2b418de1",
+  "ci": {
+    "head": "2b418de1",
+    "checks": "36/36 SUCCESS",
+    "serverRun": 43776829922,
+    "receipt": "refactor-2b41-terminal-ci-2026-11-16.json"
+  },
+  "selfScan": {
+    "archive": "18744b6c",
+    "result": "PASS",
+    "reviewedExactSourceRecords": 51,
+    "reviewLines": 480,
+    "blockingPatternHits": 0,
+    "log": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-message-deletion-18744b6c-scan.log",
+    "sha256": "1a1fe3c1e0fe50311b8956da99ef19bfa09a4ebc15bcc52d09cd1882b032875c",
+    "limit": "Runtime module source unchanged since archive; final four ownership tests/docs were added later. Pattern scan is not vulnerability absence proof."
+  },
+  "sonar": {
+    "originalIssue": "AaHfuK2q4B142AX0cP6A",
+    "status": "CLOSED",
+    "resolution": "FIXED",
+    "newModuleIssueCount": 0,
+    "issueSearchTotal": 497,
+    "issueSearchPageSize": 500,
+    "analyzedCodeLines": 66,
+    "sourceMismatches": 0,
+    "extraEmptyEOF": 1
+  },
+  "nativeCIObservation": {
+    "head": "2b418de1",
+    "run": 43776829922,
+    "job": 133004893175,
+    "completedSteps": [
+      "Verify native IndexedDB search staging contracts",
+      "Verify WebKit IndexedDB search staging contracts",
+      "Verify production search panel retention and ordering",
+      "Verify production search failure state and idle retention"
+    ],
+    "conclusion": "All listed steps SUCCESS; whole job still running at observation",
+    "limit": "Supported CI browser contracts; physical platform budgets and earlier intermittent pending-panel timeout root cause remain open"
+  }
+}

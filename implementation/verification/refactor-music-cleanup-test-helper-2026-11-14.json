@@ -1,0 +1,33 @@
+{
+  "date": "2026-11-14",
+  "scope": "Extract shared music cleanup shutdown regression helper",
+  "source_sha256": "9f6033b67ecbfd9976cea1d6b47d850568dcc49df31b3c4c43aade3d450394ac",
+  "test_names_preserved": 15,
+  "targeted_cases": [
+    "Leave",
+    "Switch",
+    "Admin",
+    "Move"
+  ],
+  "checks": {
+    "host_count": 20,
+    "host_exit": 0,
+    "host_seconds": 2.304,
+    "linux_race_count": 20,
+    "race_exit": 0,
+    "race_seconds": 5.25,
+    "vet_services_exit": 0,
+    "lint_services_issues": 0
+  },
+  "negative_control": {
+    "mechanism": "Go overlay only; restore detached LeaveChannel music stop",
+    "exit": 1,
+    "test": "TestVoiceUsageShutdownWaitsForLeaveMusicCleanup",
+    "failure": "shutdown returned before music cleanup"
+  },
+  "limitations": [
+    "Test-only refactor local to integration.",
+    "Canonical PR298 head6236c8b9 CI43517792317 still active.",
+    "No PostgreSQL/runtime/physical acceptance inferred from helper checks."
+  ]
+}

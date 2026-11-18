@@ -1,0 +1,96 @@
+{
+  "backendCommit": "88892ed159c41726c3092955c9b0cd23cbbb547d",
+  "loadCommit": "a03ea5d469bce03527a0518e15e5bc22dd785f41",
+  "serverSourceParity": "git diff 88892ed1 a03ea5d4 -- server: empty",
+  "scope": "One bounded local plaintext fanout run. Windows Go1.27.4 CGO0, k6v2.4.0, isolated PostgreSQL18.6 verify-full mTLS.",
+  "profile": {
+    "vus": 20,
+    "users": 20,
+    "rampUp": "10s",
+    "hold": "60s",
+    "rampDown": "10s",
+    "holdSeconds": 75,
+    "legacyToken": false
+  },
+  "fixture": "20 distinct seeded ordinary users, real invite join and empty history read preflight for each. Separate synthetic admin creates private guild/channel and samples pprof. Limits enabled; legacy token disabled.",
+  "result": {
+    "sent": 100,
+    "received": 2000,
+    "receivers": 20,
+    "duplicates": 0,
+    "invalid": 0,
+    "persisted": 100,
+    "digest": "6dc25d5df51357fd58ffdf5dfbdbd9d8f349ec04cd0247e37fd0daf64b141fe9"
+  },
+  "checks": {
+    "pass": 240,
+    "fail": 0
+  },
+  "reconciliation": "All20 receiver SHA256 digests of canonical sender/sequence/messageID tuples match independently read HTTP history. History exactly100 messages, both pagination flags false. Each sender additionally verifies its five HTTP IDs against own WebSocket IDs.",
+  "regressions": [
+    {
+      "attempt": "setup",
+      "result": "Missing required host_type caused400 before load; fixed fixture, DB dropped/owned resources cleaned."
+    },
+    {
+      "attempt": "88892ed1 actual load",
+      "sent": 100,
+      "receivedByObserver": 0,
+      "result": "FAIL: wrong mocked envelope data vs actual Go ws.Event d. No product delivery loss claim."
+    },
+    {
+      "test": "Real d envelope",
+      "before": "RED ignored vs accepted",
+      "fix": "a03ea5d4",
+      "after": "49/49 Node contracts, zero failed/skipped"
+    }
+  ],
+  "resources": {
+    "baseline": {
+      "samples": 3,
+      "goroutineMedian": 51,
+      "maxReadPumps": 0,
+      "maxWritePumps": 0,
+      "maxHeapAlloc": 8446176,
+      "maxWorkingSet": 42135552
+    },
+    "load": {
+      "samples": 35,
+      "goroutineMedian": 111,
+      "maxReadPumps": 20,
+      "maxWritePumps": 20,
+      "maxHeapAlloc": 11666568,
+      "maxWorkingSet": 50622464
+    },
+    "recovery": {
+      "samples": 6,
+      "goroutineMedian": 52.0,
+      "maxReadPumps": 0,
+      "maxWritePumps": 0,
+      "maxHeapAlloc": 8141760,
+      "maxWorkingSet": 49061888
+    }
+  },
+  "cleanup": {
+    "databaseDropped": true,
+    "launcherExit": 0,
+    "ownedContainerAbsent": true,
+    "imageAndPrivateClientCredentialsRemovedByLauncher": true
+  },
+  "limits": [
+    "Not capacity/SLA, slow-consumer, query/pool-wait budget, extended soak, E2EE or media acceptance",
+    "Profiling overhead included; CPU not pinned; other developer services running",
+    "No forced GC; recovery median52 vs baseline51 and elevated working set, no identical memory baseline assertion",
+    "Later CI must be evaluated against its own commit"
+  ],
+  "hashes": {
+    "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-pg-tls-test-a942fc1fed6f4d5ca33fecd41457c71d\\capacity-report.json": "f803f4172fd99e7decb55b230cd8beb02bdff4cae2975899bc5628ec33d34225",
+    "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-pg-tls-test-a942fc1fed6f4d5ca33fecd41457c71d\\capacity-k6-summary.json": "60a27b5fbaeb3b059b7a815dfc821a2ceff4c70c3ecbac26e57bb6392024f55b",
+    "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-pg-tls-test-a942fc1fed6f4d5ca33fecd41457c71d\\capacity-k6.log": "240d8eed169b2a11018ab996690ab6b1d25771c62af6decb0c8bacab602890de",
+    "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-pg-tls-test-a942fc1fed6f4d5ca33fecd41457c71d\\capacity-server.log": "d6515ed6ff43b0ef0ebf0d9dc91babc43ffa7f4acd860daf4d371272244e0fc7",
+    "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-fanout-runner-20261116.mjs": "b973503397d7ba7de71191ee440f9dd2e4427fadc54d9d61c724fee9bc8f3005",
+    "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-fanout-launch-20261116.ps1": "6052d92c7efa91632e4e898b0756278a9b69404b965634223ea4aa9cd8017669",
+    "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-fanout-wire-red.log": "3b6ab708b8644dbe17d58bd9e32127dc111b371c98c35bb5a3d49ebb6cf184bb",
+    "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-fanout-wire-green.log": "97044f0252fa99ba342ba3ac87a882fde0e58919e77bd0f9439cd8ee32117a36"
+  }
+}

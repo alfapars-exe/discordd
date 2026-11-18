@@ -34,6 +34,10 @@ Credentials are not stored in this repository. Server secrets are root-only unde
 
 ## Rehearsal tooling
 
+For an offline SQLite snapshot with an empty migration ledger, the importer recognizes the exact schema produced by each bundled migration from 144 through 150. It checks tables, indexes, triggers and views against that snapshot and checks the migration files through the matching version. Later migrations run on the working copy. An unrecognized schema or changed historical migration stops the import before it connects to the PostgreSQL target.
+
+If adoption fails, preserve the original SQLite snapshot. Recover a consistent backup with its matching migration ledger and repeat the rehearsal on that backup. A schema match establishes the DDL version. Use a backup from a known successful upgrade to establish the provenance of historical data changes as well.
+
 Build commands from `server/`:
 
 ```sh

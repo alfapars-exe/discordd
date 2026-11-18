@@ -1,0 +1,120 @@
+{
+  "source_before": {
+    "revision": "8ec41413f7ac03f72a53a1c11010df76283d1cf2",
+    "source_sha256": "aa44b3df0f8a491a009f6075250c0460773d5b4c5efc8bb3dfd2e7a904a091ad"
+  },
+  "source_after": {
+    "revision": "8ec41413f7ac03f72a53a1c11010df76283d1cf2",
+    "source_sha256": "aa44b3df0f8a491a009f6075250c0460773d5b4c5efc8bb3dfd2e7a904a091ad"
+  },
+  "source_stable": true,
+  "dirty_before": [],
+  "platform": "windows/amd64",
+  "cgo": 0,
+  "race": false,
+  "go_version": "go version go1.27.4 windows/amd64",
+  "provider_environment_present": {
+    "HICHAT_TEST_POSTGRES_DSN": false,
+    "HICHAT_ACTIVE_VOICE_POSTGRES_DSN": false,
+    "HICHAT_TEST_LIVEKIT_URL": false,
+    "TEST_POSTGRES_DSN": false
+  },
+  "mode": "server",
+  "command": [
+    "go",
+    "test",
+    "-json",
+    "./...",
+    "-count=1",
+    "-p=2",
+    "-timeout=15m"
+  ],
+  "started_at_unix": 1794632381.1497495,
+  "seconds": 207.52768120000837,
+  "exit": 0,
+  "counts_including_subtests": {
+    "pass": 4324,
+    "fail": 0,
+    "skip": 84
+  },
+  "package_failures": [],
+  "slowest_tests": [
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "test": "TestAppLogRequestLatencyUnderStorageFailure",
+      "seconds": 5.01
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "test": "TestAppLogRequestLatencyUnderStorageFailure/unavailable",
+      "seconds": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "test": "TestMusicAudienceDeadlineCannotAuthorizeDelayedRecipient",
+      "seconds": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "test": "TestPlayTrack_GuardHasOwnDeadline",
+      "seconds": 5
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "test": "TestGroupAdmissionServiceRejectsKnownIDWithoutAcceptedFriendship",
+      "seconds": 4.36
+    },
+    {
+      "package": "github.com/argeinfina/hichat/repository",
+      "test": "TestApplicationRemovalRejectsWrongOwnerPrincipalAndChangedProof",
+      "seconds": 3.13
+    },
+    {
+      "package": "github.com/argeinfina/hichat/repository",
+      "test": "TestServerOwnershipTransferRejectsIneligibleTargetAndAdministrativeOverride",
+      "seconds": 3.02
+    },
+    {
+      "package": "github.com/argeinfina/hichat/repository",
+      "test": "TestServerEventEmailSendEligibilityTracksOccurrenceAndConsent",
+      "seconds": 2.81
+    },
+    {
+      "package": "github.com/argeinfina/hichat/musicjs",
+      "test": "TestCompiledShimRelaysPinnedEnvelopeThroughPrivateBridge",
+      "seconds": 2.71
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "test": "TestMusicAccessScopeDeniedAfterExtractionNeverConnects",
+      "seconds": 2.52
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "test": "TestMusicControlAdoptionWinningAfterLegacyPrecheckRejectsEveryMutation",
+      "seconds": 2.4
+    },
+    {
+      "package": "github.com/argeinfina/hichat/repository",
+      "test": "TestStreamStartRequiresCurrentMembershipChannelAndViewPermission",
+      "seconds": 2.25
+    },
+    {
+      "package": "github.com/argeinfina/hichat/services",
+      "test": "TestMusicWorkerMetadataVetoesDenialsEvenWithDataAndExitZero",
+      "seconds": 2.17
+    },
+    {
+      "package": "github.com/argeinfina/hichat/database",
+      "test": "TestLegacyBaselinesMatchHistoricalUpgrades",
+      "seconds": 2.12
+    },
+    {
+      "package": "github.com/argeinfina/hichat/database",
+      "test": "TestLegacyAdoptionAppliesMigrationsAfterKnownPrefix",
+      "seconds": 2.06
+    }
+  ],
+  "jsonl": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-baseline-8ec-server.jsonl",
+  "stderr": "C:\\Users\\PARS\\AppData\\Local\\Temp\\hichat-baseline-8ec-server.stderr.log"
+}

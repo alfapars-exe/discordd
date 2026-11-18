@@ -1,0 +1,395 @@
+{
+  "source": "15ee57816c692689b3df4839fd75c070dd995f7f",
+  "run": 43537493692,
+  "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692",
+  "status": "completed",
+  "conclusion": "failure",
+  "jobs": [
+    {
+      "name": "PostgreSQL client certificate reconnect",
+      "databaseId": 132269921178,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921178"
+    },
+    {
+      "name": "Security scan",
+      "databaseId": 132269921462,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921462"
+    },
+    {
+      "name": "golangci-lint",
+      "databaseId": 132269921483,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921483"
+    },
+    {
+      "name": "Electron main-process tests",
+      "databaseId": 132269921510,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921510"
+    },
+    {
+      "name": "PostgreSQL repository and migration contracts",
+      "databaseId": 132269921518,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921518"
+    },
+    {
+      "name": "Client lint, type, test & build",
+      "databaseId": 132269921560,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921560"
+    },
+    {
+      "name": "Prod image build (HF Dockerfile)",
+      "databaseId": 132269921567,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921567"
+    },
+    {
+      "name": "npm audit (e2e)",
+      "databaseId": 132269921580,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921580"
+    },
+    {
+      "name": "Go tests (./repository shard 4/8)",
+      "databaseId": 132269921581,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921581"
+    },
+    {
+      "name": "Playwright E2E",
+      "databaseId": 132269921584,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921584"
+    },
+    {
+      "name": "npm audit (.)",
+      "databaseId": 132269921601,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921601"
+    },
+    {
+      "name": "Go base tests & build",
+      "databaseId": 132269921616,
+      "status": "completed",
+      "conclusion": "failure",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921616"
+    },
+    {
+      "name": "Migration filename hygiene",
+      "databaseId": 132269921659,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921659"
+    },
+    {
+      "name": "npm audit (client)",
+      "databaseId": 132269921704,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921704"
+    },
+    {
+      "name": "Go tests (./repository shard 3/8)",
+      "databaseId": 132269921748,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921748"
+    },
+    {
+      "name": "Go tests (./repository shard 2/8)",
+      "databaseId": 132269921761,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921761"
+    },
+    {
+      "name": "Go tests (./repository shard 5/8)",
+      "databaseId": 132269921781,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921781"
+    },
+    {
+      "name": "Go tests (./services shard 2/8)",
+      "databaseId": 132269921798,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921798"
+    },
+    {
+      "name": "Go tests (./repository shard 0/8)",
+      "databaseId": 132269921822,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921822"
+    },
+    {
+      "name": "Go tests (./services shard 7/8)",
+      "databaseId": 132269921847,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921847"
+    },
+    {
+      "name": "Go tests (./services shard 4/8)",
+      "databaseId": 132269921890,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921890"
+    },
+    {
+      "name": "Go tests (./services shard 0/8)",
+      "databaseId": 132269921908,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921908"
+    },
+    {
+      "name": "Go tests (./services shard 3/8)",
+      "databaseId": 132269921941,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921941"
+    },
+    {
+      "name": "Go tests (./repository shard 7/8)",
+      "databaseId": 132269921950,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921950"
+    },
+    {
+      "name": "Go tests (./repository shard 1/8)",
+      "databaseId": 132269921960,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921960"
+    },
+    {
+      "name": "Go tests (./repository shard 6/8)",
+      "databaseId": 132269921976,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921976"
+    },
+    {
+      "name": "Go tests (./services shard 6/8)",
+      "databaseId": 132269921992,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921992"
+    },
+    {
+      "name": "Go tests (./services shard 1/8)",
+      "databaseId": 132269922063,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269922063"
+    },
+    {
+      "name": "Go tests (./services shard 5/8)",
+      "databaseId": 132269922104,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269922104"
+    },
+    {
+      "name": "Go test & build",
+      "databaseId": 132274480069,
+      "status": "completed",
+      "conclusion": "failure",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132274480069"
+    },
+    {
+      "name": "Combined Go statement coverage",
+      "databaseId": 132274481143,
+      "status": "completed",
+      "conclusion": "skipped",
+      "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132274481143"
+    }
+  ],
+  "native_job": {
+    "completedAt": "2026-11-14T01:07:41Z",
+    "conclusion": "success",
+    "databaseId": 132269921518,
+    "name": "PostgreSQL repository and migration contracts",
+    "startedAt": "2026-11-14T00:56:58Z",
+    "status": "completed",
+    "steps": [
+      {
+        "completedAt": "2026-11-14T00:57:00Z",
+        "conclusion": "success",
+        "name": "Set up job",
+        "number": 1,
+        "startedAt": "2026-11-14T00:56:59Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T00:57:14Z",
+        "conclusion": "success",
+        "name": "Initialize containers",
+        "number": 2,
+        "startedAt": "2026-11-14T00:57:00Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T00:57:21Z",
+        "conclusion": "success",
+        "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "number": 3,
+        "startedAt": "2026-11-14T00:57:14Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T00:57:29Z",
+        "conclusion": "success",
+        "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+        "number": 4,
+        "startedAt": "2026-11-14T00:57:21Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T00:57:29Z",
+        "conclusion": "success",
+        "name": "Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+        "number": 5,
+        "startedAt": "2026-11-14T00:57:29Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T00:57:34Z",
+        "conclusion": "success",
+        "name": "Start active-process PostgreSQL with mutual TLS",
+        "number": 6,
+        "startedAt": "2026-11-14T00:57:29Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T00:58:38Z",
+        "conclusion": "success",
+        "name": "Build production server for active-process acceptance",
+        "number": 7,
+        "startedAt": "2026-11-14T00:57:34Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T01:04:23Z",
+        "conclusion": "success",
+        "name": "Execute server, repository, and database tests; reject required test skips",
+        "number": 8,
+        "startedAt": "2026-11-14T00:58:38Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T01:07:00Z",
+        "conclusion": "success",
+        "name": "Race-check role mutations, durable delivery and email queues against PostgreSQL",
+        "number": 9,
+        "startedAt": "2026-11-14T01:04:23Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T01:07:36Z",
+        "conclusion": "success",
+        "name": "Race-check active voice process SIGTERM against mutual TLS PostgreSQL",
+        "number": 10,
+        "startedAt": "2026-11-14T01:07:00Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T01:07:36Z",
+        "conclusion": "success",
+        "name": "Stop active-process PostgreSQL",
+        "number": 11,
+        "startedAt": "2026-11-14T01:07:36Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T01:07:36Z",
+        "conclusion": "success",
+        "name": "Post Run actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
+        "number": 19,
+        "startedAt": "2026-11-14T01:07:36Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T01:07:37Z",
+        "conclusion": "success",
+        "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+        "number": 20,
+        "startedAt": "2026-11-14T01:07:36Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T01:07:37Z",
+        "conclusion": "success",
+        "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "number": 21,
+        "startedAt": "2026-11-14T01:07:37Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T01:07:37Z",
+        "conclusion": "success",
+        "name": "Stop containers",
+        "number": 22,
+        "startedAt": "2026-11-14T01:07:37Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-11-14T01:07:37Z",
+        "conclusion": "success",
+        "name": "Complete job",
+        "number": 23,
+        "startedAt": "2026-11-14T01:07:37Z",
+        "status": "completed"
+      }
+    ],
+    "url": "https://github.com/alfapars-exe/discordd/actions/runs/43537493692/job/132269921518"
+  },
+  "native_evidence": [
+    "2026-11-14T01:04:23.1068299Z === RUN   TestVoiceUsagePostgresChannelDeletionHandsOffAllBeforeMedia",
+    "2026-11-14T01:04:23.1068898Z === RUN   TestVoiceUsagePostgresChannelDeletionHandsOffAllBeforeMedia/admitted-eviction",
+    "2026-11-14T01:04:23.1082489Z === RUN   TestVoiceUsagePostgresChannelDeletionHandsOffAllBeforeMedia/closed-eviction",
+    "2026-11-14T01:04:23.1095241Z === RUN   TestVoiceUsagePostgresChannelDeletionHandsOffAllBeforeMedia/closed-music",
+    "2026-11-14T01:04:23.1107987Z --- PASS: TestVoiceUsagePostgresChannelDeletionHandsOffAllBeforeMedia (1.63s)",
+    "2026-11-14T01:04:23.1109336Z     --- PASS: TestVoiceUsagePostgresChannelDeletionHandsOffAllBeforeMedia/admitted-eviction (0.54s)",
+    "2026-11-14T01:04:23.1111061Z     --- PASS: TestVoiceUsagePostgresChannelDeletionHandsOffAllBeforeMedia/closed-eviction (0.56s)",
+    "2026-11-14T01:04:23.1112410Z     --- PASS: TestVoiceUsagePostgresChannelDeletionHandsOffAllBeforeMedia/closed-music (0.53s)",
+    "2026-11-14T01:04:23.1248823Z ##[group]Run go test -race ./services ./repository ./database ./pkg/email -run '^(TestPostgresRole|TestPostgresMemberRoleReplacement|TestVoiceMaintenanceAFKPostgresCancellation|TestVoiceUsageCreditPostgres|TestVoiceUsagePostgres|TestPostgresVoiceUsageMigration|TestChannelDelivery|TestDMIdempotent|TestDMOutbox|TestDMMarkUnreadFrom|TestEmail)' -count=1 -timeout=5m",
+    "2026-11-14T01:04:23.1251772Z \u001b[36;1mgo test -race ./services ./repository ./database ./pkg/email -run '^(TestPostgresRole|TestPostgresMemberRoleReplacement|TestVoiceMaintenanceAFKPostgresCancellation|TestVoiceUsageCreditPostgres|TestVoiceUsagePostgres|TestPostgresVoiceUsageMigration|TestChannelDelivery|TestDMIdempotent|TestDMOutbox|TestDMMarkUnreadFrom|TestEmail)' -count=1 -timeout=5m\u001b[0m"
+  ],
+  "base_failure": {
+    "job": 132269921616,
+    "test": "TestGameActivityWebSocketTwoViewersOptOutAndPhysicalDisconnect",
+    "assertion": "game id = Game A, want Game B",
+    "cause": "ready precedes asynchronous initial snapshots; fixture did not await those snapshots before publishing updates",
+    "additional_fixture_gap": "Gorilla timeout poisoned repeated no-event reads; replaced by live reader with joined cleanup"
+  },
+  "fixture_fix_validation": {
+    "canonical_ws_repetitions": 3,
+    "canonical_activity_repetitions": 50,
+    "integration_activity_and_registration_repetitions": 10,
+    "vet": "pass both trees",
+    "lint": "0 issues both trees"
+  },
+  "limits": [
+    "new fixture source requires fresh complete CI",
+    "native channel deletion success does not prove physical media or pre-enqueue crash behavior"
+  ]
+}

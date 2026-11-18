@@ -7,7 +7,7 @@ import { useVoiceRecoveryStore } from "../../stores/voiceRecoveryStore";
 import {ownsP2PCapture}from "../../audio/p2pCaptureOwner";
 import {useMicrophoneCaptureViewStore}from "../../stores/microphoneCaptureViewStore";
 import { useGroupCallAudioControlStore, toggleGroupCallMicrophone } from "../../stores/groupCallAudioControlStore";
-import { useState, useRef, useEffect, lazy, Suspense } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuthStore } from "../../stores/authStore";
 import { useVoiceStore } from "../../stores/voiceStore";
@@ -29,7 +29,7 @@ import { useVoiceShortcutAction } from "../../hooks/useVoiceShortcutAction";
 import { getAuthGeneration } from "../../api/client";
 import { createPortal } from "react-dom";
 
-const VoiceConnectionStatus = lazy(() => import("../voice/VoiceConnectionStatus"));
+import VoiceConnectionStatus from "../voice/VoiceConnectionStatus";
 
 type UserBarProps = {
   onToggleMute: () => void;
@@ -192,9 +192,7 @@ function UserBar({
       {isInVoice && (
         <div className="ub-voice-row">
           <div className="ub-voice-info">
-            {UI_SHELL_V2 ? <Suspense fallback={<span className="ub-voice-label">{t("connectingToVoice")}</span>}>
-              <VoiceConnectionStatus showConnected />
-            </Suspense> : recoveryPhase === "idle" ? <span className="ub-voice-label">{t("voiceConnected")}</span> : null}
+            {UI_SHELL_V2 ? <VoiceConnectionStatus showConnected /> : recoveryPhase === "idle" ? <span className="ub-voice-label">{t("voiceConnected")}</span> : null}
             {rtt > 0 && recoveryPhase === "idle" && (
               <div className="ub-ping-tooltip">
                 <span className={`ub-ping-value ${pingColor}`}>{rtt} ms</span>

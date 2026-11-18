@@ -28,7 +28,7 @@ type LiveKitInstanceMetrics struct {
 	HetznerAvail    bool    `json:"hetzner_avail"`
 
 	// Screen share stats (from voice service, not Prometheus)
-	ScreenShareCount int `json:"screen_share_count"` // active streamers
+	ScreenShareCount   int `json:"screen_share_count"`   // active streamers
 	ScreenShareViewers int `json:"screen_share_viewers"` // total viewers watching
 
 	FetchedAt time.Time `json:"fetched_at"`

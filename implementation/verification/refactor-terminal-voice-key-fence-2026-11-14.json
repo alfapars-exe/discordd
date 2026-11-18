@@ -1,0 +1,34 @@
+{
+  "date": "2026-11-14",
+  "scope": "Prevent room key recreation after terminal voice finalization",
+  "source_sha256": {
+    "server/services/voice_e2ee.go": "4aaf9bf197718afdc0e9fb056273907dbff80029dedfaec838f1fd0b97f2a9d2",
+    "server/services/voice_service.go": "8371b0f1fbfb3bf33b55ba4a5e6cbd6992ccd82e926d8c377deea8be7bc7e38b",
+    "server/services/voice_shutdown.go": "d75aa9b6df0d556b3e42a629810b1ba3c6590eef57385c1f5798a4dad6b9b791",
+    "server/services/voice_shutdown_test.go": "1943db5406e9c8c87dc795633ffdce19e457cc2f6ba1d1c0b17a8b70365816f1"
+  },
+  "before": {
+    "test": "TestVoiceShutdownRejectsLateRoomKeyCreation",
+    "exit": 1,
+    "failure": "terminal music key request was accepted"
+  },
+  "after": {
+    "shutdown_and_key_tests_count": 20,
+    "host_exit": 0,
+    "host_seconds": 4.573,
+    "services_vet_exit": 0,
+    "services_lint_issues": 0
+  },
+  "invariants": [
+    "Terminal flag is written with final map clear under voice mutex",
+    "Shared locked key creator checks flag before cache hit or generation",
+    "MusicRoomKey and roomMediaKey return context.Canceled after finalization",
+    "Media worker cleanup precedes flag and final key removal"
+  ],
+  "limitations": [
+    "Local integration only; new-source Linux race pending Docker availability.",
+    "Does not claim cryptographic memory erasure or physical-media acceptance.",
+    "Published22aae5bb CI43524233537 is distinct; last poll18 successful jobs, no failure; PostgreSQL still in progress.",
+    "Whole-project and active-process acceptance remain open."
+  ]
+}

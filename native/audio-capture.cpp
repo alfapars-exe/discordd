@@ -31,7 +31,9 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 
-#include <windows.h>
+#include "process-id.h"
+#include <memory>
+#include <wrl/client.h>
 #include <initguid.h>
 #include <mmdeviceapi.h>
 #include <audioclient.h>
@@ -155,14 +157,18 @@ public:
     HRESULT STDMETHODCALLTYPE ActivateCompleted(
         IActivateAudioInterfaceAsyncOperation* op
     ) override {
-        op->GetActivateResult(&m_hrActivate, &m_pActivated);
+        const HRESULT result = op->GetActivateResult(&m_hrActivate, &m_pActivated);
+        if (FAILED(result)) m_hrActivate = result;
         SetEvent(m_event);
         return S_OK;
     }
 
     // Block until activation completes, then extract IAudioClient.
-    HRESULT Wait(IAudioClient** ppClient) {
-        WaitForSingleObject(m_event, INFINITE);
+    HRESULT Wait(IAudioClient** ppClient, DWORD timeoutMs) {
+        *ppClient = nullptr;
+        const DWORD result = WaitForSingleObject(m_event, timeoutMs);
+        if (result == WAIT_TIMEOUT) return HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+        if (result == WAIT_FAILED) return HRESULT_FROM_WIN32(GetLastError());
         fprintf(stderr, "[audio-capture] ActivateResult: hr=0x%08lx pUnk=%p\n",
             m_hrActivate, m_pActivated);
         if (FAILED(m_hrActivate) || !m_pActivated) {
@@ -205,28 +211,77 @@ struct AudioHeader {
 // Main
 // ═══════════════════════════════════════════════════════════════════════
 
-int wmain(int argc, wchar_t* argv[]) {
-    if (argc < 2) {
-        fprintf(stderr, "Usage: audio-capture.exe <PID-to-exclude>\n");
-        return 1;
+template<typename Writer>
+static bool WritePacket(const BYTE* data, size_t length, bool silent, Writer writeBytes) {
+    static const BYTE zeros[8192] = {};
+    while (length && g_running) {
+        const unsigned chunk = static_cast<unsigned>(length > sizeof(zeros) ? sizeof(zeros) : length);
+        const int written = writeBytes(silent ? zeros : data, chunk);
+        if (written <= 0) return false;
+        if (!silent) data += written;
+        length -= written;
     }
+    return true;
+}
 
-    DWORD excludePid = static_cast<DWORD>(_wtoi(argv[1]));
-    fprintf(stderr, "[audio-capture] Excluding PID %u from loopback\n", excludePid);
-
-    // Binary mode for stdout — no CR/LF translation
-    _setmode(_fileno(stdout), _O_BINARY);
-
-    // Graceful shutdown on Ctrl+C or pipe close
-    SetConsoleCtrlHandler(CtrlHandler, TRUE);
-
-    // ─── COM init (MTA required for ActivateAudioInterfaceAsync) ───
-    HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-    if (FAILED(hr)) {
-        fprintf(stderr, "[audio-capture] CoInitializeEx failed: 0x%08lx\n", hr);
-        return 1;
+static HRESULT DrainPackets(IAudioCaptureClient* client, UINT32 frameSize) {
+    while (g_running) {
+        BYTE* data = nullptr;
+        UINT32 frames = 0;
+        DWORD flags = 0;
+        const HRESULT read = client->GetBuffer(&data, &frames, &flags, nullptr, nullptr);
+        if (read == AUDCLNT_S_BUFFER_EMPTY || FAILED(read)) return read;
+        const bool delivered = WritePacket(data, static_cast<size_t>(frames) * frameSize,
+            (flags & AUDCLNT_BUFFERFLAGS_SILENT) != 0,
+            [](const BYTE* bytes, unsigned count) { return _write(1, bytes, count); });
+        const HRESULT released = client->ReleaseBuffer(frames);
+        if (FAILED(released)) return released;
+        if (!delivered) g_running = FALSE;
+        if (!frames) return S_OK;
     }
+    return S_OK;
+}
 
+static bool InputClosed(HANDLE input) {
+    if (PeekNamedPipe(input, nullptr, 0, nullptr, nullptr, nullptr)) return false;
+    const DWORD error = GetLastError();
+    return error == ERROR_BROKEN_PIPE || error == ERROR_PIPE_NOT_CONNECTED;
+}
+
+static HRESULT CapturePackets(IAudioCaptureClient* captureClient, HANDLE captureEvent, UINT32 frameSize) {
+    const HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
+    const bool hasInputPipe = GetFileType(input) == FILE_TYPE_PIPE;
+    while (g_running && !(hasInputPipe && InputClosed(input))) {
+        const DWORD result = WaitForSingleObject(captureEvent, 100);
+        if (result == WAIT_FAILED) return HRESULT_FROM_WIN32(GetLastError());
+        if (result != WAIT_OBJECT_0) continue;
+        const HRESULT hr = DrainPackets(captureClient, frameSize);
+        if (FAILED(hr)) return hr;
+    }
+    return S_OK;
+}
+
+// The Electron decoder accepts interleaved signed PCM16 or IEEE float32.
+static bool SupportsCaptureFormat(const WAVEFORMATEX& format) {
+    DWORD tag = format.wFormatTag;
+    if (tag == WAVE_FORMAT_EXTENSIBLE) {
+        if (format.cbSize < sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX)) return false;
+        const auto& extended = reinterpret_cast<const WAVEFORMATEXTENSIBLE&>(format);
+        if (IsEqualGUID(extended.SubFormat, KSDATAFORMAT_SUBTYPE_PCM)) tag = WAVE_FORMAT_PCM;
+        else if (IsEqualGUID(extended.SubFormat, KSDATAFORMAT_SUBTYPE_IEEE_FLOAT)) tag = WAVE_FORMAT_IEEE_FLOAT;
+        else return false;
+    }
+    return format.nChannels >= 1 && format.nChannels <= 8
+        && format.nSamplesPerSec >= 8000 && format.nSamplesPerSec <= 192000
+        && format.nBlockAlign == format.nChannels * (format.wBitsPerSample / 8)
+        && ((tag == WAVE_FORMAT_PCM && format.wBitsPerSample == 16)
+            || (tag == WAVE_FORMAT_IEEE_FLOAT && format.wBitsPerSample == 32));
+}
+
+static int RunCapture(DWORD excludePid) {
+    using Microsoft::WRL::ComPtr;
+    // WASAPI can signal the event until the audio client is released.
+    std::unique_ptr<void, decltype(&CloseHandle)> captureEvent(nullptr, CloseHandle);
     // ─── Setup process-exclusive loopback activation params ───
     AUDIOCLIENT_ACTIVATION_PARAMS_S acParams = {};
     acParams.ActivationType = AC_ACTIVATION_TYPE_PROCESS_LOOPBACK;
@@ -240,35 +295,35 @@ int wmain(int argc, wchar_t* argv[]) {
     activateParams.blob.pBlobData = reinterpret_cast<BYTE*>(&acParams);
 
     // ─── Activate audio interface asynchronously ───
-    auto* handler = new CompletionHandler();
-    IActivateAudioInterfaceAsyncOperation* asyncOp = nullptr;
+    ComPtr<IAudioClient> audioClient;
+    HRESULT hr;
+    {
+        ComPtr<CompletionHandler> handler;
+        handler.Attach(new CompletionHandler());
+        ComPtr<IActivateAudioInterfaceAsyncOperation> asyncOp;
 
-    hr = ActivateAudioInterfaceAsync(
-        VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK,
-        __uuidof(IAudioClient),
-        &activateParams,
-        handler,
-        &asyncOp
-    );
+        hr = ActivateAudioInterfaceAsync(
+            VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK,
+            __uuidof(IAudioClient),
+            &activateParams,
+            handler.Get(),
+            asyncOp.GetAddressOf()
+        );
 
-    if (FAILED(hr)) {
-        fprintf(stderr,
-            "[audio-capture] ActivateAudioInterfaceAsync failed: 0x%08lx\n"
-            "[audio-capture] Process loopback requires Windows 10 21H2+\n", hr);
-        handler->Release();
-        CoUninitialize();
-        return 1;
+        if (FAILED(hr)) {
+            fprintf(stderr,
+                "[audio-capture] ActivateAudioInterfaceAsync failed: 0x%08lx\n"
+                "[audio-capture] Process loopback requires Windows 10 21H2+\n", hr);
+            return 1;
+        }
+
+        // Wait for async activation to complete
+        // Bound activation even when the helper is launched without Electron.
+        constexpr DWORD activationTimeoutMs = 5000;
+        hr = handler->Wait(audioClient.GetAddressOf(), activationTimeoutMs);
     }
-
-    // Wait for async activation to complete
-    IAudioClient* audioClient = nullptr;
-    hr = handler->Wait(&audioClient);
-    handler->Release();
-    if (asyncOp) asyncOp->Release();
-
     if (FAILED(hr) || !audioClient) {
         fprintf(stderr, "[audio-capture] Failed to get IAudioClient: 0x%08lx\n", hr);
-        CoUninitialize();
         return 1;
     }
 
@@ -285,8 +340,9 @@ int wmain(int argc, wchar_t* argv[]) {
     WAVEFORMATEXTENSIBLE fallbackFmt = {};
     bool usingFallback = false;
 
-    if (FAILED(hr)) {
-        fprintf(stderr, "[audio-capture] GetMixFormat returned 0x%08lx, using fallback 48kHz/stereo/float32\n", hr);
+    if (FAILED(hr) || !waveFormat || !SupportsCaptureFormat(*waveFormat)) {
+        if (waveFormat) CoTaskMemFree(waveFormat);
+        fprintf(stderr, "[audio-capture] Mix format unavailable or unsupported (hr= 0x%08lx), using fallback 48kHz/stereo/float32\n", hr);
 
         // KSDATAFORMAT_SUBTYPE_IEEE_FLOAT = {00000003-0000-0010-8000-00AA00389B71}
         static const GUID KSDATAFORMAT_SUBTYPE_IEEE_FLOAT_LOCAL =
@@ -316,10 +372,9 @@ int wmain(int argc, wchar_t* argv[]) {
     if (formatTag == WAVE_FORMAT_EXTENSIBLE) {
         auto* ext = reinterpret_cast<WAVEFORMATEXTENSIBLE*>(waveFormat);
         formatTag     = ext->SubFormat.Data1;  // 1=PCM, 3=IEEE_FLOAT
-        bitsPerSample = ext->Samples.wValidBitsPerSample;
     }
 
-    UINT32 frameSize = channels * (bitsPerSample / 8);
+    UINT32 frameSize = waveFormat->nBlockAlign;
 
     fprintf(stderr, "[audio-capture] Format: %u Hz, %u ch, %u bit, tag=%u%s\n",
         sampleRate, channels, bitsPerSample, formatTag,
@@ -343,32 +398,28 @@ int wmain(int argc, wchar_t* argv[]) {
 
     if (FAILED(hr)) {
         fprintf(stderr, "[audio-capture] Initialize failed: 0x%08lx\n", hr);
-        audioClient->Release();
-        CoUninitialize();
         return 1;
     }
 
     // ─── Setup event-driven capture ───
-    HANDLE captureEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
-    hr = audioClient->SetEventHandle(captureEvent);
+    captureEvent.reset(CreateEventW(nullptr, FALSE, FALSE, nullptr));
+    if (!captureEvent) {
+        fprintf(stderr, "[audio-capture] CreateEvent failed: %lu\n", GetLastError());
+        return 1;
+    }
+    hr = audioClient->SetEventHandle(captureEvent.get());
     if (FAILED(hr)) {
         fprintf(stderr, "[audio-capture] SetEventHandle failed: 0x%08lx\n", hr);
-        audioClient->Release();
-        CloseHandle(captureEvent);
-        CoUninitialize();
         return 1;
     }
 
-    IAudioCaptureClient* captureClient = nullptr;
+    ComPtr<IAudioCaptureClient> captureClient;
     hr = audioClient->GetService(
         __uuidof(IAudioCaptureClient),
-        reinterpret_cast<void**>(&captureClient)
+        reinterpret_cast<void**>(captureClient.GetAddressOf())
     );
     if (FAILED(hr)) {
         fprintf(stderr, "[audio-capture] GetService(CaptureClient) failed: 0x%08lx\n", hr);
-        audioClient->Release();
-        CloseHandle(captureEvent);
-        CoUninitialize();
         return 1;
     }
 
@@ -381,10 +432,6 @@ int wmain(int argc, wchar_t* argv[]) {
 
     if (_write(1, &header, sizeof(header)) != sizeof(header)) {
         fprintf(stderr, "[audio-capture] Failed to write header to stdout\n");
-        captureClient->Release();
-        audioClient->Release();
-        CloseHandle(captureEvent);
-        CoUninitialize();
         return 1;
     }
 
@@ -392,69 +439,45 @@ int wmain(int argc, wchar_t* argv[]) {
     hr = audioClient->Start();
     if (FAILED(hr)) {
         fprintf(stderr, "[audio-capture] Start failed: 0x%08lx\n", hr);
-        captureClient->Release();
-        audioClient->Release();
-        CloseHandle(captureEvent);
-        CoUninitialize();
         return 1;
     }
 
     fprintf(stderr, "[audio-capture] Capture started (excluding PID %u)\n", excludePid);
 
     // ─── Capture loop ───
-    // Event fires when audio buffer has data. 100ms timeout for checking
-    // shutdown flag. On broken pipe (_write returns <= 0), exit cleanly.
-    while (g_running) {
-        DWORD waitResult = WaitForSingleObject(captureEvent, 100);
-
-        if (waitResult == WAIT_OBJECT_0) {
-            // Drain all available packets in this event cycle
-            while (true) {
-                BYTE*  data      = nullptr;
-                UINT32 numFrames = 0;
-                DWORD  flags     = 0;
-
-                hr = captureClient->GetBuffer(&data, &numFrames, &flags, nullptr, nullptr);
-                if (hr == AUDCLNT_S_BUFFER_EMPTY || FAILED(hr)) break;
-                if (numFrames == 0) {
-                    captureClient->ReleaseBuffer(numFrames);
-                    break;
-                }
-
-                UINT32 byteCount = numFrames * frameSize;
-
-                if (flags & AUDCLNT_BUFFERFLAGS_SILENT) {
-                    // Silent buffer — write zeros instead of garbage data
-                    static BYTE zeros[8192];
-                    UINT32 remaining = byteCount;
-                    while (remaining > 0 && g_running) {
-                        UINT32 chunk = remaining > sizeof(zeros) ? sizeof(zeros) : remaining;
-                        int w = _write(1, zeros, chunk);
-                        if (w <= 0) { g_running = FALSE; break; }
-                        remaining -= chunk;
-                    }
-                } else {
-                    // Write actual PCM data
-                    int w = _write(1, data, byteCount);
-                    if (w <= 0) {
-                        // Pipe broken — parent process closed connection
-                        g_running = FALSE;
-                    }
-                }
-
-                captureClient->ReleaseBuffer(numFrames);
-            }
-        }
-        // WAIT_TIMEOUT: just loop back and check g_running
-    }
+    hr = CapturePackets(captureClient.Get(), captureEvent.get(), frameSize);
+    if (FAILED(hr)) fprintf(stderr, "[audio-capture] Capture failed: 0x%08lx\n", hr);
 
     // ─── Cleanup ───
     fprintf(stderr, "[audio-capture] Stopping capture\n");
     audioClient->Stop();
-    captureClient->Release();
-    audioClient->Release();
-    CloseHandle(captureEvent);
-    CoUninitialize();
 
-    return 0;
+    return FAILED(hr) ? 1 : 0;
+}
+
+int wmain(int argc, wchar_t* argv[]) {
+    DWORD excludePid = 0;
+    if (argc != 2 || !ParseProcessId(argv[1], &excludePid)) {
+        fprintf(stderr, "Usage: audio-capture.exe <PID-to-exclude>\n");
+        return 1;
+    }
+
+    fprintf(stderr, "[audio-capture] Excluding PID %u from loopback\n", excludePid);
+
+    // Binary mode for stdout — no CR/LF translation
+    _setmode(_fileno(stdout), _O_BINARY);
+
+    // Graceful shutdown on Ctrl+C or pipe close
+    SetConsoleCtrlHandler(CtrlHandler, TRUE);
+
+    // ─── COM init (MTA required for ActivateAudioInterfaceAsync) ───
+    HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    if (FAILED(hr)) {
+        fprintf(stderr, "[audio-capture] CoInitializeEx failed: 0x%08lx\n", hr);
+        return 1;
+    }
+
+    const int result = RunCapture(excludePid);
+    CoUninitialize();
+    return result;
 }

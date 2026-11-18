@@ -25,6 +25,48 @@ describe("wallpaper device override", () => {
   });
 });
 
+describe("settings reset ownership inside a destination action",()=>{
+  it("receives the real presenter fence during a nested theme reset",async()=>{
+    const {applyAccountPreferences}=await import("./applyAccountPreferences");
+    useSettingsStore.getState().applyAppearanceFromServer({uiScale:130});
+    let current=true;
+    let stop=()=>{};
+    stop=useSettingsStore.subscribe(()=>{
+      stop();current=false;
+      useSettingsStore.getState().applyAppearanceFromServer({uiScale:150});
+      useSettingsStore.getState().setPendingWallpaperPreviewUrl("blob:replacement");
+    });
+    try {
+      applyAccountPreferences(()=>current?{appearance:{uiScale:130}}:null,true,false);
+      expect(useSettingsStore.getState().uiScale).toBe(150);
+      expect(localStorage.getItem("mqvi_ui_scale")).toBe("150");
+      expect(useSettingsStore.getState().pendingWallpaperPreviewUrl).toBe("blob:replacement");
+    }finally{stop();}
+  });
+
+  it.each(["before","theme","appearance"] as const)("preserves replacement state after retirement at %s",phase=>{
+    const store=useSettingsStore.getState();
+    store.applyAppearanceFromServer({uiScale:130});store.setPendingWallpaperPreviewUrl("blob:alice");
+    let current=phase!=="before",notifications=0;
+    let stop=()=>{};
+    if(current)stop=useSettingsStore.subscribe(()=>{
+      notifications++;
+      if(notifications!==(phase==="theme"?1:2))return;
+      stop();current=false;
+      useSettingsStore.getState().applyAppearanceFromServer({uiScale:150});
+      useSettingsStore.getState().setPendingWallpaperPreviewUrl("blob:bob");
+    });
+    try {
+      store.resetAccountPreferences(false,()=>current);
+      const expected=phase==="before"?130:150;
+      expect(useSettingsStore.getState().uiScale).toBe(expected);
+      expect(localStorage.getItem("mqvi_ui_scale")).toBe(String(expected));
+      expect(document.documentElement.style.getPropertyValue("--ui-scale")).toBe(String(expected/100));
+      expect(useSettingsStore.getState().pendingWallpaperPreviewUrl).toBe(phase==="before"?"blob:alice":"blob:bob");
+    }finally{stop();}
+  });
+});
+
 /**
  * UI Scale (Appearance → Uygulama Ölçeği). The store keeps an integer percent
  * (50–200, default 100) and applies it as the --ui-scale CSS custom property

@@ -1,0 +1,26 @@
+{
+  "date": "2026-11-15",
+  "base": "50faf738c3a50f214b215d7e7975f192aeee654f",
+  "sourceSha256": {
+    "client/src/crypto/cachedSearchEpoch.ts": "769f797e87b7e7b6bea5bd3701fe89e032a13aa3da4968388cb7faa940592c34",
+    "client/src/crypto/cachedSearchEpoch.test.ts": "3fab7be9925bd568c3e755272a454a3c783717a7784997aa33eca53ef27f1a19"
+  },
+  "before": "3 of 4 initial regressions failed: foreign notification opened DB, signed-out notification opened DB, session-before-derivation fence absent",
+  "after": {
+    "targetedVitest": "5 files / 76 tests passed",
+    "eslint": "changed epoch source and tests passed",
+    "typescript": "tsc --noEmit passed"
+  },
+  "behavior": [
+    "derive namespace without storage before matching reset notification",
+    "ignore signed-out and malformed notifications",
+    "reject stale session after asynchronous name derivation",
+    "preserve matching persistent-epoch reset emission",
+    "observe namespace-derivation failure"
+  ],
+  "limits": [
+    "module seam tests use mocked database and BroadcastChannel",
+    "existing snapshot and panel regression suites also passed",
+    "native cross-window and final combined-source acceptance remain open"
+  ]
+}

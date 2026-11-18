@@ -37,8 +37,6 @@ func (s *stubFriendshipService) ListFriends(context.Context, string) ([]models.F
 func (s *stubFriendshipService) ListRequests(context.Context, string) (*services.FriendRequestsResponse, error) {
 	return nil, nil
 }
-func (s *stubFriendshipService) SetDMAcceptor(services.DMRequestAcceptor) {}
-func (s *stubFriendshipService) SetEmailEnqueuer(services.EmailEnqueuer)  {}
 
 var _ services.FriendshipService = (*stubFriendshipService)(nil)
 
@@ -60,6 +58,7 @@ func newSendFriendRequest(t *testing.T, body string) *http.Request {
 func TestSendRequest_RateLimit(t *testing.T) {
 	svc := &stubFriendshipService{}
 	limiter := ratelimit.NewMessageRateLimiter(2, time.Minute, 30*time.Second)
+	t.Cleanup(limiter.Stop)
 	h := NewFriendshipHandler(svc, limiter)
 
 	for i := 0; i < 2; i++ {

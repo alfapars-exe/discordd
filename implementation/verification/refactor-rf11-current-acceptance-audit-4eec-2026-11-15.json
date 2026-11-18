@@ -1,0 +1,41 @@
+{
+  "source": "4eec9daf5f9482a80ec08064478e1bd1ea256fb5",
+  "scope": "RF11 requirement-by-requirement current audit; completion remains unproven",
+  "requirements": [
+    {
+      "requirement": "Mandatory behavior explicit in constructor or small dependency structure",
+      "evidence": "Named domain groups with missing/typed-nil matrices; independent permission caches; voice fresh and portable access modes",
+      "status": "partial",
+      "remaining": "Direct root services ServerEvent/Invite/ServerMute/ChannelMute/LinkPreview/Badge still lack complete presence validation; check all providers before workers."
+    },
+    {
+      "requirement": "Deterministic disabled optional integrations",
+      "evidence": "Nil email/sender/readiness and portable SQLite VoiceAccess distinguished from typed nil; channel delivery DB mode covered by real PostgreSQL fixture",
+      "status": "partial",
+      "remaining": "Reconcile complete production optional integration inventory including configuration-controlled features; current modes are examples, not exhaustive proof."
+    },
+    {
+      "requirement": "Domain composition, no DI framework, root without business logic",
+      "evidence": "Current initServices contains named group construction, callback binding, configuration, owner registration and returned bundle",
+      "status": "source-consistent",
+      "remaining": "Final review against all root behavior; do not equate zero direct constructors with acceptance."
+    },
+    {
+      "requirement": "Callbacks and startup/shutdown regressions",
+      "evidence": "Controlled callback composition registers every base/optional group once; explicit ServiceInitialization cleanup/transfer tests; audit stop-before-start/terminal admission fixed and Linux race ten repetitions passed",
+      "status": "partial",
+      "remaining": "Whole acquisition/failure position matrix and combined source race/PostgreSQL/runtime acceptance; pprof cache counts do not cover every non-cache resource."
+    }
+  ],
+  "next_work": [
+    "Validate direct root providers before allocation without hiding intended startup failure tests",
+    "Finish complete optional/owner inventory and close unsupported acceptance claims",
+    "Collect broad run 81657 outcome and exact current-head CI",
+    "Then continue RF01-RF30 remaining gates; RF11 is not the full project goal"
+  ],
+  "live_run": {
+    "session": 81657,
+    "source": "4eec9daf5f9482a80ec08064478e1bd1ea256fb5",
+    "status": "running; no result asserted"
+  }
+}

@@ -28,7 +28,7 @@ func benchPermMiddleware() *PermissionMiddleware {
 			}, nil
 		},
 	}
-	return NewPermissionMiddleware(repo)
+	return NewPermissionMiddleware(repo, nil)
 }
 
 // BenchmarkResolveEffectivePerms_CacheHit measures the steady-state read

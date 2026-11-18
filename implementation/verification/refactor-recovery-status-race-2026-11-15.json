@@ -1,0 +1,150 @@
+{
+  "sourceRevision": "bf910fcf",
+  "productCommit": "7e8d4ef4",
+  "initialRegressionCommit": "09bd083b",
+  "scope": "Unknown recovery backup status must not be treated as absent by WS/deferred activity prompts. Existing-key encryption readiness remains independent of lookup.",
+  "CIRegression": {
+    "source": "99584d45",
+    "run": 43736016366,
+    "job": 132878672897,
+    "step": "Recover encrypted history in a fresh production database",
+    "result": "source-tagged first attempt failed behind RecoveryPasswordPrompt modal;retry passed but failOnFlakyTests correctly failed job",
+    "archive": "refactor-99584-failed-ci-2026-11-15.json",
+    "log": "TEMP/hichat-99584-e2e-job.log",
+    "otherFailedCheck": {
+      "name": "SonarCloud Code Analysis",
+      "rule": "javascript:S2871",
+      "file": "e2e/scripts/benchmark-search-panels.mjs",
+      "cause": "Historical source manifest sort lacked an explicit comparator;quality gate reliability D",
+      "fixCommits": [
+        "64fba0dd",
+        "85a9412c"
+      ],
+      "behavior": "Named locale-independent lexicographic comparator preserves intended string order;no quality-gate exclusion or issue waiver",
+      "tests": "5source-overlay Git fixturesPASS;legacy quick benchmarkPASS",
+      "gateStatus": "Require new-head Sonar analysis;not yet claimed green"
+    }
+  },
+  "unitRegression": {
+    "failed": 3,
+    "passed": 51,
+    "log": "TEMP/hichat-recovery-status-race-red.log"
+  },
+  "extendedCases": [
+    "pending positive backup",
+    "confirmed absence",
+    "API failure remains unknown",
+    "late absence preserves newly uploaded backup",
+    "late response after owner replacement ignored",
+    "late response after generation replacement ignored"
+  ],
+  "targeted": {
+    "passed": 57,
+    "log": "TEMP/hichat-recovery-status-final-targeted.log"
+  },
+  "production": {
+    "result": "3passed,no retries,2.4minutes",
+    "log": "TEMP/hichat-recovery-race-production-final.log",
+    "stack": "Real Go/verified mTLS PostgreSQL18.6/production React/Chromium",
+    "control": "GET backup held across26encrypted DM sends and local search;normal UI onboarding retained;initial fixture-owned known-absent offer dismissed only before initial Settings setup. No recovery offer dismissed during held-GET regression.",
+    "negativeControl": {
+      "storeSource": "99584d45",
+      "result": "1failed1setup passed,1.6minutes;encrypted DM POST never sent because setup offer blocked UI",
+      "log": "TEMP/hichat-recovery-status-production-red.log",
+      "screenshot": "TEMP/hichat-recovery-status-old-prompt.png",
+      "restoration": "Owned store/test file bytes restored exactly in finally;git diff clean afterwards"
+    }
+  },
+  "coverage": {
+    "total": {
+      "lines": {
+        "total": 38500,
+        "covered": 26509,
+        "skipped": 0,
+        "pct": 68.85
+      },
+      "statements": {
+        "total": 52747,
+        "covered": 35768,
+        "skipped": 0,
+        "pct": 67.81
+      },
+      "functions": {
+        "total": 12318,
+        "covered": 7634,
+        "skipped": 0,
+        "pct": 61.97
+      },
+      "branches": {
+        "total": 39976,
+        "covered": 25936,
+        "skipped": 0,
+        "pct": 64.87
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "store": {
+      "lines": {
+        "total": 296,
+        "covered": 249,
+        "skipped": 0,
+        "pct": 84.12
+      },
+      "functions": {
+        "total": 47,
+        "covered": 37,
+        "skipped": 0,
+        "pct": 78.72
+      },
+      "statements": {
+        "total": 363,
+        "covered": 272,
+        "skipped": 0,
+        "pct": 74.93
+      },
+      "branches": {
+        "total": 247,
+        "covered": 170,
+        "skipped": 0,
+        "pct": 68.82
+      }
+    },
+    "log": "TEMP/hichat-recovery-status-final-coverage.log",
+    "files": 495,
+    "passed": 5316,
+    "skipped": 1,
+    "seconds": 123.75
+  },
+  "build": "PASS,Vite3.34s",
+  "lint": "0errors,2existing warnings",
+  "native": {
+    "passedModes": 7,
+    "log": "TEMP/hichat-recovery-status-final-native.log"
+  },
+  "selfScan": {
+    "source": "85a9412c",
+    "exitCode": 0,
+    "blockingMatches": 0,
+    "reviewedSourceRecords": 51,
+    "reviewLines": 478,
+    "log": "TEMP/hichat-recovery-ci-final-scan.log"
+  },
+  "cleanup": "Owned e1c2b84cd7223ba9 fixture image identity verified,container removed;developer services preserved. No recursive temp deletion.",
+  "remaining": [
+    "Windows/WebKit measured30second throughput limitation",
+    "Physical/native/whole-pipeline acceptance and RF01-RF30 remain open"
+  ],
+  "followupCI": {
+    "sourceRevision": "42de5382a49fa7bab2998364ced99fb8de4b4048",
+    "checks": 36,
+    "success": 36,
+    "productionRecovery": "SUCCESS,no flaky retry accepted",
+    "sonarCloud": "SUCCESS",
+    "archive": "refactor-42de-terminal-ci-2026-11-15.json"
+  }
+}

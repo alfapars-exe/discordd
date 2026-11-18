@@ -1,0 +1,153 @@
+{
+  "source": "289a473b175beec27d575299ea542bfa382d1778",
+  "testScope": [
+    "useOverlayChatCompose",
+    "useOverlayChatActions",
+    "useOverlayNotificationReply",
+    "overlayChatAccess"
+  ],
+  "testResult": {
+    "filesPassed": 4,
+    "testsPassed": 56,
+    "exitCode": 0
+  },
+  "scope": "Targeted renderer policy evidence; not global coverage, physical acceptance or server authorization proof. Coverage measured before the subsequent store-only test additions; these four product modules were unchanged.",
+  "coverage": {
+    "total": {
+      "lines": {
+        "total": 239,
+        "covered": 233,
+        "skipped": 0,
+        "pct": 97.48
+      },
+      "statements": {
+        "total": 343,
+        "covered": 319,
+        "skipped": 0,
+        "pct": 93
+      },
+      "functions": {
+        "total": 69,
+        "covered": 59,
+        "skipped": 0,
+        "pct": 85.5
+      },
+      "branches": {
+        "total": 376,
+        "covered": 346,
+        "skipped": 0,
+        "pct": 92.02
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "C:\\Users\\PARS\\Desktop\\PROJELER\\HiChat\\refactor-integration\\client\\src\\hooks\\useOverlayChatActions.ts": {
+      "lines": {
+        "total": 34,
+        "covered": 33,
+        "skipped": 0,
+        "pct": 97.05
+      },
+      "functions": {
+        "total": 12,
+        "covered": 11,
+        "skipped": 0,
+        "pct": 91.66
+      },
+      "statements": {
+        "total": 45,
+        "covered": 44,
+        "skipped": 0,
+        "pct": 97.77
+      },
+      "branches": {
+        "total": 52,
+        "covered": 50,
+        "skipped": 0,
+        "pct": 96.15
+      }
+    },
+    "C:\\Users\\PARS\\Desktop\\PROJELER\\HiChat\\refactor-integration\\client\\src\\hooks\\useOverlayChatCompose.ts": {
+      "lines": {
+        "total": 89,
+        "covered": 87,
+        "skipped": 0,
+        "pct": 97.75
+      },
+      "functions": {
+        "total": 21,
+        "covered": 20,
+        "skipped": 0,
+        "pct": 95.23
+      },
+      "statements": {
+        "total": 120,
+        "covered": 113,
+        "skipped": 0,
+        "pct": 94.16
+      },
+      "branches": {
+        "total": 119,
+        "covered": 110,
+        "skipped": 0,
+        "pct": 92.43
+      }
+    },
+    "C:\\Users\\PARS\\Desktop\\PROJELER\\HiChat\\refactor-integration\\client\\src\\hooks\\useOverlayNotificationReply.ts": {
+      "lines": {
+        "total": 43,
+        "covered": 42,
+        "skipped": 0,
+        "pct": 97.67
+      },
+      "functions": {
+        "total": 24,
+        "covered": 19,
+        "skipped": 0,
+        "pct": 79.16
+      },
+      "statements": {
+        "total": 84,
+        "covered": 79,
+        "skipped": 0,
+        "pct": 94.04
+      },
+      "branches": {
+        "total": 55,
+        "covered": 52,
+        "skipped": 0,
+        "pct": 94.54
+      }
+    },
+    "C:\\Users\\PARS\\Desktop\\PROJELER\\HiChat\\refactor-integration\\client\\src\\utils\\overlayChatAccess.ts": {
+      "lines": {
+        "total": 73,
+        "covered": 71,
+        "skipped": 0,
+        "pct": 97.26
+      },
+      "functions": {
+        "total": 12,
+        "covered": 9,
+        "skipped": 0,
+        "pct": 75
+      },
+      "statements": {
+        "total": 94,
+        "covered": 83,
+        "skipped": 0,
+        "pct": 88.29
+      },
+      "branches": {
+        "total": 150,
+        "covered": 134,
+        "skipped": 0,
+        "pct": 89.33
+      }
+    }
+  }
+}

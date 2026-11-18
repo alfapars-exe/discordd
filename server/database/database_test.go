@@ -3,9 +3,9 @@ package database
 import (
 	"database/sql"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"testing"
-	"testing/fstest"
 )
 
 // newRunnerTestDB opens a throwaway local SQLite file (modernc driver, already
@@ -87,46 +87,15 @@ func TestApplyMigrationFile_RollsBackEntireFileOnError(t *testing.T) {
 	}
 }
 
-func TestRunMigrations_LegacyBootstrapAppliesOnlyOptedInAdditiveMigrations(t *testing.T) {
+func TestLegacyBootstrapRejectsPartialSchema(t *testing.T) {
 	db := newRunnerTestDB(t)
-	mustExec(t, db, `CREATE TABLE users (id TEXT PRIMARY KEY)`)
-	mustCreateSchemaMigrations(t, db)
-
-	migrations := fstest.MapFS{
-		"001_historical.sql": &fstest.MapFile{Data: []byte("CREATE TABLE should_not_replay (id TEXT)")},
-		"002_additive.sql":   &fstest.MapFile{Data: []byte("-- bootstrap-safe: additive\nCREATE TABLE IF NOT EXISTS additive_queue (id TEXT PRIMARY KEY);\nCREATE INDEX IF NOT EXISTS idx_additive_queue_id ON additive_queue(id);")},
+	mustExec(t, db, "CREATE TABLE users(id TEXT PRIMARY KEY)")
+	mustExec(t, db, "INSERT INTO users VALUES('preserved')")
+	if err := db.runMigrations(os.DirFS("migrations")); err == nil {
+		t.Fatal("partial schema adopted")
 	}
-	if err := db.runMigrations(migrations); err != nil {
-		t.Fatalf("run legacy bootstrap: %v", err)
-	}
-	if got := count(t, db, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='additive_queue'`); got != 1 {
-		t.Fatalf("additive queue table count = %d, want 1", got)
-	}
-	if got := count(t, db, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='should_not_replay'`); got != 0 {
-		t.Fatalf("historical migration was replayed (table count %d)", got)
-	}
-	if got := count(t, db, `SELECT COUNT(*) FROM schema_migrations`); got != 2 {
-		t.Fatalf("recorded migrations = %d, want 2", got)
-	}
-}
-
-func TestRunMigrations_LegacyBootstrapRollsBackSafeDDLAndHistoryOnFailure(t *testing.T) {
-	db := newRunnerTestDB(t)
-	mustExec(t, db, `CREATE TABLE users (id TEXT PRIMARY KEY)`)
-	mustCreateSchemaMigrations(t, db)
-
-	migrations := fstest.MapFS{
-		"001_additive.sql":   &fstest.MapFile{Data: []byte("-- bootstrap-safe: additive\nCREATE TABLE IF NOT EXISTS transient_queue (id TEXT);\nINSERT INTO missing_table VALUES (1);")},
-		"002_historical.sql": &fstest.MapFile{Data: []byte("CREATE TABLE should_not_replay (id TEXT)")},
-	}
-	if err := db.runMigrations(migrations); err == nil {
-		t.Fatal("expected bootstrap-safe DDL failure")
-	}
-	if got := count(t, db, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='transient_queue'`); got != 0 {
-		t.Fatalf("partial bootstrap DDL survived failure (table count %d)", got)
-	}
-	if got := count(t, db, `SELECT COUNT(*) FROM schema_migrations`); got != 0 {
-		t.Fatalf("partial bootstrap migration history survived failure (%d rows)", got)
+	if count(t, db, "SELECT count(*) FROM schema_migrations") != 0 || count(t, db, "SELECT count(*) FROM users WHERE id='preserved'") != 1 {
+		t.Fatal("partial schema or ledger was changed")
 	}
 }
 

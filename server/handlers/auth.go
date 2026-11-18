@@ -759,8 +759,14 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	// generic response regardless of whether the email exists or is cooling
 	// down.
 	if _, err := h.authService.ForgotPassword(r.Context(), req.Identifier); err != nil {
-		pkg.Error(w, err)
-		return
+		if errors.Is(err, services.ErrPasswordRecoveryUnavailable) {
+			pkg.Error(w, err)
+			return
+		}
+		// Account-specific operational failures must not disclose existence.
+		// Log a fixed event without provider diagnostics, identifiers or proofs.
+		pkg.DiagnosticError(r.Context(), http.StatusOK, "AUTH_RECOVERY_FAILED", "internal",
+			errors.New("password recovery attempt could not complete"))
 	}
 
 	pkg.JSON(w, http.StatusOK, map[string]string{

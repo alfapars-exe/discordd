@@ -2,6 +2,8 @@ package testutil
 
 import (
 	"context"
+	"fmt"
+	"github.com/argeinfina/hichat/pkg"
 
 	"github.com/argeinfina/hichat/models"
 )
@@ -223,4 +225,26 @@ func (m *MockDMSettingsUnhider) UnhideForNewMessage(ctx context.Context, userID,
 		return m.UnhideForNewMessageFn(ctx, userID, channelID)
 	}
 	return nil
+}
+
+// AcceptPendingUnblocked explicitly adapts the ordinary status-write fixture.
+// Concurrency/denial tests override this method with conditionalDMRepo.
+func (m *MockDMRepo) AcceptPendingUnblocked(ctx context.Context, id string) (bool, error) {
+	err := m.UpdateChannelStatus(ctx, id, models.DMStatusAccepted)
+	return err == nil, err
+}
+
+// CreateChannelUnblocked explicitly adapts the ordinary creation fixture.
+// Guarded repository/concurrency tests provide their own real implementation.
+func (m *MockDMRepo) CreateChannelUnblocked(ctx context.Context, ch *models.DMChannel) (bool, error) {
+	err := m.CreateChannel(ctx, ch)
+	return err == nil, err
+}
+
+// Receipt-disabled fixtures fail explicitly; real idempotency tests use the DB.
+func (m *MockDMRepo) FindDMSend(context.Context, string, string, string, string) (*models.DMMessage, error) {
+	return nil, fmt.Errorf("%w: dm_send_receipts_unavailable", pkg.ErrBadRequest)
+}
+func (m *MockDMRepo) RecordDMSend(context.Context, string, string, string, string, string) error {
+	return fmt.Errorf("%w: dm_send_receipts_unavailable", pkg.ErrBadRequest)
 }

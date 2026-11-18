@@ -36,9 +36,7 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 	var used int64
 	var err error
 	now := time.Now()
-	if reader, ok := s.channelGetter.(interface {
-		VoiceTokenAccess(context.Context, string, string, time.Time) (*models.VoiceAdmission, *models.LiveKitInstance, int64, error)
-	}); ok {
+	if reader := s.voiceAccess; reader != nil {
 		admission, lkInstance, used, err = reader.VoiceTokenAccess(ctx, userID, channelID, now)
 		if err == nil {
 			channel = &admission.Channel
@@ -396,9 +394,7 @@ func (s *voiceService) GenerateScreenShareToken(ctx context.Context, userID, use
 }
 
 func (s *voiceService) loadVoiceChannel(ctx context.Context, userID, channelID string) (*models.Channel, *models.VoiceAdmission, error) {
-	if repo, ok := s.channelGetter.(interface {
-		VoiceAdmission(context.Context, string, string) (*models.VoiceAdmission, error)
-	}); ok {
+	if repo := s.voiceAccess; repo != nil {
 		a, err := repo.VoiceAdmission(ctx, userID, channelID)
 		if err != nil {
 			return nil, nil, err
@@ -437,9 +433,7 @@ func voicePublishSources(perms models.Permission, muted bool) []livekit.TrackSou
 }
 
 func (s *voiceService) currentVoicePermissions(ctx context.Context, userID, channelID string) (models.Permission, error) {
-	if fresh, ok := s.permResolver.(interface {
-		ResolveChannelPermissionsFresh(context.Context, string, string) (models.Permission, error)
-	}); ok {
+	if fresh := s.freshPermissions; fresh != nil {
 		return fresh.ResolveChannelPermissionsFresh(ctx, userID, channelID)
 	}
 	return s.permResolver.ResolveChannelPermissions(ctx, userID, channelID)

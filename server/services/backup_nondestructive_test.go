@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -17,7 +18,7 @@ func TestBackupEmptyOrPartialMountNeverDeletesRemoteFiles(t *testing.T) {
 			}
 		}
 		svc, fake := newTestBackupService(t, config.BackupConfig{HFBucket: "test/backup"})
-		if err := svc.hfSyncDir(dir, "uploads"); err != nil {
+		if err := svc.hfSyncDir(context.Background(), dir, "uploads"); err != nil {
 			t.Fatal(err)
 		}
 		if len(fake.calls) != 1 {

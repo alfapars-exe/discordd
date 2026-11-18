@@ -1,0 +1,36 @@
+{
+  "scope": "RF11 voice/media production composition validation",
+  "required_integrations": [
+    "Repositories",
+    "Hub",
+    "Permissions",
+    "FreshPermissions",
+    "Voice",
+    "Logger"
+  ],
+  "required_repositories": [
+    "Entrance",
+    "Server",
+    "Role",
+    "Channel",
+    "LiveKit",
+    "User",
+    "MusicSession"
+  ],
+  "regression": "Missing and typed nil integration/repository cases failed before implementation. Repositories pointer has two equivalent nil cases; interface providers have distinct nil/typed-nil cases.",
+  "behavior": "Reject invalid dependencies before entrance upload directory creation and music persisted-session List. Lower-level standalone constructors unchanged. Upload path and encryption key retain existing configuration semantics.",
+  "checks": {
+    "invalid_side_effects": "Upload directory remains absent and session read count remains zero.",
+    "valid_composition": "Both owners retained; session List exactly once; upload setup occurs; music owner stopped on cleanup.",
+    "root": "PASS media matrix and real friendship-DM/startup/rollback/routes/callback/voice integration, 2.428s",
+    "build": "PASS go build ./...",
+    "vet": "PASS go vet .",
+    "reviewed_manifest": "PASS 50 exact records"
+  },
+  "remaining": [
+    "Complete optional integration inventory across remaining domains",
+    "Full resource lifecycle and race acceptance",
+    "Other RF01-RF30 acceptance gates"
+  ],
+  "remote_ci": "43654234802 source 4408d2f2 still live, no observed failed job; does not cover local media changes"
+}

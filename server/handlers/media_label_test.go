@@ -37,7 +37,7 @@ func (s *mediaHandlerStore) Delete(_ context.Context, entry *models.MediaLabel) 
 
 func TestMediaLabelHandlerReturnsVersionConflict(t *testing.T) {
 	store := &mediaHandlerStore{err: pkg.ErrConflict}
-	h := NewMediaLabelHandler(services.NewMediaLabelService(store, mediaHandlerAccess{}))
+	h := NewMediaLabelHandler(services.NewMediaLabelService(store, mediaHandlerAccess{}, nil))
 	body := `{"source_kind":"dm","channel_id":"private","message_id":"message","revision":"original","fingerprint":"` + strings.Repeat("a", 64) + `","label":"sexual","expected_version":"legacy"}`
 	for _, handler := range []http.HandlerFunc{h.Set, h.Delete} {
 		w := httptest.NewRecorder()
@@ -56,7 +56,7 @@ func (mediaHandlerAccess) RecipientRevision(context.Context, string, string, str
 
 func TestMediaLabelHandlerRoundTripAndPrivateResponse(t *testing.T) {
 	store := &mediaHandlerStore{}
-	h := NewMediaLabelHandler(services.NewMediaLabelService(store, mediaHandlerAccess{}))
+	h := NewMediaLabelHandler(services.NewMediaLabelService(store, mediaHandlerAccess{}, nil))
 	body := `{"source_kind":"dm","channel_id":"private","message_id":"message","revision":"original","fingerprint":"` + strings.Repeat("a", 64) + `","label":"sexual","expected_version":""}`
 	w := httptest.NewRecorder()
 	h.Set(w, spamHandlerRequest(body, &models.User{ID: "owner"}))
@@ -94,7 +94,7 @@ func TestMediaLabelHandlerRoundTripAndPrivateResponse(t *testing.T) {
 }
 
 func TestMediaLabelHandlerRejectsMissingOwnerBotsAndUnsafeBodies(t *testing.T) {
-	h := NewMediaLabelHandler(services.NewMediaLabelService(nil, nil))
+	h := NewMediaLabelHandler(services.NewMediaLabelService(nil, nil, nil))
 	for _, method := range []http.HandlerFunc{h.Get, h.Set, h.Delete} {
 		for _, user := range []*models.User{nil, {ID: "bot", IsBot: true}} {
 			w := httptest.NewRecorder()

@@ -1,3 +1,4 @@
+import { clampVoicePeerVolume, isVoicePeerKey, ownVoicePeerValue, voicePeerVolume } from "../voicePreferenceMaps";
 /**
  * voiceSettingsSlice — persisted voice settings (input mode, PTT, volumes, devices, etc.)
  *
@@ -7,254 +8,14 @@
  */
 
 import type { StateCreator } from "zustand";
+import { DEVICE_LOCAL_VOICE_SETTING_KEYS } from "../voicePreferenceScope";
+import { cacheable, sanitize } from "../preferencesCodec";
 import { usePreferencesStore } from "../preferencesStore";
 import type { VoiceStore } from "../voiceStore";
 
-export type InputMode = "voice_activity" | "push_to_talk";
-
-/**
- * Screen-share resolution preset.
- *   - "720p" / "1080p" / "1440p" — fixed targets that any monitor can downscale to.
- *   - "native" — resolves to the active monitor's physical pixel count via
- *     useDisplayInfo at publish time. Hidden from the dropdown on monitors
- *     ≤ 1440p (the existing tier list already covers them) and on web
- *     (Electron-only IPC).
- */
-export type ScreenShareQuality = "720p" | "1080p" | "1440p" | "native";
-
-/**
- * Screen-share frame rate.
- *   - 30 / 60 / 120 — fixed targets.
- *   - -1 — sentinel for "use monitor's native refresh rate" (resolved at
- *     publish time from useDisplayInfo.refreshRate). We use a sentinel
- *     number instead of a discriminated union so the existing arithmetic
- *     (`fps === 60 ? ... : ...` in publish defaults) stays type-clean
- *     after a single resolve step at the call site.
- */
-export type ScreenShareFps = 30 | 60 | 120 | -1;
-
-/**
- * Camera resolution preset. Maps to VideoPresets.h360 / h720 / h1080 in
- * useCameraPublishDefaults, which also derives the simulcast ladder from it.
- * Default "720p": the sweet spot for a webcam tile — noticeably sharper than
- * the SDK's unconfigured default without the upstream cost of 1080p.
- */
-export type CameraQuality = "360p" | "720p" | "1080p";
-
-/**
- * Camera frame rate. 30 is the default (natural motion); 15 halves the frame
- * budget and spends the same bitrate ceiling on fewer, sharper frames —
- * useful on weak uplinks or laptop encoders.
- */
-export type CameraFps = 15 | 30;
-export type VoiceOverlayPosition = "top-left" | "center-left" | "bottom-left" | "top-right" | "bottom-right";
-
-/**
- * Microphone profile — picks the whole capture + publish + processor chain.
- *
- *   - "konusma" (speech, default): mono capture, browser AEC/AGC on,
- *     browser NS only for the WebRTC engine, Opus DTX + RED on.
- *   - "muzik" (music): stereo capture, all voice DSP off, noise-suppression
- *     processor bypassed, Opus DTX + RED off with forced stereo.
- *
- * The full rationale and the exact option objects live in audio/micProfile.ts.
- * Changing this republishes the mic track (via useMicSync) rather than
- * reconnecting the room.
- */
-export type MicProfile = "konusma" | "muzik";
-
-/**
- * Noise suppression level — controls the post-denoiser energy gate's open/close
- * dB thresholds + hold time. Layered with the existing micSensitivity slider:
- * the level sets a base curve, sensitivity offsets it ±6 dB. sensitivity=100
- * still disables the gate entirely (legacy "off" semantic preserved).
- *
- * Mapping (see gateConfig.LEVEL_BASE):
- *   "low"      — open=-60dB / close=-65dB / hold=400ms (effectively pass-through)
- *   "medium"   — open=-52dB / close=-58dB / hold=300ms (default — passes quiet speech, blocks fan/keyboard)
- *   "high"     — open=-45dB / close=-52dB / hold=200ms (tight, kicks more noise)
- *   "maximum"  — open=-38dB / close=-45dB / hold=150ms (very tight; loud rooms only)
- */
-export type NoiseSuppressionLevel = "low" | "medium" | "high" | "maximum";
-
-/**
- * Available noise-reduction engines.
- *
- * History:
- *  - "dpdfnet" was a label-only impersonation of DeepFilterNet3 (UI lied:
- *    selecting it ran the same engine as "deepfilter"). Removed in v2.11.81;
- *    stale localStorage entries are migrated to "rnnoise" by loadSettings.
- *  - "krisp" remains in the compatibility type, but is hidden from the picker;
- *    old local and account preferences are migrated to the free "rnnoise" default.
- *  - "gtcrn" uses a 16 kHz model with a 48 kHz host-rate adapter.
- *
- * On werman/noise-suppression-for-voice (not exposed as an engine):
- * That popular project is a native VST/LV2/AU plugin (C++), not a
- * browser library — it wraps Xiph's RNNoise for DAW + OS-level audio.
- * We already deliver the same RNNoise model via WASM through the
- * "rnnoise" engine, so adding werman would be redundant.
- */
-export type NoiseReductionEngine =
-  | "rnnoise"
-  | "krisp"
-  | "webrtc"
-  | "deepfilter"
-  | "gtcrn"
-  | "dtln"
-  | "speex";
-
-export type VoiceSettings = {
-  inputMode: InputMode;
-  pttKey: string;
-  micSensitivity: number;
-  userVolumes: Record<string, number>;
-  inputDevice: string;
-  outputDevice: string;
-  masterVolume: number;
-  inputVolume: number;
-  soundsEnabled: boolean;
-  localMutedUsers: Record<string, boolean>;
-  noiseReduction: boolean;
-  /**
-   * Selected noise-reduction engine. Free choices: RNNoise (48 kHz default),
-   * DeepFilterNet3 (48 kHz), GTCRN and DTLN (16 kHz models), SpeexDSP,
-   * and browser-native WebRTC. The shared microphone pipeline reports the
-   * actual engine separately when a fallback is needed.
-   */
-  noiseReductionEngine: NoiseReductionEngine;
-  noiseSuppressionLevel: NoiseSuppressionLevel;
-  /**
-   * DeepFilterNet3 suppression strength as a 0-100 % (0 = passthrough,
-   * 100 = full suppression). NOT a raw dB value: useAudioProcessor maps it to
-   * upstream's attenuation-limit in dB via strengthToAttenLimDb (perceptual
-   * mix domain) before df_create / setSuppressionLevel, so the slider is
-   * linear in "% denoised". Live-tunable without rebuilding the audio graph.
-   * Independent from noiseSuppressionLevel (gate-only mode). Default 70 ≈ 70 %
-   * denoised (~10 dB) — a clean-but-natural medium preset.
-   */
-  deepfilterSuppression: number;
-  screenShareVolumes: Record<string, number>;
-  screenShareAudio: boolean;
-  screenShareQuality: ScreenShareQuality;
-  screenShareFps: ScreenShareFps;
-  /**
-   * Whether the mouse cursor is captured into the screen-share stream.
-   * true → `getDisplayMedia({ video: { cursor: "always" } })`. Default true
-   * matches Discord/Zoom/Teams behaviour and the browser API default.
-   * Wired through utils/screenShareCursorPatch.ts which monkey-patches
-   * navigator.mediaDevices.getDisplayMedia at boot, so LiveKit's internal
-   * setScreenShareEnabled call honours it without touching the SDK API.
-   */
-  screenShareShowCursor: boolean;
-  /**
-   * Requests H264 instead of VP9 on desktop/browser screen shares, including
-   * an active share. Hardware support and latency gains depend on the device.
-   * The selected content profile still determines the degradation preference.
-   * Default false; codec transitions may briefly interrupt remote video.
-   */
-  screenShareLowLatency: boolean;
-  /**
-   * Screen-share content profile.
-   *   - "motion": video / games / animations. Pairs with maintain-framerate
-   *     degradation + contentHint:"motion". Bandwidth tight → resolution
-   *     softens first, frame rate stays smooth. (Discord-default behaviour.)
-   *   - "detail": presentations / code / docs. Pairs with maintain-resolution
-   *     degradation + contentHint:"detail". Bandwidth tight → frame rate
-   *     drops first, text stays sharp.
-   *
-   * Default "motion" because most users share gameplay/video. Power users
-   * sharing slides or text should switch to "detail" via Voice Settings.
-   * Also applies during an active desktop/browser share.
-   */
-  screenShareMode: ScreenShareMode;
-  /**
-   * Camera resolution + frame rate. Applied per-publish by
-   * useCameraPublishDefaults → setCameraEnabled(enabled, capture, publish).
-   * Mid-session changes take effect on the NEXT camera toggle, matching the
-   * screen-share semantics (LiveKit doesn't re-encode a live publication).
-   */
-  cameraQuality: CameraQuality;
-  cameraFps: CameraFps;
-  /** Hardware IDs are local to this browser/device and never synced to the server. */
-  cameraDevice: string;
-  /**
-   * Microphone profile. "muzik" disables noise suppression entirely — see
-   * audio/micProfile.ts. Changing it triggers a mic republish cycle in
-   * useMicSync, not a room reconnect.
-   */
-  micProfile: MicProfile;
-  /**
-   * Whether the standalone mute-toggle hotkey (see `muteHotkey`) is active.
-   * Default false (opt-in) — unlike PTT, this shortcut can fire while the
-   * app window is merely focused (or, when `muteHotkeyGlobal` is on,
-   * whenever the OS delivers the key at all), so it stays off until a user
-   * deliberately enables it in Voice Settings.
-   */
-  muteHotkeyEnabled: boolean;
-  /**
-   * KeyboardEvent.code bound to the mute-toggle hotkey. Default "KeyL". If
-   * it collides with the active PTT key, PTT wins (see useKeyboardShortcuts
-   * guard). Scope (focused-only vs. global) is controlled by
-   * `muteHotkeyGlobal`.
-   */
-  muteHotkey: string;
-  /**
-   * Electron-only: when true, the mute hotkey is registered as a global
-   * uIOhook shortcut (electron/push-to-talk.ts registerMuteHotkey) and
-   * fires even while the HiChat window is unfocused. When false (default),
-   * the hotkey only fires while the app window is focused, via the
-   * document-level listener in useKeyboardShortcuts — the original
-   * behavior before this field existed. Has no effect on web; the settings
-   * row for it is hidden there.
-   *
-   * Device-local by design: persisted only to localStorage and excluded from
-   * both inbound and outbound account preferences. A synced value would let one device
-   * silently arm a system-wide keyboard hook on another — the hook itself
-   * only ever compares one keycode (see hotkey-router.ts's privacy note),
-   * but "which device is watching every keystroke" must never be decided
-   * remotely.
-   */
-  muteHotkeyGlobal: boolean;
-  voiceOverlayEnabled: boolean;
-  voiceOverlayMode: "desktop" | "game";
-  voiceOverlaySpeakingOpacity: number;
-  voiceOverlayIdleOpacity: number;
-  voiceOverlayScale: number;
-  voiceOverlayPosition: VoiceOverlayPosition;
-  /** Device-local movement lock; topmost behavior is independent of pinning. */
-  voiceOverlayPinned: boolean;
-  /** Device-local opt-in to show native widget quick-action controls. */
-  voiceOverlayQuickActions: boolean;
-  /** Device-local opt-in for mute/deafen button input while widget is click-through locked. */
-  voiceOverlayClickableActions: boolean;
-  voiceOverlayCompatibility: boolean;
-  /** Device-local display of activity already shared by friends. */
-  voiceOverlayActivity: boolean;
-  voiceOverlayVideo: boolean;
-  voiceOverlayStreams: boolean;
-  voiceOverlayWelcome: boolean;
-  voiceOverlayGoLive: boolean;
-  voiceOverlayGameActivityNotifications: boolean;
-  voiceOverlayNowPlayingNotifications: boolean;
-  /** Device-local opt-in to show read-only genuine unread notification indicators. */
-  voiceOverlayNotifications: boolean;
-  /** Device-local opt-in to open the main app from the overlay notification panel. */
-  voiceOverlayNotificationActions: boolean;
-  /** Device-local opt-in to show a short read-only chat excerpt in the overlay. */
-  voiceOverlayChat: boolean;
-  /** Separate device-local opt-in to open the current chat in the main app. */
-  voiceOverlayChatActions: boolean;
-  /** Device-local opt-in to compose a message from the dedicated overlay surface. */
-  voiceOverlayChatCompose: boolean;
-  voiceOverlaySpeakingOnly: boolean;
-  /** Device-local presentation preferences for the desktop voice widget. */
-  voiceOverlayAvatarSize: "small" | "large";
-  voiceOverlayNameDisplay: "always" | "speaking" | "never";
-  voiceOverlayMaxParticipants: number;
-};
-
-/** Display profile that shapes encoder degradation + content hint. */
-export type ScreenShareMode = "motion" | "detail";
+import { clampVoicePreferenceNumber, type VoiceNumberPreference, DEFAULT_SETTINGS, projectVoiceSettings as currentSettings, type InputMode, type ScreenShareQuality, type ScreenShareFps, type CameraQuality, type CameraFps, type VoiceOverlayPosition, type MicProfile, type NoiseSuppressionLevel, type NoiseReductionEngine, type VoiceSettings, type ScreenShareMode } from "../voicePreferences";
+export { DEFAULT_SETTINGS } from "../voicePreferences";
+export type { InputMode, ScreenShareQuality, ScreenShareFps, CameraQuality, CameraFps, VoiceOverlayPosition, MicProfile, NoiseSuppressionLevel, NoiseReductionEngine, VoiceSettings, ScreenShareMode } from "../voicePreferences";
 
 const STORAGE_KEY = "mqvi_voice_settings";
 
@@ -285,67 +46,6 @@ const OVERLAY_GAME_MODE_MIGRATION_KEY = "mqvi_voice_settings_v3_overlayGameMode"
  */
 const REMOVED_ENGINES = new Set<string>(["dpdfnet", "krisp"]);
 
-export const DEFAULT_SETTINGS: VoiceSettings = {
-  inputMode: "voice_activity",
-  pttKey: "Space",
-  micSensitivity: 50,
-  userVolumes: {},
-  inputDevice: "",
-  outputDevice: "",
-  masterVolume: 100,
-  inputVolume: 100,
-  soundsEnabled: true,
-  localMutedUsers: {},
-  noiseReduction: true,
-  noiseReductionEngine: "rnnoise",
-  noiseSuppressionLevel: "medium",
-  deepfilterSuppression: 70,
-  screenShareVolumes: {},
-  // Default true: most users sharing a screen also want to share its audio
-  // (gameplay, presentations, video). When the toggle is on, the browser's
-  // native picker still shows its own "share audio" checkbox so users who
-  // don't want audio can uncheck it at the OS level. A false default here
-  // would silently strip audio before the browser even asks.
-  screenShareAudio: true,
-  screenShareQuality: "720p",
-  screenShareFps: 30,
-  screenShareShowCursor: true,
-  screenShareLowLatency: false,
-  screenShareMode: "motion",
-  cameraQuality: "720p",
-  cameraFps: 30,
-  cameraDevice: "",
-  micProfile: "konusma",
-  muteHotkeyEnabled: false,
-  muteHotkey: "KeyL",
-  muteHotkeyGlobal: false,
-  voiceOverlayEnabled: true,
-  voiceOverlayMode: "game",
-  voiceOverlaySpeakingOpacity: 100,
-  voiceOverlayIdleOpacity: 35,
-  voiceOverlayScale: 100,
-  voiceOverlayPosition: "center-left",
-  voiceOverlayPinned: false,
-  voiceOverlayQuickActions: false,
-  voiceOverlayClickableActions: false,
-  voiceOverlayCompatibility: false,
-  voiceOverlayActivity: false,
-  voiceOverlayVideo: false,
-  voiceOverlayStreams: false,
-  voiceOverlayWelcome: false,
-  voiceOverlayGoLive: false,
-  voiceOverlayGameActivityNotifications: false,
-  voiceOverlayNowPlayingNotifications: false,
-  voiceOverlayNotifications: false,
-  voiceOverlayNotificationActions: false,
-  voiceOverlayChat: false,
-  voiceOverlayChatActions: false,
-  voiceOverlayChatCompose: false,
-  voiceOverlaySpeakingOnly: false,
-  voiceOverlayAvatarSize: "small",
-  voiceOverlayNameDisplay: "always",
-  voiceOverlayMaxParticipants: 25,
-};
 
 function boundedOverlayNumber(value: number, min: number, max: number, fallback: number): number {
   return Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
@@ -372,12 +72,21 @@ export function loadSettings(): VoiceSettings {
     // string's index properties over DEFAULT_SETTINGS and pollute the
     // store with garbage.
     const parsedRaw = JSON.parse(raw);
-    const parsed: Partial<VoiceSettings> =
+    const stored: Record<string, unknown> =
       parsedRaw && typeof parsedRaw === "object" && !Array.isArray(parsedRaw)
-        ? (parsedRaw as Partial<VoiceSettings>)
+        ? parsedRaw
         : {};
+    // Apply the same account-leaf validation used for server hydration. Keep
+    // only declared local fields for the existing device/overlay migrations.
+    const parsed: Partial<VoiceSettings> = {
+      ...(cacheable(sanitize({ voice_settings: stored })).voice_settings as Partial<VoiceSettings> | undefined),
+      ...Object.fromEntries(DEVICE_LOCAL_VOICE_SETTING_KEYS.filter(key => Object.hasOwn(stored, key)).map(key => [key, stored[key]])),
+    };
     const merged: VoiceSettings = { ...DEFAULT_SETTINGS, ...parsed };
-    if (typeof merged.cameraDevice !== "string") merged.cameraDevice = "";
+    for (const field of ["inputDevice", "outputDevice", "cameraDevice"] as const) {
+      if (typeof merged[field] !== "string") merged[field] = DEFAULT_SETTINGS[field];
+    }
+    if (typeof merged.muteHotkeyGlobal !== "boolean") merged.muteHotkeyGlobal = DEFAULT_SETTINGS.muteHotkeyGlobal;
     if (typeof merged.voiceOverlayEnabled !== "boolean") merged.voiceOverlayEnabled = false;
     if (merged.voiceOverlayMode !== "desktop" && merged.voiceOverlayMode !== "game") {
       merged.voiceOverlayMode = DEFAULT_SETTINGS.voiceOverlayMode;
@@ -442,7 +151,7 @@ export function loadSettings(): VoiceSettings {
     } catch { /* localStorage unavailable */ }
 
     // Hidden paid and obsolete engines migrate to the free default.
-    if (REMOVED_ENGINES.has(merged.noiseReductionEngine as string)) {
+    if (typeof stored.noiseReductionEngine === "string" && REMOVED_ENGINES.has(stored.noiseReductionEngine)) {
       merged.noiseReductionEngine = "rnnoise";
       persistNow(merged);
     }
@@ -461,22 +170,7 @@ function persistNow(settings: VoiceSettings): void {
   }
 }
 
-const DEVICE_LOCAL_KEYS = new Set<keyof VoiceSettings>([
-  "inputDevice", "outputDevice", "cameraDevice", "muteHotkeyGlobal",
-  "voiceOverlayEnabled", "voiceOverlayMode", "voiceOverlaySpeakingOpacity", "voiceOverlayIdleOpacity",
-  "voiceOverlayScale", "voiceOverlayPosition", "voiceOverlaySpeakingOnly",
-  "voiceOverlayPinned",
-  "voiceOverlayQuickActions", "voiceOverlayClickableActions",
-  "voiceOverlayCompatibility",
-  "voiceOverlayActivity", "voiceOverlayVideo", "voiceOverlayStreams", "voiceOverlayWelcome", "voiceOverlayGoLive",
-  "voiceOverlayGameActivityNotifications", "voiceOverlayNowPlayingNotifications",
-  "voiceOverlayNotifications",
-  "voiceOverlayNotificationActions",
-  "voiceOverlayChat",
-  "voiceOverlayChatActions",
-  "voiceOverlayChatCompose",
-  "voiceOverlayAvatarSize", "voiceOverlayNameDisplay", "voiceOverlayMaxParticipants",
-]);
+const DEVICE_LOCAL_KEYS = new Set<keyof VoiceSettings>(DEVICE_LOCAL_VOICE_SETTING_KEYS);
 let observedSettings = loadSettings();
 
 /** Register edits immediately, before a concurrent hydration can apply. */
@@ -492,7 +186,9 @@ function syncChangedSettings(settings: VoiceSettings): void {
       const after = value as Record<string, number | boolean>;
       const changed: Record<string, number | boolean> = {};
       for (const id of new Set([...Object.keys(before), ...Object.keys(after)])) {
-        if (before[id] !== after[id]) changed[id] = after[id] ?? (key === "localMutedUsers" ? false : 100);
+        const previous = ownVoicePeerValue(before, id);
+        const next = ownVoicePeerValue(after, id);
+        if (previous !== next) changed[id] = next ?? (key === "localMutedUsers" ? false : 100);
       }
       patch[key] = changed;
     } else {
@@ -551,65 +247,6 @@ if (typeof window !== "undefined") {
   window.addEventListener("beforeunload", flushPendingVoiceSettingsSave);
 }
 
-/** Extract settings-shaped subset from the current store state. */
-function currentSettings(s: VoiceSettings): VoiceSettings {
-  return {
-    inputMode: s.inputMode,
-    pttKey: s.pttKey,
-    micSensitivity: s.micSensitivity,
-    userVolumes: s.userVolumes,
-    inputDevice: s.inputDevice,
-    outputDevice: s.outputDevice,
-    masterVolume: s.masterVolume,
-    inputVolume: s.inputVolume,
-    soundsEnabled: s.soundsEnabled,
-    localMutedUsers: s.localMutedUsers,
-    noiseReduction: s.noiseReduction,
-    noiseReductionEngine: s.noiseReductionEngine,
-    noiseSuppressionLevel: s.noiseSuppressionLevel,
-    deepfilterSuppression: s.deepfilterSuppression,
-    screenShareVolumes: s.screenShareVolumes,
-    screenShareAudio: s.screenShareAudio,
-    screenShareQuality: s.screenShareQuality,
-    screenShareFps: s.screenShareFps,
-    screenShareShowCursor: s.screenShareShowCursor,
-    screenShareLowLatency: s.screenShareLowLatency,
-    screenShareMode: s.screenShareMode,
-    cameraQuality: s.cameraQuality,
-    cameraFps: s.cameraFps,
-    cameraDevice: s.cameraDevice,
-    micProfile: s.micProfile,
-    muteHotkeyEnabled: s.muteHotkeyEnabled,
-    muteHotkey: s.muteHotkey,
-    muteHotkeyGlobal: s.muteHotkeyGlobal,
-    voiceOverlayEnabled: s.voiceOverlayEnabled,
-    voiceOverlayMode: s.voiceOverlayMode,
-    voiceOverlaySpeakingOpacity: s.voiceOverlaySpeakingOpacity,
-    voiceOverlayIdleOpacity: s.voiceOverlayIdleOpacity,
-    voiceOverlayScale: s.voiceOverlayScale,
-    voiceOverlayPosition: s.voiceOverlayPosition,
-    voiceOverlayPinned: s.voiceOverlayPinned,
-    voiceOverlayQuickActions: s.voiceOverlayQuickActions,
-    voiceOverlayClickableActions: s.voiceOverlayClickableActions,
-    voiceOverlayCompatibility: s.voiceOverlayCompatibility,
-    voiceOverlayActivity: s.voiceOverlayActivity,
-    voiceOverlayVideo: s.voiceOverlayVideo,
-    voiceOverlayStreams: s.voiceOverlayStreams,
-    voiceOverlayWelcome: s.voiceOverlayWelcome,
-    voiceOverlayGoLive: s.voiceOverlayGoLive,
-    voiceOverlayGameActivityNotifications: s.voiceOverlayGameActivityNotifications,
-    voiceOverlayNowPlayingNotifications: s.voiceOverlayNowPlayingNotifications,
-    voiceOverlayNotifications: s.voiceOverlayNotifications,
-    voiceOverlayNotificationActions: s.voiceOverlayNotificationActions,
-    voiceOverlayChat: s.voiceOverlayChat,
-    voiceOverlayChatActions: s.voiceOverlayChatActions,
-    voiceOverlayChatCompose: s.voiceOverlayChatCompose,
-    voiceOverlaySpeakingOnly: s.voiceOverlaySpeakingOnly,
-    voiceOverlayAvatarSize: s.voiceOverlayAvatarSize,
-    voiceOverlayNameDisplay: s.voiceOverlayNameDisplay,
-    voiceOverlayMaxParticipants: s.voiceOverlayMaxParticipants,
-  };
-}
 
 export type VoiceSettingsSlice = VoiceSettings & {
   /** Pre-mute volume values for local mute restore */
@@ -681,6 +318,22 @@ export const createVoiceSettingsSlice: StateCreator<
 > = (set, get) => {
   const initial = loadSettings();
   observedSettings = initial;
+  const setNumericPreference = (field: VoiceNumberPreference, value: number) => {
+    const normalized = clampVoicePreferenceNumber(field, value);
+    if (normalized === undefined) return;
+    const patch: Partial<Pick<VoiceSettings, VoiceNumberPreference>> = { [field]: normalized };
+    set(patch);
+    saveSettings(currentSettings(get()));
+  };
+
+  const setPeerVolume = (field: "userVolumes" | "screenShareVolumes", userId: string, volume: number) => {
+    if (!isVoicePeerKey(userId)) return;
+    const normalized = clampVoicePeerVolume(volume);
+    if (normalized === undefined) return;
+    const patch: Partial<Pick<VoiceSettings, "userVolumes" | "screenShareVolumes">> = { [field]: { ...get()[field], [userId]: normalized } };
+    set(patch);
+    saveSettings(currentSettings(get()));
+  };
 
   return {
     inputMode: initial.inputMode,
@@ -749,20 +402,11 @@ export const createVoiceSettingsSlice: StateCreator<
       saveSettings(currentSettings(get()));
     },
 
-    setMicSensitivity: (value) => {
-      set({ micSensitivity: value });
-      saveSettings(currentSettings(get()));
-    },
+    setMicSensitivity: (value) => setNumericPreference("micSensitivity", value),
 
-    setUserVolume: (userId, volume) => {
-      set({ userVolumes: { ...get().userVolumes, [userId]: volume } });
-      saveSettings(currentSettings(get()));
-    },
+    setUserVolume: (userId, volume) => setPeerVolume("userVolumes", userId, volume),
 
-    setScreenShareVolume: (userId, volume) => {
-      set({ screenShareVolumes: { ...get().screenShareVolumes, [userId]: volume } });
-      saveSettings(currentSettings(get()));
-    },
+    setScreenShareVolume: (userId, volume) => setPeerVolume("screenShareVolumes", userId, volume),
 
     setInputDevice: (deviceId) => {
       set({ inputDevice: deviceId });
@@ -774,15 +418,9 @@ export const createVoiceSettingsSlice: StateCreator<
       saveSettings(currentSettings(get()));
     },
 
-    setMasterVolume: (value) => {
-      set({ masterVolume: value });
-      saveSettings(currentSettings(get()));
-    },
+    setMasterVolume: (value) => setNumericPreference("masterVolume", value),
 
-    setInputVolume: (value) => {
-      set({ inputVolume: value });
-      saveSettings(currentSettings(get()));
-    },
+    setInputVolume: (value) => setNumericPreference("inputVolume", value),
 
     setSoundsEnabled: (enabled) => {
       set({ soundsEnabled: enabled });
@@ -907,20 +545,16 @@ export const createVoiceSettingsSlice: StateCreator<
       saveSettings(currentSettings(get()));
     },
 
-    setDeepfilterSuppression: (value) => {
-      // Clamp to 0-100 — this is a strength %, mapped to DeepFilterNet3's
-      // dB attenuation limit downstream (strengthToAttenLimDb), not raw dB.
-      const clamped = Math.max(0, Math.min(100, value));
-      set({ deepfilterSuppression: clamped });
-      saveSettings(currentSettings(get()));
-    },
+    // Strength percentage, mapped downstream to DeepFilterNet3's attenuation limit.
+    setDeepfilterSuppression: (value) => setNumericPreference("deepfilterSuppression", value),
 
     toggleLocalMute: (userId: string) => {
+      if (!isVoicePeerKey(userId)) return;
       const { localMutedUsers, preMuteVolumes, userVolumes } = get();
-      const isCurrentlyMuted = localMutedUsers[userId] ?? false;
+      const isCurrentlyMuted = ownVoicePeerValue(localMutedUsers, userId) ?? false;
 
       if (isCurrentlyMuted) {
-        const restoredVolume = preMuteVolumes[userId] ?? 100;
+        const restoredVolume = ownVoicePeerValue(preMuteVolumes, userId) ?? 100;
         const newLocalMuted = { ...localMutedUsers };
         delete newLocalMuted[userId];
         const newPreMute = { ...preMuteVolumes };
@@ -933,7 +567,7 @@ export const createVoiceSettingsSlice: StateCreator<
           userVolumes: newVolumes,
         });
       } else {
-        const currentVolume = userVolumes[userId] ?? 100;
+        const currentVolume = voicePeerVolume(userVolumes, userId);
         const newLocalMuted = { ...localMutedUsers, [userId]: true };
         const newPreMute = { ...preMuteVolumes, [userId]: currentVolume };
         const newVolumes = { ...userVolumes, [userId]: 0 };
@@ -953,15 +587,16 @@ export const createVoiceSettingsSlice: StateCreator<
       // server snapshot. Persist that reconciled result, not an older timer.
       cancelPendingSave();
       const merged: VoiceSettings = currentSettings(get());
-      const keys = Object.keys(settings) as (keyof VoiceSettings)[];
+      const incoming = (cacheable(sanitize({ voice_settings: settings })).voice_settings ?? {}) as Record<string, unknown>;
+      const keys = Object.keys(incoming) as (keyof VoiceSettings)[];
       for (const key of keys) {
         // Hardware IDs and native hotkey scope remain local in both directions.
         if (DEVICE_LOCAL_KEYS.has(key)) continue;
         if (key in merged) {
           if (key === "userVolumes" || key === "screenShareVolumes" || key === "localMutedUsers") {
-            (merged as Record<string, unknown>)[key] = { ...merged[key], ...(settings[key] as Record<string, unknown>) };
+            (merged as Record<string, unknown>)[key] = { ...merged[key], ...(incoming[key] as Record<string, unknown>) };
           } else {
-            (merged as Record<string, unknown>)[key] = settings[key];
+            (merged as Record<string, unknown>)[key] = incoming[key];
           }
         }
       }
@@ -974,96 +609,16 @@ export const createVoiceSettingsSlice: StateCreator<
         /* ignore */
       }
       observedSettings = merged;
-      set({
-        inputMode: merged.inputMode,
-        pttKey: merged.pttKey,
-        micSensitivity: merged.micSensitivity,
-        userVolumes: merged.userVolumes,
-        inputDevice: merged.inputDevice,
-        outputDevice: merged.outputDevice,
-        masterVolume: merged.masterVolume,
-        inputVolume: merged.inputVolume,
-        soundsEnabled: merged.soundsEnabled,
-        screenShareAudio: merged.screenShareAudio,
-        screenShareQuality: merged.screenShareQuality,
-        screenShareFps: merged.screenShareFps,
-        screenShareShowCursor: merged.screenShareShowCursor,
-        screenShareLowLatency: merged.screenShareLowLatency,
-        screenShareMode: merged.screenShareMode,
-        localMutedUsers: merged.localMutedUsers,
-        noiseReduction: merged.noiseReduction,
-        noiseReductionEngine: merged.noiseReductionEngine,
-        noiseSuppressionLevel: merged.noiseSuppressionLevel,
-        deepfilterSuppression: merged.deepfilterSuppression,
-        screenShareVolumes: merged.screenShareVolumes,
-        cameraQuality: merged.cameraQuality,
-        cameraFps: merged.cameraFps,
-        micProfile: merged.micProfile,
-        muteHotkeyEnabled: merged.muteHotkeyEnabled,
-        muteHotkey: merged.muteHotkey,
-        voiceOverlayEnabled: merged.voiceOverlayEnabled,
-        voiceOverlayMode: merged.voiceOverlayMode,
-        voiceOverlaySpeakingOpacity: merged.voiceOverlaySpeakingOpacity,
-        voiceOverlayIdleOpacity: merged.voiceOverlayIdleOpacity,
-        voiceOverlayScale: merged.voiceOverlayScale,
-        voiceOverlayPosition: merged.voiceOverlayPosition,
-        voiceOverlayPinned: merged.voiceOverlayPinned,
-        voiceOverlayQuickActions: merged.voiceOverlayQuickActions,
-        voiceOverlayClickableActions: merged.voiceOverlayClickableActions,
-        voiceOverlayCompatibility: merged.voiceOverlayCompatibility,
-        voiceOverlayActivity: merged.voiceOverlayActivity,
-        voiceOverlayVideo: merged.voiceOverlayVideo,
-        voiceOverlayStreams: merged.voiceOverlayStreams,
-        voiceOverlayWelcome: merged.voiceOverlayWelcome,
-        voiceOverlayGoLive: merged.voiceOverlayGoLive,
-        voiceOverlayGameActivityNotifications: merged.voiceOverlayGameActivityNotifications,
-        voiceOverlayNowPlayingNotifications: merged.voiceOverlayNowPlayingNotifications,
-        voiceOverlayNotifications: merged.voiceOverlayNotifications,
-        voiceOverlayNotificationActions: merged.voiceOverlayNotificationActions,
-        voiceOverlayChat: merged.voiceOverlayChat,
-        voiceOverlayChatActions: merged.voiceOverlayChatActions,
-        voiceOverlayChatCompose: merged.voiceOverlayChatCompose,
-        voiceOverlaySpeakingOnly: merged.voiceOverlaySpeakingOnly,
-        voiceOverlayAvatarSize: merged.voiceOverlayAvatarSize,
-        voiceOverlayNameDisplay: merged.voiceOverlayNameDisplay,
-        voiceOverlayMaxParticipants: merged.voiceOverlayMaxParticipants,
-        // muteHotkeyGlobal intentionally omitted — device-local, see the
-        // field's doc comment and the `continue` above.
-      });
+      // The projection contains preference fields only. Zustand merges this
+      // snapshot, preserving runtime state and action references.
+      set(merged);
     },
     resetAccountPreferences: (preserveSessionState = false) => {
       cancelPendingSave();
       const current = get();
       const defaults: VoiceSettings = {
         ...DEFAULT_SETTINGS, userVolumes: {}, screenShareVolumes: {}, localMutedUsers: {},
-        inputDevice: current.inputDevice, outputDevice: current.outputDevice,
-        cameraDevice: current.cameraDevice, muteHotkeyGlobal: current.muteHotkeyGlobal,
-        voiceOverlayEnabled: current.voiceOverlayEnabled,
-        voiceOverlayMode: current.voiceOverlayMode,
-        voiceOverlaySpeakingOpacity: current.voiceOverlaySpeakingOpacity,
-        voiceOverlayIdleOpacity: current.voiceOverlayIdleOpacity,
-        voiceOverlayScale: current.voiceOverlayScale,
-        voiceOverlayPosition: current.voiceOverlayPosition,
-        voiceOverlayPinned: current.voiceOverlayPinned,
-        voiceOverlayQuickActions: current.voiceOverlayQuickActions,
-        voiceOverlayClickableActions: current.voiceOverlayClickableActions,
-        voiceOverlayCompatibility: current.voiceOverlayCompatibility,
-        voiceOverlayActivity: current.voiceOverlayActivity,
-        voiceOverlayVideo: current.voiceOverlayVideo,
-        voiceOverlayStreams: current.voiceOverlayStreams,
-        voiceOverlayWelcome: current.voiceOverlayWelcome,
-        voiceOverlayGoLive: current.voiceOverlayGoLive,
-        voiceOverlayGameActivityNotifications: current.voiceOverlayGameActivityNotifications,
-        voiceOverlayNowPlayingNotifications: current.voiceOverlayNowPlayingNotifications,
-        voiceOverlayNotifications: current.voiceOverlayNotifications,
-        voiceOverlayNotificationActions: current.voiceOverlayNotificationActions,
-        voiceOverlayChat: current.voiceOverlayChat,
-        voiceOverlayChatActions: current.voiceOverlayChatActions,
-        voiceOverlayChatCompose: current.voiceOverlayChatCompose,
-        voiceOverlaySpeakingOnly: current.voiceOverlaySpeakingOnly,
-        voiceOverlayAvatarSize: current.voiceOverlayAvatarSize,
-        voiceOverlayNameDisplay: current.voiceOverlayNameDisplay,
-        voiceOverlayMaxParticipants: current.voiceOverlayMaxParticipants,
+        ...Object.fromEntries(DEVICE_LOCAL_VOICE_SETTING_KEYS.map(key => [key, current[key]])),
       };
       observedSettings = defaults;
       persistNow(defaults);

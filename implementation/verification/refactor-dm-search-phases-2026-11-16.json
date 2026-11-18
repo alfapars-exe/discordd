@@ -1,0 +1,60 @@
+{
+  "characterizationCommit": "f35a2b18",
+  "sourceCommit": "d276b08c9bbdf2368b87a095bb98f6bfcdf4d167",
+  "originalSonarIssue": {
+    "key": "AaHcyWYyASsLdyanVxtV",
+    "complexity": 30,
+    "state": "CLOSED/FIXED at7e8d4dfd;431source lines plus empty EOF, zero mismatches"
+  },
+  "change": "Separate encrypted DM cached search from plaintext dispatcher, and synchronous cached page publication from search orchestration. Promise is adopted directly; no added await precedes owned UI publication.",
+  "preserved": [
+    "Monotonic query sequence and early empty-query invalidation",
+    "Encryption/key readiness checks before selecting local/remote path",
+    "AbortController, deletion frontier version loop and snapshot disposal on stale query",
+    "Projection includes sender/application/source sequence and existing minimal DM rendering fields",
+    "All state publication stays in the original asynchronous continuation; caller adds no publication work after awaiting extracted phase"
+  ],
+  "validation": {
+    "originalPanel": {
+      "pass": 20,
+      "fail": 0
+    },
+    "newCharacterizationsOnOldSource": {
+      "pass": 23,
+      "fail": 0,
+      "cases": "Pending plaintext response after replacement query, cleared input and changed account owner"
+    },
+    "candidateRelatedSuites": {
+      "files": 3,
+      "pass": 53,
+      "fail": 0,
+      "skip": 0
+    },
+    "typescript": "tsc -b PASS",
+    "lint": "Changed panel and test file PASS, no output",
+    "tokenParity": {
+      "phaseTokenParity": true,
+      "publicationTokenParity": true,
+      "phaseHash": "a84a03845e2d2cc8d7688e209affa09e4e2bd8341cc387ff105642b3101580ed",
+      "publicationHash": "17be3eeb3f1dd1b0fdeca67b9c237badcf6f4cffd22662ab05cfa90551103278"
+    },
+    "productionBuild": "Vite build PASS, 2.27s; existing large chunk warning"
+  },
+  "pending": [
+    "Immutable source self-scan",
+    "Full local client and coverage not rerun; source CI pending",
+    "RF17 first-query/live-write/physical/native and intermittent historical pending-panel timeout root cause remain open"
+  ],
+  "environment": "Disk cleanup request remains unanswered after automatic policy denied generated ZIP deletion. No further deletion attempted. Narrow no-cache single-worker validation used; heavy local workloads not restarted. Later observation found about2GB free and Docker responding. Manual deletion remained blocked and was not performed. Bounded production build passed after a1GB free-space preflight.",
+  "hashes": {
+    "hichat-dm-search-phases-baseline.log": "e0d702e7ca13af621d8f2256f20ada3a65aebd17140544c4bbeae65247026ed4",
+    "hichat-dm-search-phases-characterization.log": "a015fca902ae982da6e4fdfa90b51343d9586736463b24b0129958ce9af79dfa",
+    "hichat-dm-search-phases-candidate.log": "f759955fd288509962d57864923c7a5391c6b8b5bb8deaf6a77f6518949948db",
+    "hichat-dm-search-phases-tsc.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "hichat-dm-search-phases-lint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "hichat-dm-search-phases-token-parity.json": "d680ea4cb422b383f8dc4ee36c8a61302adb42b0569868a97cbee6bf1f349cd8",
+    "hichat-dm-search-phases-vite.log": "91344f7945036b2dafbdde9fc52c5e9e728c5961a8b7ae17af5ae68245a5677c"
+  },
+  "sonarEvidence": "refactor-dm-search-result-states-2026-11-16.json",
+  "ciEvidence": "refactor-7e8d-terminal-ci-2026-11-16.json"
+}

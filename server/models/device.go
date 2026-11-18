@@ -13,18 +13,18 @@ import (
 // Each device has an independent cryptographic identity in Signal Protocol.
 // Messages are encrypted separately for each recipient device.
 type Device struct {
-	ID                   string    `json:"id"`
-	UserID               string    `json:"user_id"`
-	DeviceID             string    `json:"device_id"`
-	DisplayName          *string   `json:"display_name,omitempty"`
-	IdentityKey          string    `json:"identity_key"`
-	SigningKey           *string   `json:"signing_key,omitempty"` // Ed25519 public — verifies signed prekey
-	SignedPrekey         string    `json:"signed_prekey"`
-	SignedPrekeyID       int       `json:"signed_prekey_id"`
-	SignedPrekeySig      string    `json:"signed_prekey_signature"`
-	RegistrationID       int       `json:"registration_id"`
-	LastSeenAt           time.Time `json:"last_seen_at"`
-	CreatedAt            time.Time `json:"created_at"`
+	ID              string    `json:"id"`
+	UserID          string    `json:"user_id"`
+	DeviceID        string    `json:"device_id"`
+	DisplayName     *string   `json:"display_name,omitempty"`
+	IdentityKey     string    `json:"identity_key"`
+	SigningKey      *string   `json:"signing_key,omitempty"` // Ed25519 public — verifies signed prekey
+	SignedPrekey    string    `json:"signed_prekey"`
+	SignedPrekeyID  int       `json:"signed_prekey_id"`
+	SignedPrekeySig string    `json:"signed_prekey_signature"`
+	RegistrationID  int       `json:"registration_id"`
+	LastSeenAt      time.Time `json:"last_seen_at"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 // DevicePublicInfo is the public subset of device info visible to other users.
@@ -39,15 +39,15 @@ type DevicePublicInfo struct {
 // PrekeyBundle contains the full key bundle needed for X3DH key agreement.
 // one_time_prekey is consumed (deleted) after use; nil if pool is exhausted.
 type PrekeyBundle struct {
-	DeviceID             string  `json:"device_id"`
-	RegistrationID       int     `json:"registration_id"`
-	IdentityKey          string  `json:"identity_key"`
-	SigningKey           *string `json:"signing_key,omitempty"` // Ed25519 public — verifies signed prekey
-	SignedPrekeyID       int     `json:"signed_prekey_id"`
-	SignedPrekey         string  `json:"signed_prekey"`
-	SignedPrekeySig      string  `json:"signed_prekey_signature"`
-	OneTimePrekeyID      *int    `json:"one_time_prekey_id,omitempty"`
-	OneTimePrekey        *string `json:"one_time_prekey,omitempty"`
+	DeviceID        string  `json:"device_id"`
+	RegistrationID  int     `json:"registration_id"`
+	IdentityKey     string  `json:"identity_key"`
+	SigningKey      *string `json:"signing_key,omitempty"` // Ed25519 public — verifies signed prekey
+	SignedPrekeyID  int     `json:"signed_prekey_id"`
+	SignedPrekey    string  `json:"signed_prekey"`
+	SignedPrekeySig string  `json:"signed_prekey_signature"`
+	OneTimePrekeyID *int    `json:"one_time_prekey_id,omitempty"`
+	OneTimePrekey   *string `json:"one_time_prekey,omitempty"`
 }
 
 // OneTimePrekey is a single-use ephemeral prekey.
@@ -68,15 +68,15 @@ type OTPKey struct {
 
 // RegisterDeviceRequest is sent on first login or new device setup.
 type RegisterDeviceRequest struct {
-	DeviceID             string   `json:"device_id"`
-	DisplayName          string   `json:"display_name"`
-	IdentityKey          string   `json:"identity_key"`
-	SigningKey           string   `json:"signing_key"` // Ed25519 public — verifies signed prekey
-	SignedPrekey         string   `json:"signed_prekey"`
-	SignedPrekeyID       int      `json:"signed_prekey_id"`
-	SignedPrekeySig      string   `json:"signed_prekey_signature"`
-	RegistrationID       int      `json:"registration_id"`
-	OneTimePrekeys       []OTPKey `json:"one_time_prekeys"`
+	DeviceID        string   `json:"device_id"`
+	DisplayName     string   `json:"display_name"`
+	IdentityKey     string   `json:"identity_key"`
+	SigningKey      string   `json:"signing_key"` // Ed25519 public — verifies signed prekey
+	SignedPrekey    string   `json:"signed_prekey"`
+	SignedPrekeyID  int      `json:"signed_prekey_id"`
+	SignedPrekeySig string   `json:"signed_prekey_signature"`
+	RegistrationID  int      `json:"registration_id"`
+	OneTimePrekeys  []OTPKey `json:"one_time_prekeys"`
 }
 
 // Validate checks required fields.

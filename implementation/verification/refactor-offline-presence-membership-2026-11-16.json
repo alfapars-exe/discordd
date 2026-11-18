@@ -1,0 +1,21 @@
+{
+  "baselineCommit": "607f0239",
+  "scope": "Use existing containsPresenceUser predicate for offline reconnect membership check. Preserve one GetOnlineUserIDs call before both generation gates, persistence, compensation and notification.",
+  "validation": {
+    "beforeAndAfter": "Same 18 named cases including subtests, repeated20, 360 PASS on each source",
+    "rootGoVet": "PASS",
+    "fail": 0,
+    "skip": 0
+  },
+  "remaining": [
+    "Final-source scan and CI/Sonar",
+    "Linux race for new presence source",
+    "Full transport/reconnect/physical and RF07/RF14 acceptance"
+  ],
+  "sourceScan": {
+    "sourceCommit": "60b6c61c",
+    "exactReviewedRecords": 51,
+    "reviewLines": 482,
+    "blockingPatterns": 0
+  }
+}

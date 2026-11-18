@@ -16,11 +16,11 @@ var dmStageName = regexp.MustCompile(`^dmstage_[a-f0-9]{16}_`)
 
 // Only the singleton backend owner scans newly staged DM files. Fresh files and
 // every file with a committed attachment reference survive, including lost ACKs.
-func StartDMUploadCleanup(parent context.Context, service DMUploadService) func() {
-	s, ok := service.(*dmUploadService)
-	if !ok {
-		return func() { /* Optional upload adapters own no maintenance resources. */ }
-	}
+func StartDMUploadCleanup(parent context.Context, service interface{ StartDMUploadCleanup(context.Context) func() }) func() {
+	return service.StartDMUploadCleanup(parent)
+}
+
+func (s *dmUploadService) StartDMUploadCleanup(parent context.Context) func() {
 	ctx, cancel := context.WithCancel(parent) // NOSONAR: ownership transfers to worker defer and returned stop; deferring here would stop the worker immediately.
 	done := make(chan struct{})
 	go func() {

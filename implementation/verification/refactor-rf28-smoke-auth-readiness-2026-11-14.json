@@ -1,0 +1,13 @@
+{
+  "source_before": "8ccf5d9d04e07ca2063e7cbad137c58a2a26ebc9",
+  "run": 43574345347,
+  "failed_job": 132385286513,
+  "observation": "Only Chromium login/recovery smoke flaky: first password-field visibility timed out15s; retry passed. Offline retry, DM history and role cases passed first try. Screenshot shows real server-waking screen.",
+  "evidence": "G:/hichat-verification-overflow-20261114/8cc-smoke-browser",
+  "change": "Initial password-field visibility uses90s readiness gate matching login helper. Keyboard focus/navigation and no-script-error assertions unchanged; no fixed sleep, no skip, strict flaky rejection retained.",
+  "limits": [
+    "Fresh full browser run required",
+    "Unchanged server rate limits and Retry-After behavior",
+    "This is bounded readiness alignment, not a claim of production startup latency improvement"
+  ]
+}

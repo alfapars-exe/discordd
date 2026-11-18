@@ -1,0 +1,30 @@
+{
+  "headSha": "c9bfae0b5a997662f037a8b69013c000edb38f49",
+  "sourceProof": [
+    {
+      "path": "server/services/server_service_membership.go",
+      "matchedLines": 262
+    },
+    {
+      "path": "server/repository/sqlite_group_dm.go",
+      "matchedLines": 676
+    }
+  ],
+  "issues": [
+    {
+      "key": "AaHYWqtNd7dyvm3wYSoq",
+      "component": "alfapars-exe_discordd:server/services/server_service_membership.go",
+      "status": "CLOSED",
+      "resolution": "FIXED",
+      "message": "Refactor this method to reduce its Cognitive Complexity from 17 to the 15 allowed."
+    },
+    {
+      "key": "AaHYWqd-d7dyvm3wYSoP",
+      "component": "alfapars-exe_discordd:server/repository/sqlite_group_dm.go",
+      "status": "CLOSED",
+      "resolution": "FIXED",
+      "message": "Refactor this method to reduce its Cognitive Complexity from 16 to the 15 allowed."
+    }
+  ],
+  "scope": "Source-bound complexity closure; does not turn failed Security scan into accepted CI."
+}

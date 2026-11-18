@@ -1,0 +1,29 @@
+{
+  "baselineCommit": "b8a14164888b683b4a7b581922ac22d5e57edf5d",
+  "scope": "Separate synchronous Retry-After backoff and account-bound refreshed access installation from doRefresh. No asynchronous boundary added; generation checks, lifetime disposal and rejection handling remain in place.",
+  "verification": {
+    "originalClientTests": 64,
+    "candidateClientTests": 64,
+    "targetedEslint": "PASS",
+    "typescriptBuild": "PASS",
+    "diffCheck": "PASS",
+    "sourceScan": {
+      "reviewLines": 481,
+      "blockingPatterns": 0
+    }
+  },
+  "remaining": [
+    "New-source CI/Sonar",
+    "Complete authentication/native/offline acceptance",
+    "Other API request orchestration complexity"
+  ],
+  "sourceCommit": "e7cc898b",
+  "structuralParity": {
+    "method": "Canonical TypeScript AST printing after reconstructing both synchronous helper call sites",
+    "doRefreshParity": true
+  },
+  "sourceScanAttempt": {
+    "initialAttempt": "Invalid: system WSL bash could not resolve Windows paths; not a product scan result",
+    "current": "Git Bash immutable e7cc898b scan terminal PASS: 51 exact source records, 481 review lines, 0 blocking patterns"
+  }
+}
