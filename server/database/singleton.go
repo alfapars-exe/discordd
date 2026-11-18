@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -56,7 +57,7 @@ func AcquireBackendOwner(ctx context.Context, db *sql.DB) (*sql.Conn, error) {
 		return nil, ErrBackendOwnerBusy
 	}
 	// Session-scoped: only the owner session gets the idle limit.
-	if _, err = conn.ExecContext(ctx, fmt.Sprintf(`SET idle_session_timeout = %d`, backendOwnerIdleTimeout.Milliseconds())); err != nil {
+	if _, err = conn.ExecContext(ctx, `SELECT set_config('idle_session_timeout', $1, false)`, strconv.FormatInt(backendOwnerIdleTimeout.Milliseconds(), 10)); err != nil {
 		_, _ = conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock(7341982,30)`)
 		_ = conn.Close()
 		return nil, fmt.Errorf("backend ownership idle limit failed: %w", err)
