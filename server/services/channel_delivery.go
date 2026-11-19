@@ -143,10 +143,12 @@ func (s *messageService) StartChannelDelivery(parent context.Context) func() {
 		messageLogger.Error("channel preparation recovery failed")
 	}
 	startupCancel()
+	wake := queueWake(parent, database.WakeChannelDelivery)
 	go func() {
 		defer close(done)
-		ticker := time.NewTicker(500 * time.Millisecond)
-		defer ticker.Stop()
+		poll := newIdlePoll(500*time.Millisecond, 2*time.Second)
+		timer := time.NewTimer(poll.base)
+		defer timer.Stop()
 		preparations := time.NewTicker(10 * time.Second)
 		defer preparations.Stop()
 		retention := time.NewTicker(5 * time.Minute)
@@ -155,12 +157,15 @@ func (s *messageService) StartChannelDelivery(parent context.Context) func() {
 			if ctx.Err() != nil {
 				return
 			}
-			s.deliveryTick(ctx)
+			timer.Reset(poll.after(s.deliveryTick(ctx)))
 			select {
 			case <-ctx.Done():
 				return
-			case <-ticker.C:
+			case <-timer.C:
 			case <-s.deliveryWake:
+				poll.wake()
+			case <-wake:
+				poll.wake()
 			case <-preparations.C:
 				s.recoverChannelPreparations(ctx)
 			case <-retention.C:
@@ -198,15 +203,18 @@ func (s *messageService) KeepChannelSendAlive(parent context.Context, id string)
 	return func() { cancel(); <-done }
 }
 
-func (s *messageService) deliveryTick(parent context.Context) {
+// deliveryTick reports whether it delivered anything, so the worker keeps
+// polling quickly only while the outbox is busy.
+func (s *messageService) deliveryTick(parent context.Context) bool {
 	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
 	defer cancel()
 	for i := 0; i < 32; i++ {
 		if !s.deliverNext(ctx) {
-			return
+			return i > 0
 		}
 	}
 	s.wakeChannelDelivery()
+	return true
 }
 
 func (s *messageService) recoverChannelPreparations(parent context.Context) {

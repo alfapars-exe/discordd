@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/logx"
@@ -113,21 +114,27 @@ func (w *ChannelMessageNotificationWorker) failBatch(ctx context.Context, job *r
 func (w *ChannelMessageNotificationWorker) Start(ctx context.Context) func() {
 	workerCtx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
+	wake := queueWake(ctx, database.WakeChannelNotifications)
 	go func() {
 		defer close(done)
-		ticker := time.NewTicker(200 * time.Millisecond)
-		defer ticker.Stop()
+		poll := newIdlePoll(200*time.Millisecond, 5*time.Second)
+		timer := time.NewTimer(poll.base)
+		defer timer.Stop()
 		for {
 			select {
 			case <-workerCtx.Done():
 				return
-			case <-ticker.C:
-				workCtx, workCancel := context.WithTimeout(workerCtx, 15*time.Second)
-				if _, err := w.ProcessNextBatch(workCtx); err != nil {
-					channelMessageNotificationLogger.Error("channel notification batch failed", "err", pkg.ErrText(err))
-				}
-				workCancel()
+			case <-wake:
+				poll.wake()
+			case <-timer.C:
 			}
+			workCtx, workCancel := context.WithTimeout(workerCtx, 15*time.Second)
+			worked, err := w.ProcessNextBatch(workCtx)
+			if err != nil {
+				channelMessageNotificationLogger.Error("channel notification batch failed", "err", pkg.ErrText(err))
+			}
+			workCancel()
+			timer.Reset(poll.after(worked))
 		}
 	}()
 	return func() { cancel(); <-done }

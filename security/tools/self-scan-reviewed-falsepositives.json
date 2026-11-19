@@ -340,18 +340,18 @@
     {
       "rule": "go.sql-concat",
       "path": "server/services/channel_delivery.go",
-      "file_sha256": "b8dfff5ac3c4390896161a93b5d3f320cbd7b1e6631fb39b7470f63c9e37812a",
+      "file_sha256": "0c3359a09f57ee6701d9a2df31b6ce3518c18840379bd5d0024f81ad6411d7c8",
       "line_sha256": "b9e0dcf41d9c6f4062cda62024095077af22625d7f722a3e1b4a89c426369e0a",
       "reason": "The exact match contains fixed SQL arithmetic for attempt counts and lease timestamps, with no SQL string interpolation.",
-      "proof_ref": "server/services/channel_delivery.go:253"
+      "proof_ref": "server/services/channel_delivery.go:261"
     },
     {
       "rule": "go.sql-concat",
       "path": "server/services/channel_delivery.go",
-      "file_sha256": "b8dfff5ac3c4390896161a93b5d3f320cbd7b1e6631fb39b7470f63c9e37812a",
+      "file_sha256": "0c3359a09f57ee6701d9a2df31b6ce3518c18840379bd5d0024f81ad6411d7c8",
       "line_sha256": "11bc8e7a1de4aeca027449fff5f2c52dc0b81088401995e892fcac6344f7d84c",
       "reason": "The exact match contains fixed SQL arithmetic for attempt counts and lease timestamps, with no SQL string interpolation.",
-      "proof_ref": "server/services/channel_delivery.go:267"
+      "proof_ref": "server/services/channel_delivery.go:275"
     },
     {
       "rule": "go.sql-concat",
@@ -372,18 +372,18 @@
     {
       "rule": "go.sql-concat",
       "path": "server/services/dm_delivery.go",
-      "file_sha256": "0eb53f0bd618a4d8133c492d0433a3d62678d723387d076ab54fdeb98bcc4f9d",
+      "file_sha256": "12f3beee504ef42dc87c9f6f36e774ce366f6cf1275a987511fc6acc7f5a4489",
       "line_sha256": "35d61981a49cecfec2795904654d63c4055fc0a7131ce795cd098299b16dd681",
       "reason": "The plus signs are fixed PostgreSQL timestamp and attempt arithmetic inside a single SQL literal. No SQL string concatenation occurs; the retry event ID remains a bound argument.",
-      "proof_ref": "server/services/dm_delivery.go:142,152;server/services/dm_delivery_test.go:TestDMOutboxRetryOrderingDeletionAndRetention"
+      "proof_ref": "server/services/dm_delivery.go:144,157;server/services/dm_delivery_test.go:TestDMOutboxRetryOrderingDeletionAndRetention"
     },
     {
       "rule": "go.sql-concat",
       "path": "server/services/dm_delivery.go",
-      "file_sha256": "0eb53f0bd618a4d8133c492d0433a3d62678d723387d076ab54fdeb98bcc4f9d",
+      "file_sha256": "12f3beee504ef42dc87c9f6f36e774ce366f6cf1275a987511fc6acc7f5a4489",
       "line_sha256": "b0c9f492f92a7d02eafb57e17a8d7db5f096e1f1c04dab7f625b21dea03e7220",
       "reason": "The plus signs are fixed PostgreSQL timestamp and attempt arithmetic inside a single SQL literal. No SQL string concatenation occurs; the retry event ID remains a bound argument.",
-      "proof_ref": "server/services/dm_delivery.go:142,152;server/services/dm_delivery_test.go:TestDMOutboxRetryOrderingDeletionAndRetention"
+      "proof_ref": "server/services/dm_delivery.go:144,157;server/services/dm_delivery_test.go:TestDMOutboxRetryOrderingDeletionAndRetention"
     },
     {
       "rule": "go.sql-concat",

@@ -295,13 +295,27 @@ func main() {
 	defer stopAuthMaintenance()
 	stopAccountAssetCleanup := svcs.AccountAssetCleanup.Start(context.Background())
 	stopMessageReminders := svcs.ReminderWorker.Start(context.Background())
-	stopChannelMessageNotifications := svcs.ChannelNotifWorker.Start(context.Background())
+	// One dedicated LISTEN connection (outside the pool) wakes the queue
+	// workers on commit, so they idle instead of polling several times per
+	// second and holding pooled connections while nothing is queued.
+	queueWaker := database.NewQueueWaker()
+	queueWakeCtx, stopQueueWake := context.WithCancel(context.Background())
+	queueWakeDone := make(chan struct{})
+	go func() {
+		defer close(queueWakeDone)
+		queueWaker.Run(queueWakeCtx, db.QueueWakeConnector(), func(err error) {
+			bootLogger.Warn("queue wake listener disconnected; workers fall back to idle polling", "err", pkg.ErrText(err))
+		})
+	}()
+	defer func() { stopQueueWake(); <-queueWakeDone }()
+	workerCtx := services.WithQueueWaker(context.Background(), queueWaker)
+	stopChannelMessageNotifications := svcs.ChannelNotifWorker.Start(workerCtx)
 	stopServerEvents := svcs.ServerEventWorker.Start(context.Background())
 	stopFriendAnniversaries := svcs.FriendAnniversaryWorker.Start(context.Background())
 	stopEmailDelivery := svcs.EmailDelivery.Start(context.Background())
-	stopChannelDelivery := svcs.Message.StartChannelDelivery(context.Background())
+	stopChannelDelivery := svcs.Message.StartChannelDelivery(workerCtx)
 	defer stopChannelDelivery()
-	stopDMDelivery, dmDeliveryErr := svcs.DM.StartDMDelivery(ownerCtx)
+	stopDMDelivery, dmDeliveryErr := svcs.DM.StartDMDelivery(services.WithQueueWaker(ownerCtx, queueWaker))
 	if dmDeliveryErr != nil {
 		logx.Fatal("boot", "failed to initialize DM outbox", dmDeliveryErr)
 	}

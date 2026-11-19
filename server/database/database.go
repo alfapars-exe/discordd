@@ -14,6 +14,7 @@ import (
 
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/pkg/logx"
+	"github.com/jackc/pgx/v5"
 
 	_ "modernc.org/sqlite" // Offline import sources and historical migration fixtures only.
 )
@@ -29,6 +30,9 @@ var recoverableErrors = []string{
 type DB struct {
 	Conn               *sql.DB
 	remoteMigrationDSN string
+	// listenConfig is the pool's verified connection config, reused for the
+	// dedicated queue wake LISTEN connection. Nil for non-PostgreSQL fixtures.
+	listenConfig *pgx.ConnConfig
 }
 
 func IsPostgresDSN(dsn string) bool {
@@ -95,7 +99,7 @@ func NewLegacy(dbPath string, migrationsFS fs.FS) (*DB, error) {
 	if IsPostgresDSN(dbPath) {
 		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer cancel()
-		conn, err := OpenPostgres(ctx, dbPath)
+		conn, listenConfig, err := openPostgres(ctx, dbPath)
 		if err != nil {
 			return nil, err
 		}
@@ -104,7 +108,7 @@ func NewLegacy(dbPath string, migrationsFS fs.FS) (*DB, error) {
 			return nil, err
 		}
 		logger.Info("using PostgreSQL 18 backend; native migrations applied")
-		return &DB{Conn: conn}, nil
+		return &DB{Conn: conn, listenConfig: listenConfig}, nil
 	}
 	var conn *sql.DB
 	var err error
