@@ -7,7 +7,7 @@ func TestPostgresPoolLimits(t *testing.T) {
 		open, idle         string
 		wantOpen, wantIdle int
 		invalid            bool
-	}{{"", "", 4, 2, false}, {"8", "3", 8, 3, false}, {"4", "0", 4, 0, false}, {"0", "0", 0, 0, true}, {"3", "4", 0, 0, true}, {"oops", "2", 0, 0, true}, {"257", "2", 0, 0, true}} {
+	}{{"", "", 8, 8, false}, {"4", "", 4, 4, false}, {"", "3", 8, 3, false}, {"8", "3", 8, 3, false}, {"4", "0", 4, 0, false}, {"0", "0", 0, 0, true}, {"3", "4", 0, 0, true}, {"oops", "2", 0, 0, true}, {"257", "2", 0, 0, true}} {
 		t.Run(tc.open+"_"+tc.idle, func(t *testing.T) {
 			t.Setenv("POSTGRES_MAX_OPEN_CONNS", tc.open)
 			t.Setenv("POSTGRES_MAX_IDLE_CONNS", tc.idle)

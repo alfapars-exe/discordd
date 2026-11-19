@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/argeinfina/hichat/database"
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
 	"github.com/argeinfina/hichat/ws"
@@ -56,10 +57,12 @@ func (s *dmService) StartDMDelivery(parent context.Context) (func(), error) {
 		return func() {}, errors.New("DM outbox startup recovery failed")
 	}
 	stop()
+	wake := queueWake(parent, database.WakeDMDelivery)
 	go func() {
 		defer close(done)
-		ticker := time.NewTicker(500 * time.Millisecond)
-		defer ticker.Stop()
+		poll := newIdlePoll(500*time.Millisecond, 2*time.Second)
+		timer := time.NewTimer(poll.base)
+		defer timer.Stop()
 		preparations := time.NewTicker(30 * time.Second)
 		defer preparations.Stop()
 		retention := time.NewTicker(5 * time.Minute)
@@ -68,11 +71,13 @@ func (s *dmService) StartDMDelivery(parent context.Context) (func(), error) {
 			if ctx.Err() != nil {
 				return
 			}
-			s.dmDeliveryTick(ctx)
+			timer.Reset(poll.after(s.dmDeliveryTick(ctx)))
 			select {
 			case <-ctx.Done():
 				return
-			case <-ticker.C:
+			case <-timer.C:
+			case <-wake:
+				poll.wake()
 			case <-preparations.C:
 				s.recoverDMPreparations(ctx)
 			case <-retention.C:
@@ -105,14 +110,16 @@ type dmDeliveryEvent struct {
 	Payload   json.RawMessage `json:"d,omitempty"`
 }
 
-func (s *dmService) dmDeliveryTick(parent context.Context) {
+// dmDeliveryTick reports whether it delivered anything (see deliveryTick).
+func (s *dmService) dmDeliveryTick(parent context.Context) bool {
 	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
 	defer cancel()
-	for range 64 {
+	for i := range 64 {
 		if !s.deliverNextDM(ctx) {
-			break
+			return i > 0
 		}
 	}
+	return true
 }
 
 func (s *dmService) recoverDMPreparations(parent context.Context) {

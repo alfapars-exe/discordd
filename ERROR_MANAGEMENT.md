@@ -57,8 +57,10 @@ rota ayrı tutulur; kalan rotaların histogramı `other` altında birleştirilir
 sınırlarıdır; `-1` 60 saniyenin üzerindeki kovayı belirtir. Bu ek bilgiler
 `runtime_telemetry.diagnostics` JSON metninde de saklanır.
 
-PostgreSQL havuzu `POSTGRES_MAX_OPEN_CONNS` (varsayılan 4) ve
-`POSTGRES_MAX_IDLE_CONNS` (varsayılan 2) ile ayarlanır. Açık bağlantı 1–256,
+PostgreSQL havuzu `POSTGRES_MAX_OPEN_CONNS` (varsayılan 8) ve
+`POSTGRES_MAX_IDLE_CONNS` (varsayılan: açık bağlantı sınırı) ile ayarlanır.
+Bunlara ek olarak kuyruk uyandırma için havuz dışında tek bir `LISTEN`
+bağlantısı açılır. Açık bağlantı 2–256,
 boş bağlantı 0–açık bağlantı sınırı arasında olmalıdır. Ayarlamadan önce DB
 bekleme süresi ve gerçek istek gecikmesi birlikte karşılaştırılmalıdır.
 
