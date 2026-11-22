@@ -15,7 +15,7 @@ func TestVoiceActivityWriterOverflowIsNonBlockingAndDrainsFIFO(t *testing.T) {
 		var written []voiceActivityUpdate
 		w := newVoiceActivityWriter(func(ctx context.Context, update voiceActivityUpdate) {
 			deadline, ok := ctx.Deadline()
-			if !ok || deadline.Sub(time.Now()) != voiceActivityBudget {
+			if !ok || time.Until(deadline) != voiceActivityBudget {
 				t.Error("activity task must receive one five-second budget")
 			}
 			<-release
