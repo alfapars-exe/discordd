@@ -17,6 +17,7 @@ import { isMusicBotErrorReason } from "../../types/music";
 import type { WSMessage } from "../../types";
 import type { WSHandlerContext } from "./types";
 import { isVoiceRecoveryAllowed } from "../../stores/shared/voiceRecovery";
+import { getAuthSessionSnapshot } from "../../api/authSessionEvents";
 
 export async function handleVoiceEvent(
   msg: WSMessage,
@@ -42,7 +43,9 @@ export async function handleVoiceEvent(
       const myChannelId = voiceState.currentVoiceChannelId;
       const isSameChannel = myChannelId && myChannelId === voiceData.channel_id;
 
-      if (isSameChannel || isMe) {
+      // Local transition owners emit self cues after teardown/token commit.
+      // Fanout may arrive on either side of force_move, so it never owns them.
+      if (isSameChannel && !isMe) {
         if (voiceData.action === "join") playJoinSound();
         else if (voiceData.action === "leave") playLeaveSound();
       }
@@ -184,6 +187,8 @@ export async function handleVoiceEvent(
     case "voice_force_move": {
       const forceMoveData = msg.d;
       const voiceStore = useVoiceStore.getState();
+      if ((voiceStore.pendingVoiceChannelId ?? voiceStore.currentVoiceChannelId) === forceMoveData.channel_id) return true;
+      const auth = getAuthSessionSnapshot();
 
       // Preserve user's mute/deafen state across the move
       const prevMuted = voiceStore.isMuted;
@@ -207,12 +212,17 @@ export async function handleVoiceEvent(
       const request = voiceStore.joinVoiceChannel(forceMoveData.channel_id);
       const generation = useVoiceStore.getState()._joinGeneration;
       void request.then((tokenResp) => {
-        if (useVoiceStore.getState()._joinGeneration !== generation) return;
+        const current = useVoiceStore.getState();
+        const currentAuth = getAuthSessionSnapshot();
+        if (current._joinGeneration !== generation
+          || currentAuth.ownerId !== auth.ownerId || currentAuth.generation !== auth.generation) return;
         if (!tokenResp) {
           useVoiceStore.getState()._wsSend?.("voice_leave", {});
           return;
         }
+        if (current.currentVoiceChannelId !== forceMoveData.channel_id) return;
         ctx.sendVoiceJoin(forceMoveData.channel_id);
+        playJoinSound();
 
         const channelName = forceMoveData.channel_name
           ?? useChannelStore.getState().categories
@@ -230,15 +240,20 @@ export async function handleVoiceEvent(
       return true;
     }
 
-    case "voice_force_disconnect":
+    case "voice_force_disconnect": {
       console.warn("[ws] voice_force_disconnect RECEIVED", { timestamp: new Date().toISOString() });
+      const wasConnected = !!useVoiceStore.getState().currentVoiceChannelId;
       useVoiceStore.getState().handleForceDisconnect();
+      if (wasConnected) playLeaveSound();
       return true;
+    }
 
     case "voice_afk_kick": {
       console.warn("[ws] voice_afk_kick RECEIVED", { timestamp: new Date().toISOString() });
       const afkData = msg.d;
+      const wasConnected = !!useVoiceStore.getState().currentVoiceChannelId;
       useVoiceStore.getState().handleAFKKick(afkData.channel_name, afkData.server_name);
+      if (wasConnected) playLeaveSound();
       return true;
     }
 

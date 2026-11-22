@@ -17,6 +17,10 @@ import { configureMobileUI, initAppLifecycle } from "./utils/nativePlugins";
 import { installGlobalErrorLogger } from "./api/globalErrorLogger";
 import { installScreenPickerDiagnosticForwarder } from "./api/screenPickerDiagnostic";
 import { initSentry } from "./monitoring/sentry";
+import { prepareWindowsVoiceTransport } from "./audio/prepareWindowsVoiceTransport";
+
+// Asynchronous GPU capability discovery; no microphone or camera capture.
+void prepareWindowsVoiceTransport();
 
 // Native shells (Electron file://, Capacitor capacitor://) don't support HTML5 History API.
 // Web uses BrowserRouter for clean URLs. Capitalized (JSX requires it for <Router>) but

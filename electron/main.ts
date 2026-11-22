@@ -25,6 +25,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { APP_HOST, APP_SCHEME, resolveAppPath } from "./resolve-path";
 import { isProxyableUrl, proxyApiRequest } from "./api-proxy";
+import { apiRequestCancellation } from "./api-request-cancellation";
 import { setupAutoUpdater } from "./auto-updater";
 import { shutdownCapture } from "./audio-capture";
 import { setupCrashReporter } from "./crash-reporter";
@@ -243,6 +244,7 @@ function setupAppProtocol(): void {
       // relay can't be used to reach services on the user's own machine.
       return proxyApiRequest(request, (input, init) => net.fetch(input, init), {
         allowLoopback: !app.isPackaged,
+        cancellation: apiRequestCancellation,
       });
     }
 

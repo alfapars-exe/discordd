@@ -1,0 +1,2626 @@
+{
+  "schemaVersion": 1,
+  "measuredOn": "2026-11-22",
+  "platform": "Windows x64",
+  "benchmarkScript": "scripts/measure-windows-voice.cjs",
+  "rawReportDirectory": "e2e/.tmp/run-1795353000000-221122-7a045ef081c1a002 (ignored, synthetic accounts only)",
+  "quantiles": {
+    "median": "middle value for odd n; average of middle two for even n",
+    "p95": "nearest rank ceil(n * 0.95)"
+  },
+  "timing": {
+    "start": "actual DOM click for join, actual owner DOM drop for administrator move",
+    "list": "first owner-sidebar observation of member in destination",
+    "decodedAudio": "first positive decoded remote-track PCM via test-only WebAudio analyser, before product/OS output",
+    "decodedSamples": "first nonzero inbound RTP totalSamplesReceived; supporting counter, not audibility proof",
+    "connection": "new target RTCPeerConnection connected event",
+    "token": "renderer fetch wall time",
+    "epoch": "Unix milliseconds",
+    "pollingIntervalMs": 40,
+    "analyserFftSize": 2048,
+    "positivePcmRmsThreshold": 0.0001,
+    "cold": "first voice-channel join after fresh process/profile and UI login; excludes process startup/login time",
+    "normalSeries": "20 joins include one first/cold join and 19 warm rejoins; warm summaries exclude first join; 20 moves are separate",
+    "cue": "actual output GainNode downstream PCM over entire cue duration+100ms; stable product Preview Join positive control"
+  },
+  "environment": {
+    "network": "isolated loopback Go API9090, HTTPS9443, LiveKit17880/TCP17881/UDP17882",
+    "ice": "LiveKit advertises 127.0.0.1; use_external_ip=false; no ICE-lite override; fixture filters non-loopback STUN/TURN",
+    "filteredIceHosts": [
+      "global.stun.twilio.com",
+      "stun.l.google.com",
+      "stun1.l.google.com"
+    ],
+    "outboundHttp": "deny proxy; explicit loopback bypass only",
+    "profiles": "fresh isolated temporary userData; real user profile untouched",
+    "hostLoad": "baseline and final candidate measured with full client test suite stopped; no root heavy jobs during measured runs",
+    "microphone": {
+      "source": "client/public/audio-test-fixtures/turkish-fleurs-original.wav",
+      "license": "CC BY 4.0; attribution in adjacent README.md",
+      "conversion": "active segment 10.3–11.3s; float32 mono to PCM16 mono, original sample rate; Chromium loops this 1s segment",
+      "sha256": "f36cfa40c41769ce300c9f6ea1789a3de02c0e01003c0255e9299ae8fe4227ea"
+    },
+    "output": "hidden app windows; --mute-audio; no physical speaker playback",
+    "cryptography": "real app E2EE device/session flow; encryption not disabled"
+  },
+  "baseline": {
+    "applicationVersion": "2.11.130",
+    "runtime": {
+      "electron": "45.1.0",
+      "chrome": "156.0.8078.49",
+      "node": "24.22.1"
+    },
+    "applicationArchiveSha256": "b84aa20420179906109de839e9115c5e5091d07ee7532c8adcecbec0c95ca82b",
+    "rawReports": [
+      "voice-baseline-final.json",
+      "voice-baseline-cold.json",
+      "voice-baseline-sound-control.json"
+    ],
+    "conditions": {
+      "noiseReduction": false,
+      "microphoneProfile": "speech",
+      "input": "looped active speech segment 10.3–11.3 seconds; no long source silence"
+    },
+    "joins": [
+      {
+        "sample": 1,
+        "kind": "cold application voice join",
+        "resolvedActionAt": 1795369076865,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795369076979,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369078493,
+        "decodedSamplesAt": 1795369078451,
+        "connectionAt": 1795369078338,
+        "listMs": 114,
+        "decodedAudioMs": 1628,
+        "decodedSamplesMs": 1586,
+        "connectionMs": 1473,
+        "tokens": [
+          {
+            "durationMs": 71,
+            "status": 200,
+            "sinceActionMs": 76,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.5, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 2,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795369082880,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795369082993,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369083214,
+        "decodedSamplesAt": 1795369083176,
+        "connectionAt": 1795369083075,
+        "listMs": 113,
+        "decodedAudioMs": 334,
+        "decodedSamplesMs": 296,
+        "connectionMs": 195,
+        "tokens": [
+          {
+            "durationMs": 67,
+            "status": 200,
+            "sinceActionMs": 70,
+            "serverTiming": "auth;dur=2.7, token_lookup;dur=3.1, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 3,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795369087888,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795369087989,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369088208,
+        "decodedSamplesAt": 1795369088252,
+        "connectionAt": 1795369088054,
+        "listMs": 101,
+        "decodedAudioMs": 320,
+        "decodedSamplesMs": 364,
+        "connectionMs": 166,
+        "tokens": [
+          {
+            "durationMs": 58,
+            "status": 200,
+            "sinceActionMs": 60,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.0, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 4,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795369092893,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795369092986,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369093217,
+        "decodedSamplesAt": 1795369093170,
+        "connectionAt": 1795369093063,
+        "listMs": 93,
+        "decodedAudioMs": 324,
+        "decodedSamplesMs": 277,
+        "connectionMs": 170,
+        "tokens": [
+          {
+            "durationMs": 62,
+            "status": 200,
+            "sinceActionMs": 64,
+            "serverTiming": "auth;dur=1.5, token_lookup;dur=1.0, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 5,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795369097903,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795369097988,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369098246,
+        "decodedSamplesAt": 1795369098293,
+        "connectionAt": 1795369098083,
+        "listMs": 85,
+        "decodedAudioMs": 343,
+        "decodedSamplesMs": 390,
+        "connectionMs": 180,
+        "tokens": [
+          {
+            "durationMs": 68,
+            "status": 200,
+            "sinceActionMs": 71,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.5, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 6,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795369102914,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795369102992,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369103337,
+        "decodedSamplesAt": 1795369103292,
+        "connectionAt": 1795369103106,
+        "listMs": 78,
+        "decodedAudioMs": 423,
+        "decodedSamplesMs": 378,
+        "connectionMs": 192,
+        "tokens": [
+          {
+            "durationMs": 58,
+            "status": 200,
+            "sinceActionMs": 61,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.0, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 7,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795369107928,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795369108025,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369108334,
+        "decodedSamplesAt": 1795369108380,
+        "connectionAt": 1795369108111,
+        "listMs": 97,
+        "decodedAudioMs": 406,
+        "decodedSamplesMs": 452,
+        "connectionMs": 183,
+        "tokens": [
+          {
+            "durationMs": 54,
+            "status": 200,
+            "sinceActionMs": 58,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.0, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 8,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795369112941,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795369113024,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369113297,
+        "decodedSamplesAt": 1795369113328,
+        "connectionAt": 1795369113128,
+        "listMs": 83,
+        "decodedAudioMs": 356,
+        "decodedSamplesMs": 387,
+        "connectionMs": 187,
+        "tokens": [
+          {
+            "durationMs": 65,
+            "status": 200,
+            "sinceActionMs": 67,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.6, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 9,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795369117946,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795369118029,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369118290,
+        "decodedSamplesAt": 1795369118336,
+        "connectionAt": 1795369118122,
+        "listMs": 83,
+        "decodedAudioMs": 344,
+        "decodedSamplesMs": 390,
+        "connectionMs": 176,
+        "tokens": [
+          {
+            "durationMs": 68,
+            "status": 200,
+            "sinceActionMs": 70,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.7, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 10,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795369122957,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795369123069,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369123295,
+        "decodedSamplesAt": 1795369123328,
+        "connectionAt": 1795369123139,
+        "listMs": 112,
+        "decodedAudioMs": 338,
+        "decodedSamplesMs": 371,
+        "connectionMs": 182,
+        "tokens": [
+          {
+            "durationMs": 67,
+            "status": 200,
+            "sinceActionMs": 69,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.1, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 11,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795369127961,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795369128061,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369128290,
+        "decodedSamplesAt": 1795369128337,
+        "connectionAt": 1795369128132,
+        "listMs": 100,
+        "decodedAudioMs": 329,
+        "decodedSamplesMs": 376,
+        "connectionMs": 171,
+        "tokens": [
+          {
+            "durationMs": 68,
+            "status": 200,
+            "sinceActionMs": 71,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=2.6, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 12,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795369132972,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795369133071,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369133333,
+        "decodedSamplesAt": 1795369133379,
+        "connectionAt": 1795369133163,
+        "listMs": 99,
+        "decodedAudioMs": 361,
+        "decodedSamplesMs": 407,
+        "connectionMs": 191,
+        "tokens": [
+          {
+            "durationMs": 68,
+            "status": 200,
+            "sinceActionMs": 71,
+            "serverTiming": "auth;dur=1.6, token_lookup;dur=2.2, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 13,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795369137983,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795369138062,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369138337,
+        "decodedSamplesAt": 1795369138337,
+        "connectionAt": 1795369138153,
+        "listMs": 79,
+        "decodedAudioMs": 354,
+        "decodedSamplesMs": 354,
+        "connectionMs": 170,
+        "tokens": [
+          {
+            "durationMs": 63,
+            "status": 200,
+            "sinceActionMs": 66,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.5, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 14,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795369142991,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795369143073,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369143409,
+        "decodedSamplesAt": 1795369143369,
+        "connectionAt": 1795369143180,
+        "listMs": 82,
+        "decodedAudioMs": 418,
+        "decodedSamplesMs": 378,
+        "connectionMs": 189,
+        "tokens": [
+          {
+            "durationMs": 66,
+            "status": 200,
+            "sinceActionMs": 68,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=0.5, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 15,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795369148003,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795369148110,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369148370,
+        "decodedSamplesAt": 1795369148334,
+        "connectionAt": 1795369148189,
+        "listMs": 107,
+        "decodedAudioMs": 367,
+        "decodedSamplesMs": 331,
+        "connectionMs": 186,
+        "tokens": [
+          {
+            "durationMs": 60,
+            "status": 200,
+            "sinceActionMs": 63,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=0.5, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 16,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795369153010,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795369153107,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369153414,
+        "decodedSamplesAt": 1795369153460,
+        "connectionAt": 1795369153201,
+        "listMs": 97,
+        "decodedAudioMs": 404,
+        "decodedSamplesMs": 450,
+        "connectionMs": 191,
+        "tokens": [
+          {
+            "durationMs": 66,
+            "status": 200,
+            "sinceActionMs": 68,
+            "serverTiming": "auth;dur=1.6, token_lookup;dur=0.5, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 17,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795369158020,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795369158100,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369158373,
+        "decodedSamplesAt": 1795369158419,
+        "connectionAt": 1795369158204,
+        "listMs": 80,
+        "decodedAudioMs": 353,
+        "decodedSamplesMs": 399,
+        "connectionMs": 184,
+        "tokens": [
+          {
+            "durationMs": 65,
+            "status": 200,
+            "sinceActionMs": 67,
+            "serverTiming": "auth;dur=1.5, token_lookup;dur=1.5, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 18,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795369163037,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795369163145,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369163449,
+        "decodedSamplesAt": 1795369163495,
+        "connectionAt": 1795369163227,
+        "listMs": 108,
+        "decodedAudioMs": 412,
+        "decodedSamplesMs": 458,
+        "connectionMs": 190,
+        "tokens": [
+          {
+            "durationMs": 62,
+            "status": 200,
+            "sinceActionMs": 65,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=2.1, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 19,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795369168040,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795369168150,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369168499,
+        "decodedSamplesAt": 1795369168499,
+        "connectionAt": 1795369168226,
+        "listMs": 110,
+        "decodedAudioMs": 459,
+        "decodedSamplesMs": 459,
+        "connectionMs": 186,
+        "tokens": [
+          {
+            "durationMs": 66,
+            "status": 200,
+            "sinceActionMs": 67,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.5, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 20,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795369173053,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795369173141,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369173493,
+        "decodedSamplesAt": 1795369173493,
+        "connectionAt": 1795369173229,
+        "listMs": 88,
+        "decodedAudioMs": 440,
+        "decodedSamplesMs": 440,
+        "connectionMs": 176,
+        "tokens": [
+          {
+            "durationMs": 58,
+            "status": 200,
+            "sinceActionMs": 60,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.5, issue;dur=0.0"
+          }
+        ]
+      }
+    ],
+    "moves": [
+      {
+        "sample": 1,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795369183249,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795369183261,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369183568,
+        "decodedSamplesAt": 1795369183541,
+        "connectionAt": 1795369183409,
+        "listMs": 12,
+        "decodedAudioMs": 319,
+        "decodedSamplesMs": 292,
+        "connectionMs": 160,
+        "tokens": [
+          {
+            "durationMs": 30,
+            "status": 200,
+            "sinceActionMs": 48,
+            "serverTiming": "auth;dur=0.5, token_lookup;dur=1.0, issue;dur=0.5"
+          }
+        ]
+      },
+      {
+        "sample": 2,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795369194280,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795369194307,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369194654,
+        "decodedSamplesAt": 1795369194689,
+        "connectionAt": 1795369194448,
+        "listMs": 27,
+        "decodedAudioMs": 374,
+        "decodedSamplesMs": 409,
+        "connectionMs": 168,
+        "tokens": [
+          {
+            "durationMs": 30,
+            "status": 200,
+            "sinceActionMs": 46,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=2.0, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 3,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795369205292,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795369205304,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369205697,
+        "decodedSamplesAt": 1795369205697,
+        "connectionAt": 1795369205443,
+        "listMs": 12,
+        "decodedAudioMs": 405,
+        "decodedSamplesMs": 405,
+        "connectionMs": 151,
+        "tokens": [
+          {
+            "durationMs": 28,
+            "status": 200,
+            "sinceActionMs": 44,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=0.5, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 4,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795369216323,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795369216341,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369216699,
+        "decodedSamplesAt": 1795369216729,
+        "connectionAt": 1795369216487,
+        "listMs": 18,
+        "decodedAudioMs": 376,
+        "decodedSamplesMs": 406,
+        "connectionMs": 164,
+        "tokens": [
+          {
+            "durationMs": 32,
+            "status": 200,
+            "sinceActionMs": 51,
+            "serverTiming": "auth;dur=1.6, token_lookup;dur=1.1, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 5,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795369227342,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795369227385,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369227727,
+        "decodedSamplesAt": 1795369227697,
+        "connectionAt": 1795369227497,
+        "listMs": 43,
+        "decodedAudioMs": 385,
+        "decodedSamplesMs": 355,
+        "connectionMs": 155,
+        "tokens": [
+          {
+            "durationMs": 28,
+            "status": 200,
+            "sinceActionMs": 43,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=0.5, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 6,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795369238366,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795369238380,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369238700,
+        "decodedSamplesAt": 1795369238700,
+        "connectionAt": 1795369238514,
+        "listMs": 14,
+        "decodedAudioMs": 334,
+        "decodedSamplesMs": 334,
+        "connectionMs": 148,
+        "tokens": [
+          {
+            "durationMs": 27,
+            "status": 200,
+            "sinceActionMs": 42,
+            "serverTiming": "auth;dur=0.5, token_lookup;dur=1.6, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 7,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795369249382,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795369249434,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369249728,
+        "decodedSamplesAt": 1795369249774,
+        "connectionAt": 1795369249535,
+        "listMs": 52,
+        "decodedAudioMs": 346,
+        "decodedSamplesMs": 392,
+        "connectionMs": 153,
+        "tokens": [
+          {
+            "durationMs": 29,
+            "status": 200,
+            "sinceActionMs": 46,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=0.5, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 8,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795369260402,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795369260419,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369260768,
+        "decodedSamplesAt": 1795369260813,
+        "connectionAt": 1795369260555,
+        "listMs": 17,
+        "decodedAudioMs": 366,
+        "decodedSamplesMs": 411,
+        "connectionMs": 153,
+        "tokens": [
+          {
+            "durationMs": 29,
+            "status": 200,
+            "sinceActionMs": 44,
+            "serverTiming": "auth;dur=7.4, token_lookup;dur=1.6, issue;dur=0.5"
+          }
+        ]
+      },
+      {
+        "sample": 9,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795369271423,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795369271474,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369271772,
+        "decodedSamplesAt": 1795369271812,
+        "connectionAt": 1795369271575,
+        "listMs": 51,
+        "decodedAudioMs": 349,
+        "decodedSamplesMs": 389,
+        "connectionMs": 152,
+        "tokens": [
+          {
+            "durationMs": 28,
+            "status": 200,
+            "sinceActionMs": 44,
+            "serverTiming": "auth;dur=0.7, token_lookup;dur=2.1, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 10,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795369282440,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795369282459,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369282854,
+        "decodedSamplesAt": 1795369282854,
+        "connectionAt": 1795369282602,
+        "listMs": 19,
+        "decodedAudioMs": 414,
+        "decodedSamplesMs": 414,
+        "connectionMs": 162,
+        "tokens": [
+          {
+            "durationMs": 29,
+            "status": 200,
+            "sinceActionMs": 48,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.6, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 11,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795369293473,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795369293505,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369293849,
+        "decodedSamplesAt": 1795369293891,
+        "connectionAt": 1795369293631,
+        "listMs": 32,
+        "decodedAudioMs": 376,
+        "decodedSamplesMs": 418,
+        "connectionMs": 158,
+        "tokens": [
+          {
+            "durationMs": 30,
+            "status": 200,
+            "sinceActionMs": 46,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=2.1, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 12,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795369304491,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795369304502,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369304852,
+        "decodedSamplesAt": 1795369304898,
+        "connectionAt": 1795369304648,
+        "listMs": 11,
+        "decodedAudioMs": 361,
+        "decodedSamplesMs": 407,
+        "connectionMs": 157,
+        "tokens": [
+          {
+            "durationMs": 26,
+            "status": 200,
+            "sinceActionMs": 41,
+            "serverTiming": "auth;dur=0.5, token_lookup;dur=1.1, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 13,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795369315509,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795369315542,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369315815,
+        "decodedSamplesAt": 1795369315849,
+        "connectionAt": 1795369315661,
+        "listMs": 33,
+        "decodedAudioMs": 306,
+        "decodedSamplesMs": 340,
+        "connectionMs": 152,
+        "tokens": [
+          {
+            "durationMs": 26,
+            "status": 200,
+            "sinceActionMs": 43,
+            "serverTiming": "auth;dur=0.5, token_lookup;dur=1.6, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 14,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795369326540,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795369326590,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369326895,
+        "decodedSamplesAt": 1795369326928,
+        "connectionAt": 1795369326689,
+        "listMs": 50,
+        "decodedAudioMs": 355,
+        "decodedSamplesMs": 388,
+        "connectionMs": 149,
+        "tokens": [
+          {
+            "durationMs": 27,
+            "status": 200,
+            "sinceActionMs": 43,
+            "serverTiming": "auth;dur=5.4, token_lookup;dur=1.1, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 15,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795369337567,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795369337582,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369337934,
+        "decodedSamplesAt": 1795369337934,
+        "connectionAt": 1795369337711,
+        "listMs": 15,
+        "decodedAudioMs": 367,
+        "decodedSamplesMs": 367,
+        "connectionMs": 144,
+        "tokens": [
+          {
+            "durationMs": 26,
+            "status": 200,
+            "sinceActionMs": 41,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=0.5, issue;dur=0.5"
+          }
+        ]
+      },
+      {
+        "sample": 16,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795369348589,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795369348625,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369348979,
+        "decodedSamplesAt": 1795369348979,
+        "connectionAt": 1795369348734,
+        "listMs": 36,
+        "decodedAudioMs": 390,
+        "decodedSamplesMs": 390,
+        "connectionMs": 145,
+        "tokens": [
+          {
+            "durationMs": 25,
+            "status": 200,
+            "sinceActionMs": 41,
+            "serverTiming": "auth;dur=0.5, token_lookup;dur=1.6, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 17,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795369359607,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795369359621,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369359973,
+        "decodedSamplesAt": 1795369359929,
+        "connectionAt": 1795369359756,
+        "listMs": 14,
+        "decodedAudioMs": 366,
+        "decodedSamplesMs": 322,
+        "connectionMs": 149,
+        "tokens": [
+          {
+            "durationMs": 26,
+            "status": 200,
+            "sinceActionMs": 41,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=0.5, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 18,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795369370629,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795369370669,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369371009,
+        "decodedSamplesAt": 1795369371048,
+        "connectionAt": 1795369370787,
+        "listMs": 40,
+        "decodedAudioMs": 380,
+        "decodedSamplesMs": 419,
+        "connectionMs": 158,
+        "tokens": [
+          {
+            "durationMs": 28,
+            "status": 200,
+            "sinceActionMs": 43,
+            "serverTiming": "auth;dur=1.1, token_lookup;dur=1.1, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 19,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795369381653,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795369381713,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369381973,
+        "decodedSamplesAt": 1795369382019,
+        "connectionAt": 1795369381815,
+        "listMs": 60,
+        "decodedAudioMs": 320,
+        "decodedSamplesMs": 366,
+        "connectionMs": 162,
+        "tokens": [
+          {
+            "durationMs": 28,
+            "status": 200,
+            "sinceActionMs": 48,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=0.5, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 20,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795369392672,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795369392706,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369393047,
+        "decodedSamplesAt": 1795369393088,
+        "connectionAt": 1795369392823,
+        "listMs": 34,
+        "decodedAudioMs": 375,
+        "decodedSamplesMs": 416,
+        "connectionMs": 151,
+        "tokens": [
+          {
+            "durationMs": 25,
+            "status": 200,
+            "sinceActionMs": 39,
+            "serverTiming": "auth;dur=5.4, token_lookup;dur=0.5, issue;dur=0.0"
+          }
+        ]
+      }
+    ],
+    "coldJoins": [
+      {
+        "sample": 1,
+        "kind": "cold application voice join",
+        "resolvedActionAt": 1795369466311,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795369466443,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369467947,
+        "decodedSamplesAt": 1795369467902,
+        "connectionAt": 1795369467753,
+        "listMs": 132,
+        "decodedAudioMs": 1636,
+        "decodedSamplesMs": 1591,
+        "connectionMs": 1442,
+        "tokens": [
+          {
+            "durationMs": 70,
+            "status": 200,
+            "sinceActionMs": 74,
+            "serverTiming": "auth;dur=0.5, token_lookup;dur=1.1, issue;dur=0.5"
+          }
+        ]
+      },
+      {
+        "sample": 2,
+        "kind": "cold application voice join",
+        "resolvedActionAt": 1795369477196,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795369477323,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369478845,
+        "decodedSamplesAt": 1795369478804,
+        "connectionAt": 1795369478696,
+        "listMs": 127,
+        "decodedAudioMs": 1649,
+        "decodedSamplesMs": 1608,
+        "connectionMs": 1500,
+        "tokens": [
+          {
+            "durationMs": 64,
+            "status": 200,
+            "sinceActionMs": 68,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=2.1, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 3,
+        "kind": "cold application voice join",
+        "resolvedActionAt": 1795369487125,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795369487246,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369488727,
+        "decodedSamplesAt": 1795369488727,
+        "connectionAt": 1795369488585,
+        "listMs": 121,
+        "decodedAudioMs": 1602,
+        "decodedSamplesMs": 1602,
+        "connectionMs": 1460,
+        "tokens": [
+          {
+            "durationMs": 59,
+            "status": 200,
+            "sinceActionMs": 62,
+            "serverTiming": "auth;dur=1.5, token_lookup;dur=1.0, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 4,
+        "kind": "cold application voice join",
+        "resolvedActionAt": 1795369498057,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795369498162,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369499697,
+        "decodedSamplesAt": 1795369499697,
+        "connectionAt": 1795369499555,
+        "listMs": 105,
+        "decodedAudioMs": 1640,
+        "decodedSamplesMs": 1640,
+        "connectionMs": 1498,
+        "tokens": [
+          {
+            "durationMs": 64,
+            "status": 200,
+            "sinceActionMs": 68,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.5, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 5,
+        "kind": "cold application voice join",
+        "resolvedActionAt": 1795369508945,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795369509082,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795369510582,
+        "decodedSamplesAt": 1795369510531,
+        "connectionAt": 1795369510425,
+        "listMs": 137,
+        "decodedAudioMs": 1637,
+        "decodedSamplesMs": 1586,
+        "connectionMs": 1480,
+        "tokens": [
+          {
+            "durationMs": 59,
+            "status": 200,
+            "sinceActionMs": 63,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.0, issue;dur=0.0"
+          }
+        ]
+      }
+    ],
+    "summaries": {
+      "joins": {
+        "listMs": {
+          "n": 20,
+          "median": 97,
+          "p95": 113
+        },
+        "decodedAudioMs": {
+          "n": 20,
+          "median": 358.5,
+          "p95": 459
+        },
+        "decodedSamplesMs": {
+          "n": 20,
+          "median": 388.5,
+          "p95": 459
+        },
+        "connectionMs": {
+          "n": 20,
+          "median": 185,
+          "p95": 195
+        },
+        "tokenMs": {
+          "n": 20,
+          "median": 65.5,
+          "p95": 68
+        }
+      },
+      "warmJoins": {
+        "listMs": {
+          "n": 19,
+          "median": 97,
+          "p95": 113
+        },
+        "decodedAudioMs": {
+          "n": 19,
+          "median": 356,
+          "p95": 459
+        },
+        "decodedSamplesMs": {
+          "n": 19,
+          "median": 387,
+          "p95": 459
+        },
+        "connectionMs": {
+          "n": 19,
+          "median": 184,
+          "p95": 195
+        },
+        "tokenMs": {
+          "n": 19,
+          "median": 65,
+          "p95": 68
+        }
+      },
+      "moves": {
+        "listMs": {
+          "n": 20,
+          "median": 29.5,
+          "p95": 52
+        },
+        "decodedAudioMs": {
+          "n": 20,
+          "median": 366.5,
+          "p95": 405
+        },
+        "decodedSamplesMs": {
+          "n": 20,
+          "median": 391,
+          "p95": 418
+        },
+        "connectionMs": {
+          "n": 20,
+          "median": 153,
+          "p95": 164
+        },
+        "tokenMs": {
+          "n": 20,
+          "median": 28,
+          "p95": 30
+        }
+      },
+      "coldJoins": {
+        "listMs": {
+          "n": 5,
+          "median": 127,
+          "p95": 137
+        },
+        "decodedAudioMs": {
+          "n": 5,
+          "median": 1637,
+          "p95": 1649
+        },
+        "decodedSamplesMs": {
+          "n": 5,
+          "median": 1602,
+          "p95": 1640
+        },
+        "connectionMs": {
+          "n": 5,
+          "median": 1480,
+          "p95": 1500
+        },
+        "tokenMs": {
+          "n": 5,
+          "median": 64,
+          "p95": 70
+        }
+      }
+    },
+    "sound": {
+      "rawReport": "voice-baseline-sound-control.json",
+      "positiveControl": {
+        "kind": "actual product Join preview in stable non-deafened room",
+        "passed": true,
+        "cues": [
+          {
+            "asset": "join-B_xQuNtw.m4a",
+            "durationSeconds": 0.8629375,
+            "renderedPeakRms": 0.21763273815320677,
+            "gainAfterAudioQuantum": 1,
+            "samples": 24
+          }
+        ]
+      },
+      "forcedMove": {
+        "resolvedActionAt": 1795370316248,
+        "actionObserver": "owner DOM drop",
+        "deafenPreserved": true,
+        "microphonePublicationAbsent": true,
+        "remoteSpeechUnsubscribed": true,
+        "decodedRemotePcmPeakRms": 0,
+        "audibleJoinCueCount": 0,
+        "preparationChannelCuesBeforeForceMove": [
+          {
+            "asset": "leave-DCg-ybOa.m4a",
+            "durationSeconds": 1.6065208333333334,
+            "sinceActionMs": -7904,
+            "renderedPeakRms": 0,
+            "gainAfterAudioQuantum": 0,
+            "samples": 43
+          }
+        ],
+        "cuesAfterForceMove": [
+          {
+            "asset": "leave-DCg-ybOa.m4a",
+            "durationSeconds": 1.6065208333333334,
+            "sinceActionMs": 63,
+            "renderedPeakRms": 0,
+            "gainAfterAudioQuantum": 1,
+            "samples": 43
+          },
+          {
+            "asset": "join-B_xQuNtw.m4a",
+            "durationSeconds": 0.8629375,
+            "sinceActionMs": 63,
+            "renderedPeakRms": 0,
+            "gainAfterAudioQuantum": 1,
+            "samples": 24
+          }
+        ]
+      }
+    },
+    "cancellation": {
+      "rawReport": "voice-baseline-final.json",
+      "fixtureDelayMs": 5000,
+      "upstreamCancelledBeforeRelease": false,
+      "upstreamClosedAfterArrivalMs": 5018,
+      "upstreamReleasedAfterArrivalMs": 5015,
+      "selfJoinChannels": [
+        "bench-alpha"
+      ],
+      "latestTargetVisible": "Voice Connected\n1 ms\nWindows Voice Benchmark / bench-alpha\nReturn to call ↗\nNoise Reduction",
+      "onlyLatestTargetCommitted": true,
+      "tokens": [
+        {
+          "durationMs": 58,
+          "status": 200
+        },
+        {
+          "durationMs": 5022,
+          "status": 200
+        }
+      ]
+    },
+    "actualDomActions": 45,
+    "failedRounds": 0
+  },
+  "candidate": {
+    "applicationVersion": "2.11.130",
+    "runtime": {
+      "electron": "45.3.0",
+      "chrome": "156.0.8078.96",
+      "node": "24.22.2"
+    },
+    "applicationArchiveSha256": "30ed7ae6c5aa5d25aa0698138b7ae0108e5ae951dda53fc990c933a84dfc8c93",
+    "rawReports": [
+      "voice-candidate-final.json",
+      "voice-candidate-cold.json"
+    ],
+    "conditions": {
+      "noiseReduction": false,
+      "microphoneProfile": "speech",
+      "input": "looped active speech segment 10.3–11.3 seconds; no long source silence"
+    },
+    "joins": [
+      {
+        "sample": 1,
+        "kind": "cold application voice join",
+        "resolvedActionAt": 1795370356429,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795370356529,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370358675,
+        "decodedSamplesAt": 1795370358727,
+        "connectionAt": 1795370358511,
+        "listMs": 100,
+        "decodedAudioMs": 2246,
+        "decodedSamplesMs": 2298,
+        "connectionMs": 2082,
+        "tokens": [
+          {
+            "durationMs": 61,
+            "status": 200,
+            "sinceActionMs": 69,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.6, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 2,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795370363437,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795370363534,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370363795,
+        "decodedSamplesAt": 1795370363838,
+        "connectionAt": 1795370363631,
+        "listMs": 97,
+        "decodedAudioMs": 358,
+        "decodedSamplesMs": 401,
+        "connectionMs": 194,
+        "tokens": [
+          {
+            "durationMs": 66,
+            "status": 200,
+            "sinceActionMs": 69,
+            "serverTiming": "auth;dur=1.6, token_lookup;dur=1.6, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 3,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795370368443,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795370368530,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370368798,
+        "decodedSamplesAt": 1795370368849,
+        "connectionAt": 1795370368629,
+        "listMs": 87,
+        "decodedAudioMs": 355,
+        "decodedSamplesMs": 406,
+        "connectionMs": 186,
+        "tokens": [
+          {
+            "durationMs": 54,
+            "status": 200,
+            "sinceActionMs": 58,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.5, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 4,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795370373456,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795370373529,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370373801,
+        "decodedSamplesAt": 1795370373847,
+        "connectionAt": 1795370373634,
+        "listMs": 73,
+        "decodedAudioMs": 345,
+        "decodedSamplesMs": 391,
+        "connectionMs": 178,
+        "tokens": [
+          {
+            "durationMs": 53,
+            "status": 200,
+            "sinceActionMs": 57,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=4.3, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 5,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795370378467,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795370378543,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370378795,
+        "decodedSamplesAt": 1795370378844,
+        "connectionAt": 1795370378648,
+        "listMs": 76,
+        "decodedAudioMs": 328,
+        "decodedSamplesMs": 377,
+        "connectionMs": 181,
+        "tokens": [
+          {
+            "durationMs": 55,
+            "status": 200,
+            "sinceActionMs": 60,
+            "serverTiming": "auth;dur=3.8, token_lookup;dur=1.6, issue;dur=0.5"
+          }
+        ]
+      },
+      {
+        "sample": 6,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795370383482,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795370383570,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370383844,
+        "decodedSamplesAt": 1795370383801,
+        "connectionAt": 1795370383666,
+        "listMs": 88,
+        "decodedAudioMs": 362,
+        "decodedSamplesMs": 319,
+        "connectionMs": 184,
+        "tokens": [
+          {
+            "durationMs": 57,
+            "status": 200,
+            "sinceActionMs": 61,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=2.1, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 7,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795370388492,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795370388579,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370388838,
+        "decodedSamplesAt": 1795370388884,
+        "connectionAt": 1795370388670,
+        "listMs": 87,
+        "decodedAudioMs": 346,
+        "decodedSamplesMs": 392,
+        "connectionMs": 178,
+        "tokens": [
+          {
+            "durationMs": 55,
+            "status": 200,
+            "sinceActionMs": 59,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.2, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 8,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795370393508,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795370393610,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370393834,
+        "decodedSamplesAt": 1795370393886,
+        "connectionAt": 1795370393671,
+        "listMs": 102,
+        "decodedAudioMs": 326,
+        "decodedSamplesMs": 378,
+        "connectionMs": 163,
+        "tokens": [
+          {
+            "durationMs": 60,
+            "status": 200,
+            "sinceActionMs": 63,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.6, issue;dur=0.5"
+          }
+        ]
+      },
+      {
+        "sample": 9,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795370398509,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795370398619,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370398847,
+        "decodedSamplesAt": 1795370398807,
+        "connectionAt": 1795370398699,
+        "listMs": 110,
+        "decodedAudioMs": 338,
+        "decodedSamplesMs": 298,
+        "connectionMs": 190,
+        "tokens": [
+          {
+            "durationMs": 65,
+            "status": 200,
+            "sinceActionMs": 68,
+            "serverTiming": "auth;dur=1.6, token_lookup;dur=2.1, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 10,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795370403520,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795370403620,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370403834,
+        "decodedSamplesAt": 1795370403795,
+        "connectionAt": 1795370403689,
+        "listMs": 100,
+        "decodedAudioMs": 314,
+        "decodedSamplesMs": 275,
+        "connectionMs": 169,
+        "tokens": [
+          {
+            "durationMs": 53,
+            "status": 200,
+            "sinceActionMs": 57,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.1, issue;dur=0.5"
+          }
+        ]
+      },
+      {
+        "sample": 11,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795370408535,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795370408610,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370408928,
+        "decodedSamplesAt": 1795370408928,
+        "connectionAt": 1795370408717,
+        "listMs": 75,
+        "decodedAudioMs": 393,
+        "decodedSamplesMs": 393,
+        "connectionMs": 182,
+        "tokens": [
+          {
+            "durationMs": 57,
+            "status": 200,
+            "sinceActionMs": 61,
+            "serverTiming": "auth;dur=2.0, token_lookup;dur=1.5, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 12,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795370413551,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795370413625,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370413874,
+        "decodedSamplesAt": 1795370413926,
+        "connectionAt": 1795370413719,
+        "listMs": 74,
+        "decodedAudioMs": 323,
+        "decodedSamplesMs": 375,
+        "connectionMs": 168,
+        "tokens": [
+          {
+            "durationMs": 54,
+            "status": 200,
+            "sinceActionMs": 57,
+            "serverTiming": "auth;dur=4.7, token_lookup;dur=2.2, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 13,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795370418561,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795370418656,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370418915,
+        "decodedSamplesAt": 1795370418960,
+        "connectionAt": 1795370418742,
+        "listMs": 95,
+        "decodedAudioMs": 354,
+        "decodedSamplesMs": 399,
+        "connectionMs": 181,
+        "tokens": [
+          {
+            "durationMs": 63,
+            "status": 200,
+            "sinceActionMs": 66,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=2.1, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 14,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795370423576,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795370423652,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370423921,
+        "decodedSamplesAt": 1795370423967,
+        "connectionAt": 1795370423748,
+        "listMs": 76,
+        "decodedAudioMs": 345,
+        "decodedSamplesMs": 391,
+        "connectionMs": 172,
+        "tokens": [
+          {
+            "durationMs": 56,
+            "status": 200,
+            "sinceActionMs": 60,
+            "serverTiming": "auth;dur=1.2, token_lookup;dur=1.6, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 15,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795370428581,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795370428661,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370428914,
+        "decodedSamplesAt": 1795370428962,
+        "connectionAt": 1795370428758,
+        "listMs": 80,
+        "decodedAudioMs": 333,
+        "decodedSamplesMs": 381,
+        "connectionMs": 177,
+        "tokens": [
+          {
+            "durationMs": 62,
+            "status": 200,
+            "sinceActionMs": 65,
+            "serverTiming": "auth;dur=1.6, token_lookup;dur=1.0, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 16,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795370433594,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795370433695,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370433962,
+        "decodedSamplesAt": 1795370433962,
+        "connectionAt": 1795370433777,
+        "listMs": 101,
+        "decodedAudioMs": 368,
+        "decodedSamplesMs": 368,
+        "connectionMs": 183,
+        "tokens": [
+          {
+            "durationMs": 62,
+            "status": 200,
+            "sinceActionMs": 66,
+            "serverTiming": "auth;dur=1.6, token_lookup;dur=3.7, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 17,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795370438603,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795370438689,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370438964,
+        "decodedSamplesAt": 1795370439005,
+        "connectionAt": 1795370438795,
+        "listMs": 86,
+        "decodedAudioMs": 361,
+        "decodedSamplesMs": 402,
+        "connectionMs": 192,
+        "tokens": [
+          {
+            "durationMs": 68,
+            "status": 200,
+            "sinceActionMs": 71,
+            "serverTiming": "auth;dur=2.7, token_lookup;dur=1.6, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 18,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795370443616,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795370443691,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370443915,
+        "decodedSamplesAt": 1795370443915,
+        "connectionAt": 1795370443788,
+        "listMs": 75,
+        "decodedAudioMs": 299,
+        "decodedSamplesMs": 299,
+        "connectionMs": 172,
+        "tokens": [
+          {
+            "durationMs": 58,
+            "status": 200,
+            "sinceActionMs": 61,
+            "serverTiming": "auth;dur=1.6, token_lookup;dur=1.6, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 19,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795370448631,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795370448734,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370449008,
+        "decodedSamplesAt": 1795370449008,
+        "connectionAt": 1795370448808,
+        "listMs": 103,
+        "decodedAudioMs": 377,
+        "decodedSamplesMs": 377,
+        "connectionMs": 177,
+        "tokens": [
+          {
+            "durationMs": 57,
+            "status": 200,
+            "sinceActionMs": 60,
+            "serverTiming": "auth;dur=1.1, token_lookup;dur=1.6, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 20,
+        "kind": "warm voice rejoin",
+        "resolvedActionAt": 1795370453641,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795370453734,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370454007,
+        "decodedSamplesAt": 1795370454007,
+        "connectionAt": 1795370453819,
+        "listMs": 93,
+        "decodedAudioMs": 366,
+        "decodedSamplesMs": 366,
+        "connectionMs": 178,
+        "tokens": [
+          {
+            "durationMs": 62,
+            "status": 200,
+            "sinceActionMs": 65,
+            "serverTiming": "auth;dur=1.1, token_lookup;dur=2.1, issue;dur=0.0"
+          }
+        ]
+      }
+    ],
+    "moves": [
+      {
+        "sample": 1,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795370463993,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795370464011,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370464327,
+        "decodedSamplesAt": 1795370464327,
+        "connectionAt": 1795370464169,
+        "listMs": 18,
+        "decodedAudioMs": 334,
+        "decodedSamplesMs": 334,
+        "connectionMs": 176,
+        "tokens": [
+          {
+            "durationMs": 8,
+            "status": 200,
+            "sinceActionMs": 35,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.7, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 2,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795370475023,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795370475053,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370475400,
+        "decodedSamplesAt": 1795370475400,
+        "connectionAt": 1795370475204,
+        "listMs": 30,
+        "decodedAudioMs": 377,
+        "decodedSamplesMs": 377,
+        "connectionMs": 181,
+        "tokens": [
+          {
+            "durationMs": 8,
+            "status": 200,
+            "sinceActionMs": 42,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.0, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 3,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795370486056,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795370486091,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370486398,
+        "decodedSamplesAt": 1795370486440,
+        "connectionAt": 1795370486229,
+        "listMs": 35,
+        "decodedAudioMs": 342,
+        "decodedSamplesMs": 384,
+        "connectionMs": 173,
+        "tokens": [
+          {
+            "durationMs": 9,
+            "status": 200,
+            "sinceActionMs": 37,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.6, issue;dur=0.5"
+          }
+        ]
+      },
+      {
+        "sample": 4,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795370497088,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795370497135,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370497446,
+        "decodedSamplesAt": 1795370497476,
+        "connectionAt": 1795370497252,
+        "listMs": 47,
+        "decodedAudioMs": 358,
+        "decodedSamplesMs": 388,
+        "connectionMs": 164,
+        "tokens": [
+          {
+            "durationMs": 8,
+            "status": 200,
+            "sinceActionMs": 35,
+            "serverTiming": "auth;dur=1.6, token_lookup;dur=1.6, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 5,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795370508114,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795370508130,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370508435,
+        "decodedSamplesAt": 1795370508486,
+        "connectionAt": 1795370508281,
+        "listMs": 16,
+        "decodedAudioMs": 321,
+        "decodedSamplesMs": 372,
+        "connectionMs": 167,
+        "tokens": [
+          {
+            "durationMs": 8,
+            "status": 200,
+            "sinceActionMs": 36,
+            "serverTiming": "auth;dur=1.5, token_lookup;dur=1.1, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 6,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795370519149,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795370519174,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370519484,
+        "decodedSamplesAt": 1795370519439,
+        "connectionAt": 1795370519327,
+        "listMs": 25,
+        "decodedAudioMs": 335,
+        "decodedSamplesMs": 290,
+        "connectionMs": 178,
+        "tokens": [
+          {
+            "durationMs": 8,
+            "status": 200,
+            "sinceActionMs": 38,
+            "serverTiming": "auth;dur=1.1, token_lookup;dur=1.6, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 7,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795370530181,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795370530210,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370530529,
+        "decodedSamplesAt": 1795370530479,
+        "connectionAt": 1795370530342,
+        "listMs": 29,
+        "decodedAudioMs": 348,
+        "decodedSamplesMs": 298,
+        "connectionMs": 161,
+        "tokens": [
+          {
+            "durationMs": 7,
+            "status": 200,
+            "sinceActionMs": 32,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.1, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 8,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795370541206,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795370541257,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370541563,
+        "decodedSamplesAt": 1795370541608,
+        "connectionAt": 1795370541383,
+        "listMs": 51,
+        "decodedAudioMs": 357,
+        "decodedSamplesMs": 402,
+        "connectionMs": 177,
+        "tokens": [
+          {
+            "durationMs": 9,
+            "status": 200,
+            "sinceActionMs": 36,
+            "serverTiming": "auth;dur=1.6, token_lookup;dur=1.0, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 9,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795370552232,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795370552254,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370552599,
+        "decodedSamplesAt": 1795370552645,
+        "connectionAt": 1795370552425,
+        "listMs": 22,
+        "decodedAudioMs": 367,
+        "decodedSamplesMs": 413,
+        "connectionMs": 193,
+        "tokens": [
+          {
+            "durationMs": 12,
+            "status": 200,
+            "sinceActionMs": 53,
+            "serverTiming": "auth;dur=1.6, token_lookup;dur=1.2, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 10,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795370563260,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795370563294,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370563659,
+        "decodedSamplesAt": 1795370563659,
+        "connectionAt": 1795370563441,
+        "listMs": 34,
+        "decodedAudioMs": 399,
+        "decodedSamplesMs": 399,
+        "connectionMs": 181,
+        "tokens": [
+          {
+            "durationMs": 9,
+            "status": 200,
+            "sinceActionMs": 40,
+            "serverTiming": "auth;dur=1.6, token_lookup;dur=2.2, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 11,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795370574300,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795370574343,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370574646,
+        "decodedSamplesAt": 1795370574646,
+        "connectionAt": 1795370574455,
+        "listMs": 43,
+        "decodedAudioMs": 346,
+        "decodedSamplesMs": 346,
+        "connectionMs": 155,
+        "tokens": [
+          {
+            "durationMs": 8,
+            "status": 200,
+            "sinceActionMs": 32,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.1, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 12,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795370585326,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795370585376,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370585679,
+        "decodedSamplesAt": 1795370585724,
+        "connectionAt": 1795370585500,
+        "listMs": 50,
+        "decodedAudioMs": 353,
+        "decodedSamplesMs": 398,
+        "connectionMs": 174,
+        "tokens": [
+          {
+            "durationMs": 7,
+            "status": 200,
+            "sinceActionMs": 37,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.0, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 13,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795370596363,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795370596410,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370596729,
+        "decodedSamplesAt": 1795370596675,
+        "connectionAt": 1795370596539,
+        "listMs": 47,
+        "decodedAudioMs": 366,
+        "decodedSamplesMs": 312,
+        "connectionMs": 176,
+        "tokens": [
+          {
+            "durationMs": 8,
+            "status": 200,
+            "sinceActionMs": 37,
+            "serverTiming": "auth;dur=1.5, token_lookup;dur=1.6, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 14,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795370607396,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795370607408,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370607767,
+        "decodedSamplesAt": 1795370607767,
+        "connectionAt": 1795370607563,
+        "listMs": 12,
+        "decodedAudioMs": 371,
+        "decodedSamplesMs": 371,
+        "connectionMs": 167,
+        "tokens": [
+          {
+            "durationMs": 10,
+            "status": 200,
+            "sinceActionMs": 40,
+            "serverTiming": "auth;dur=1.9, token_lookup;dur=1.7, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 15,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795370618421,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795370618460,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370618763,
+        "decodedSamplesAt": 1795370618824,
+        "connectionAt": 1795370618592,
+        "listMs": 39,
+        "decodedAudioMs": 342,
+        "decodedSamplesMs": 403,
+        "connectionMs": 171,
+        "tokens": [
+          {
+            "durationMs": 10,
+            "status": 200,
+            "sinceActionMs": 40,
+            "serverTiming": "auth;dur=2.3, token_lookup;dur=1.6, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 16,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795370629454,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795370629503,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370629759,
+        "decodedSamplesAt": 1795370629716,
+        "connectionAt": 1795370629617,
+        "listMs": 49,
+        "decodedAudioMs": 305,
+        "decodedSamplesMs": 262,
+        "connectionMs": 163,
+        "tokens": [
+          {
+            "durationMs": 7,
+            "status": 200,
+            "sinceActionMs": 38,
+            "serverTiming": "auth;dur=1.1, token_lookup;dur=0.7, issue;dur=0.5"
+          }
+        ]
+      },
+      {
+        "sample": 17,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795370640486,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795370640543,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370640848,
+        "decodedSamplesAt": 1795370640798,
+        "connectionAt": 1795370640651,
+        "listMs": 57,
+        "decodedAudioMs": 362,
+        "decodedSamplesMs": 312,
+        "connectionMs": 165,
+        "tokens": [
+          {
+            "durationMs": 8,
+            "status": 200,
+            "sinceActionMs": 38,
+            "serverTiming": "auth;dur=1.6, token_lookup;dur=1.0, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 18,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795370651517,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795370651530,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370651835,
+        "decodedSamplesAt": 1795370651884,
+        "connectionAt": 1795370651681,
+        "listMs": 13,
+        "decodedAudioMs": 318,
+        "decodedSamplesMs": 367,
+        "connectionMs": 164,
+        "tokens": [
+          {
+            "durationMs": 7,
+            "status": 200,
+            "sinceActionMs": 34,
+            "serverTiming": "auth;dur=1.1, token_lookup;dur=1.0, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 19,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795370662544,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795370662576,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370662854,
+        "decodedSamplesAt": 1795370662813,
+        "connectionAt": 1795370662710,
+        "listMs": 32,
+        "decodedAudioMs": 310,
+        "decodedSamplesMs": 269,
+        "connectionMs": 166,
+        "tokens": [
+          {
+            "durationMs": 8,
+            "status": 200,
+            "sinceActionMs": 38,
+            "serverTiming": "auth;dur=1.6, token_lookup;dur=1.3, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 20,
+        "kind": "administrator drag/drop move",
+        "resolvedActionAt": 1795370673570,
+        "actionObserver": "owner DOM drop",
+        "listObservedAt": 1795370673610,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370673918,
+        "decodedSamplesAt": 1795370673962,
+        "connectionAt": 1795370673739,
+        "listMs": 40,
+        "decodedAudioMs": 348,
+        "decodedSamplesMs": 392,
+        "connectionMs": 169,
+        "tokens": [
+          {
+            "durationMs": 9,
+            "status": 200,
+            "sinceActionMs": 35,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.0, issue;dur=0.0"
+          }
+        ]
+      }
+    ],
+    "coldJoins": [
+      {
+        "sample": 1,
+        "kind": "cold application voice join",
+        "resolvedActionAt": 1795370746297,
+        "actionObserver": "member DOM click",
+        "listObservedAt": null,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370748246,
+        "decodedSamplesAt": 1795370748207,
+        "connectionAt": 1795370748012,
+        "listMs": null,
+        "decodedAudioMs": 1949,
+        "decodedSamplesMs": 1910,
+        "connectionMs": 1715,
+        "tokens": [
+          {
+            "durationMs": 61,
+            "status": 200,
+            "sinceActionMs": 69,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=2.1, issue;dur=0.0"
+          }
+        ],
+        "invalidatedListObservation": {
+          "listObservedAt": 1795370744566,
+          "listMs": -1731,
+          "reason": "Member was visible from prior session before click; missing no-member precondition. Audio/PC timing remains valid."
+        }
+      },
+      {
+        "sample": 2,
+        "kind": "cold application voice join",
+        "resolvedActionAt": 1795370756130,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795370756244,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370758057,
+        "decodedSamplesAt": 1795370758019,
+        "connectionAt": 1795370757882,
+        "listMs": 114,
+        "decodedAudioMs": 1927,
+        "decodedSamplesMs": 1889,
+        "connectionMs": 1752,
+        "tokens": [
+          {
+            "durationMs": 66,
+            "status": 200,
+            "sinceActionMs": 74,
+            "serverTiming": "auth;dur=1.5, token_lookup;dur=1.1, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 3,
+        "kind": "cold application voice join",
+        "resolvedActionAt": 1795370766003,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795370766128,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370767921,
+        "decodedSamplesAt": 1795370767921,
+        "connectionAt": 1795370767761,
+        "listMs": 125,
+        "decodedAudioMs": 1918,
+        "decodedSamplesMs": 1918,
+        "connectionMs": 1758,
+        "tokens": [
+          {
+            "durationMs": 59,
+            "status": 200,
+            "sinceActionMs": 68,
+            "serverTiming": "auth;dur=1.0, token_lookup;dur=1.6, issue;dur=0.6"
+          }
+        ]
+      },
+      {
+        "sample": 4,
+        "kind": "cold application voice join",
+        "resolvedActionAt": 1795370774894,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795370775012,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370777116,
+        "decodedSamplesAt": 1795370777116,
+        "connectionAt": 1795370776990,
+        "listMs": 118,
+        "decodedAudioMs": 2222,
+        "decodedSamplesMs": 2222,
+        "connectionMs": 2096,
+        "tokens": [
+          {
+            "durationMs": 55,
+            "status": 200,
+            "sinceActionMs": 63,
+            "serverTiming": "auth;dur=2.1, token_lookup;dur=1.6, issue;dur=0.0"
+          }
+        ]
+      },
+      {
+        "sample": 5,
+        "kind": "cold application voice join",
+        "resolvedActionAt": 1795370785766,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795370785893,
+        "listObserver": "owner sidebar",
+        "decodedAt": 1795370787686,
+        "decodedSamplesAt": 1795370787650,
+        "connectionAt": 1795370787532,
+        "listMs": 127,
+        "decodedAudioMs": 1920,
+        "decodedSamplesMs": 1884,
+        "connectionMs": 1766,
+        "tokens": [
+          {
+            "durationMs": 61,
+            "status": 200,
+            "sinceActionMs": 69,
+            "serverTiming": "auth;dur=1.6, token_lookup;dur=1.1, issue;dur=0.0"
+          }
+        ]
+      }
+    ],
+    "summaries": {
+      "joins": {
+        "listMs": {
+          "n": 20,
+          "median": 87.5,
+          "p95": 103
+        },
+        "decodedAudioMs": {
+          "n": 20,
+          "median": 350,
+          "p95": 393
+        },
+        "decodedSamplesMs": {
+          "n": 20,
+          "median": 379.5,
+          "p95": 406
+        },
+        "connectionMs": {
+          "n": 20,
+          "median": 179.5,
+          "p95": 194
+        },
+        "tokenMs": {
+          "n": 20,
+          "median": 57.5,
+          "p95": 66
+        }
+      },
+      "warmJoins": {
+        "listMs": {
+          "n": 19,
+          "median": 87,
+          "p95": 110
+        },
+        "decodedAudioMs": {
+          "n": 19,
+          "median": 346,
+          "p95": 393
+        },
+        "decodedSamplesMs": {
+          "n": 19,
+          "median": 378,
+          "p95": 406
+        },
+        "connectionMs": {
+          "n": 19,
+          "median": 178,
+          "p95": 194
+        },
+        "tokenMs": {
+          "n": 19,
+          "median": 57,
+          "p95": 68
+        }
+      },
+      "moves": {
+        "listMs": {
+          "n": 20,
+          "median": 34.5,
+          "p95": 51
+        },
+        "decodedAudioMs": {
+          "n": 20,
+          "median": 348,
+          "p95": 377
+        },
+        "decodedSamplesMs": {
+          "n": 20,
+          "median": 371.5,
+          "p95": 403
+        },
+        "connectionMs": {
+          "n": 20,
+          "median": 170,
+          "p95": 181
+        },
+        "tokenMs": {
+          "n": 20,
+          "median": 8,
+          "p95": 10
+        }
+      },
+      "coldJoins": {
+        "listMs": {
+          "n": 4,
+          "median": 121.5,
+          "p95": 127
+        },
+        "decodedAudioMs": {
+          "n": 5,
+          "median": 1927,
+          "p95": 2222
+        },
+        "decodedSamplesMs": {
+          "n": 5,
+          "median": 1910,
+          "p95": 2222
+        },
+        "connectionMs": {
+          "n": 5,
+          "median": 1758,
+          "p95": 2096
+        },
+        "tokenMs": {
+          "n": 5,
+          "median": 61,
+          "p95": 66
+        }
+      }
+    },
+    "sound": {
+      "rawReport": "voice-candidate-final.json",
+      "positiveControl": {
+        "kind": "actual product Join preview in stable non-deafened room",
+        "passed": true,
+        "cues": [
+          {
+            "asset": "join-B_xQuNtw.m4a",
+            "durationSeconds": 0.8629375,
+            "renderedPeakRms": 0.21763273815320677,
+            "gainAfterAudioQuantum": 1,
+            "samples": 24
+          }
+        ]
+      },
+      "forcedMove": {
+        "resolvedActionAt": 1795370698635,
+        "actionObserver": "owner DOM drop",
+        "deafenPreserved": true,
+        "microphonePublicationAbsent": true,
+        "remoteSpeechUnsubscribed": true,
+        "decodedRemotePcmPeakRms": 0,
+        "audibleJoinCueCount": 1,
+        "preparationChannelCuesBeforeForceMove": [
+          {
+            "asset": "leave-DCg-ybOa.m4a",
+            "durationSeconds": 1.6065208333333334,
+            "sinceActionMs": -7919,
+            "renderedPeakRms": 0.1881750098863665,
+            "gainAfterAudioQuantum": 1,
+            "samples": 43
+          }
+        ],
+        "cuesAfterForceMove": [
+          {
+            "asset": "join-B_xQuNtw.m4a",
+            "durationSeconds": 0.8629375,
+            "sinceActionMs": 65,
+            "renderedPeakRms": 0.21763273815320677,
+            "gainAfterAudioQuantum": 1,
+            "samples": 24
+          }
+        ]
+      }
+    },
+    "cancellation": {
+      "rawReport": "voice-candidate-final.json",
+      "fixtureDelayMs": 5000,
+      "upstreamCancelledBeforeRelease": true,
+      "upstreamClosedAfterArrivalMs": 2006,
+      "upstreamReleasedAfterArrivalMs": null,
+      "selfJoinChannels": [
+        "bench-alpha"
+      ],
+      "latestTargetVisible": "Voice Connected\n2 ms\nWindows Voice Benchmark / bench-alpha\nReturn to call ↗\nNoise Reduction",
+      "onlyLatestTargetCommitted": true,
+      "tokens": [
+        {
+          "durationMs": 2004,
+          "status": 0,
+          "aborted": true
+        },
+        {
+          "durationMs": 53,
+          "status": 200
+        }
+      ]
+    },
+    "actualDomActions": 45,
+    "failedRounds": 0
+  },
+  "defaultNoiseFunctional": {
+    "rawReport": "voice-candidate-default-noise.json",
+    "conditions": {
+      "noiseReduction": true,
+      "microphoneProfile": "speech",
+      "input": "looped active speech segment 10.3–11.3 seconds; no long source silence"
+    },
+    "failures": [],
+    "successfulJoins": 1,
+    "decodedRemotePcmPeakRms": 0.06956580082360472,
+    "microphonePipeline": {
+      "requestedEngine": "rnnoise",
+      "activeEngine": "rnnoise",
+      "phase": "ready",
+      "sampleRate": 48000,
+      "gateAvailable": true,
+      "gateEnabled": true,
+      "gainAvailable": true,
+      "inputDb": -16.899172482867996,
+      "outputDb": -11.607325739570575,
+      "gateOpen": true
+    },
+    "excludedFromTimingCohorts": true,
+    "sound": {
+      "rawReport": "voice-candidate-default-noise.json",
+      "positiveControl": {
+        "kind": "actual product Join preview in stable non-deafened room",
+        "passed": true,
+        "cues": [
+          {
+            "asset": "join-B_xQuNtw.m4a",
+            "durationSeconds": 0.8629375,
+            "renderedPeakRms": 0.21763273815320677,
+            "gainAfterAudioQuantum": 1,
+            "samples": 24
+          }
+        ]
+      },
+      "forcedMove": {
+        "resolvedActionAt": 1795370842634,
+        "actionObserver": "owner DOM drop",
+        "deafenPreserved": true,
+        "microphonePublicationAbsent": true,
+        "remoteSpeechUnsubscribed": true,
+        "decodedRemotePcmPeakRms": 0,
+        "audibleJoinCueCount": 1,
+        "preparationChannelCuesBeforeForceMove": [
+          {
+            "asset": "leave-DCg-ybOa.m4a",
+            "durationSeconds": 1.6065208333333334,
+            "sinceActionMs": -7895,
+            "renderedPeakRms": 0.1881750098863665,
+            "gainAfterAudioQuantum": 1,
+            "samples": 42
+          }
+        ],
+        "cuesAfterForceMove": [
+          {
+            "asset": "join-B_xQuNtw.m4a",
+            "durationSeconds": 0.8629375,
+            "sinceActionMs": 77,
+            "renderedPeakRms": 0.21763273815320677,
+            "gainAfterAudioQuantum": 1,
+            "samples": 24
+          }
+        ]
+      }
+    }
+  },
+  "limitations": [
+    "Local warm baseline did not reproduce the reported five-second join delay; these are controlled loopback observations, not production/WAN performance claims.",
+    "Installed baseline Electron 45.1.0 and candidate 45.3.0 differ; combined-build differences cannot be attributed solely to this code patch.",
+    "Candidate fresh-process joins were slower: median 1927 ms / p95 2222 ms versus baseline 1637 / 1649 ms. The cause was not isolated; each cold cohort has only five samples.",
+    "Synthetic licensed active speech input, fake microphone and hidden windows do not validate physical device or speaker latency.",
+    "Measured PCM is decoded remote track data before app/OS output; cue PCM is downstream of actual product gain, before OS output.",
+    "Transport latency cohort disables noiseReduction identically for both synthetic accounts; one separate default-noise functional call does not characterize all microphones or speech.",
+    "Loopback fixture filters non-loopback STUN/TURN and cannot evaluate TURN, NAT, restricted networks or packet loss.",
+    "Old synchronous AudioParam gain.value cue counts were invalidated; only full rendered-PCM sound-control reports are used here.",
+    "Warm main series 19 and fresh-process cold series 5 are small samples; nearest-rank p95 in five cold samples equals their maximum."
+  ],
+  "corrections": [
+    {
+      "date": "2026-11-22",
+      "metric": "candidate.coldJoins[0].listMs",
+      "reason": "Negative list timing invalidated; original observation retained in invalidatedListObservation. Existing raw report remains intact. New harness requires no-member barrier and nonnegative list timing.",
+      "validAudioSamples": 90,
+      "validListSamples": 89
+    }
+  ]
+}

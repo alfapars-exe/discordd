@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-22",
+  "purpose": "Identify the synchronous first Windows RTCPeerConnection constructor delay without joining or opening capture.",
+  "observations": 1,
+  "test": "single fresh packaged renderer; no account, tracks, offer, SDP, capture or ICE gathering",
+  "runtime": {
+    "electron": "45.3.0",
+    "chrome": "156.0.8078.96"
+  },
+  "applicationArchiveSha256": "30ed7ae6c5aa5d25aa0698138b7ae0108e5ae951dda53fc990c933a84dfc8c93",
+  "constructor": {
+    "elapsedMs": 1000.7000000001863,
+    "closeMs": 0.39999999944120646,
+    "beforeClose": {
+      "signaling": "stable",
+      "gathering": "new",
+      "connection": "new",
+      "senderCount": 0,
+      "receiverCount": 0,
+      "hasLocalDescription": false
+    }
+  },
+  "native": {
+    "constructorMarkerDurationMs": 1000.765,
+    "clockHandling": "Packet clock defaults and sequence-local incremental clock snapshots converted to nanoseconds before matching begin/end spans.",
+    "spans": [
+      {
+        "name": "PeerConnectionDependencyFactory::CreatePeerConnectionFactory - Wait for start signaling",
+        "startAfterConstructorMs": 0.6937,
+        "durationMs": 999.2568,
+        "thread": "CrRendererMain"
+      },
+      {
+        "name": "ScopedBlockingCallWithBaseSyncPrimitives",
+        "startAfterConstructorMs": 0.6957,
+        "durationMs": 999.2538,
+        "thread": "CrRendererMain"
+      },
+      {
+        "name": "ScopedBlockingCallWithBaseSyncPrimitives",
+        "startAfterConstructorMs": 1.0881,
+        "durationMs": 998.3476,
+        "thread": "WebRTC_Signaling"
+      },
+      {
+        "name": "MediaFoundationVideoEncodeAccelerator::GetSupportedProfiles",
+        "startAfterConstructorMs": 4.402,
+        "durationMs": 994.7453,
+        "thread": "ThreadPoolSingleThreadCOMSTASharedForegroundBlocking"
+      },
+      {
+        "name": "ScopedBlockingCallWithBaseSyncPrimitives",
+        "startAfterConstructorMs": 0.9386,
+        "durationMs": 3.271,
+        "thread": "Media"
+      },
+      {
+        "name": "PeerConnectionFactoryProxy::CreatePeerConnectionOrError",
+        "startAfterConstructorMs": 999.9935,
+        "durationMs": 0.708,
+        "thread": "CrRendererMain"
+      },
+      {
+        "name": "ScopedBlockingCallWithBaseSyncPrimitives",
+        "startAfterConstructorMs": 1000.0055,
+        "durationMs": 0.694,
+        "thread": "CrRendererMain"
+      },
+      {
+        "name": "PeerConnection::Create",
+        "startAfterConstructorMs": 1000.1617,
+        "durationMs": 0.526,
+        "thread": "WebRTC_Signaling"
+      },
+      {
+        "name": "ScopedBlockingCallWithBaseSyncPrimitives",
+        "startAfterConstructorMs": 0.4067,
+        "durationMs": 0.152,
+        "thread": "CrRendererMain"
+      },
+      {
+        "name": "ScopedBlockingCallWithBaseSyncPrimitives",
+        "startAfterConstructorMs": 3.3265,
+        "durationMs": 0.146,
+        "thread": "CrGpuMain"
+      },
+      {
+        "name": "ScopedBlockingCallWithBaseSyncPrimitives",
+        "startAfterConstructorMs": 1000.5257,
+        "durationMs": 0.055,
+        "thread": "WebRTC_Signaling"
+      },
+      {
+        "name": "ScopedBlockingCallWithBaseSyncPrimitives",
+        "startAfterConstructorMs": 1000.0307,
+        "durationMs": 0.05,
+        "thread": "WebRTC_Signaling"
+      },
+      {
+        "name": "ScopedBlockingCallWithBaseSyncPrimitives",
+        "startAfterConstructorMs": 1000.5997,
+        "durationMs": 0.043,
+        "thread": "WebRTC_Signaling"
+      }
+    ]
+  },
+  "attribution": "The renderer waits for the WebRTC signaling thread while the GPU process enumerates Media Foundation hardware video encoder profiles. GetSupportedProfiles occupies 994.7453 ms of the 1000.7 ms constructor. Actual PeerConnection::Create takes only 0.526 ms after capability discovery completes.",
+  "tracePrivacy": "Fresh isolated profile, no account, non-loopback networking denied, netlog excluded, argument filtering enabled. This report omits trace arguments, GPU/device identities, process IDs and command lines; the raw trace was deleted after extracting the allowlisted timing evidence.",
+  "captureCategories": "Electron getCategories() returned an empty array; this original capture used default categories with netlog excluded. The tracked reproduction explicitly selects webrtc/media/audio/gpu/toplevel/user-timing categories.",
+  "reproductionCommand": "node scripts/trace-windows-voice-bootstrap.cjs --exe release/voice-responsive-qa-ipc/win-unpacked/HiChat.exe",
+  "parserCommand": "python scripts/parse-windows-voice-bootstrap.py <local-constructor.trace>",
+  "reproductionValidation": "Tracked script syntax checked; tracked parser verified on the original capture. No second capture was run.",
+  "limitations": [
+    "One hardware/environment observation; it identifies capability enumeration, not a particular codec, GPU, driver defect or universal Windows duration.",
+    "Asynchronous capability preparation remains a causal experiment until measured; this trace alone does not prove a successful remedy.",
+    "Moving the synchronous constructor earlier would move its main-thread pause rather than eliminate that work."
+  ]
+}

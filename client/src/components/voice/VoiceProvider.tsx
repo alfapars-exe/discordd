@@ -56,6 +56,7 @@ import VoiceRecoveryStatus from "./VoiceRecoveryStatus";
 import { useTranslation } from "react-i18next";
 import { isNativeVoice as checkIsNativeVoice } from "../../utils/nativePlugins";
 import { useEncryptedRoomAdmission } from "../../hooks/useEncryptedRoomAdmission";
+import { useVoiceTransportReady } from "../../hooks/useVoiceTransportReady";
 import { useE2EEKeyProvider } from "../../hooks/useE2EEKeyProvider";
 import { useVoiceAutoRejoin } from "../../hooks/useVoiceAutoRejoin";
 import VoiceStateManager from "./VoiceStateManager";
@@ -208,7 +209,8 @@ function VoiceProvider({ children }: VoiceProviderProps) {
     if (source === Track.Source.ScreenShare || source === Track.Source.ScreenShareAudio) return current.isStreaming;
     return false;
   }, []);
-  const admission = useEncryptedRoomAdmission({ enabled: isConnected && !recovery.suspended, token: livekitToken ?? "", scope: encryption.ownerScope,
+  const transportReady = useVoiceTransportReady();
+  const admission = useEncryptedRoomAdmission({ enabled: isConnected && !recovery.suspended && transportReady, token: livekitToken ?? "", scope: encryption.ownerScope,
     keyScope: encryption.keyScope, keyReady: encryption.keyReady, keyError: encryption.keyError,
     keyProvider, worker: e2eeWorker, roomOptions: roomOptions ?? {}, onError: handleE2eeKeyError, allowRestore });
   useEffect(() => { markReady(admission.publishReady); }, [admission.publishReady, markReady]);

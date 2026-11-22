@@ -1,5 +1,12 @@
 # CHANGELOG — SECURE-CODING.md
 
+## 2.11.131 - 2026-11-22
+
+- Speed up the first Windows voice connection by preparing media capabilities asynchronously at startup and removing the voice module's delayed mount.
+- Cancel superseded voice joins and channel moves promptly, including pending desktop network requests.
+- Play channel transition notifications while deafened, preserving microphone and remote speech mute settings.
+- Keep post-join activity writes off the ordered voice callback path.
+
 ## 2.11.130 - 2026-11-10
 
 - Wait for channel permissions to load before editing and verify saved changes before enabling the next edit.

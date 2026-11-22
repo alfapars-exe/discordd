@@ -9,6 +9,7 @@ import (
 	"github.com/argeinfina/hichat/ws"
 	"reflect"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -81,12 +82,52 @@ type voiceActivityUserRepo struct {
 	repository.UserRepository
 	contexts []context.Context
 	ids      []string
+	update   func(context.Context, string) error
 }
 
 func (r *voiceActivityUserRepo) UpdateLastVoiceActivity(ctx context.Context, id string) error {
 	r.contexts = append(r.contexts, ctx)
 	r.ids = append(r.ids, id)
+	if r.update != nil {
+		return r.update(ctx, id)
+	}
 	return nil
+}
+
+func TestVoiceCallbackSlowActivityDoesNotBlockNextVoiceAction(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		registrar, service := &voiceRegistrationRecorder{}, &voiceRoutingRecorder{}
+		release := make(chan struct{})
+		users := &voiceActivityUserRepo{update: func(ctx context.Context, _ string) error {
+			select {
+			case <-release:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}}
+		channels, servers := &voiceActivityChannelRepo{}, &voiceActivityServerRepo{}
+		stop := registerVoiceCallbacks(registrar, service, users, channels, servers)
+		t.Cleanup(stop)
+		registrar.join("user", "name", "display", "avatar", "first", false, false)
+		synctest.Wait()
+		if len(users.ids) != 1 || len(channels.ids) != 0 {
+			t.Fatal("fixture must block in the first activity write")
+		}
+		registrar.join("user", "name", "display", "avatar", "second", false, false)
+		registrar.leave("user")
+		if len(service.calls) != 3 || service.calls[1][5] != "second" || service.calls[2][0] != "leave" {
+			t.Fatal("slow activity delayed the next join or leave")
+		}
+		if len(channels.ids) != 0 {
+			t.Fatal("activity write unexpectedly completed")
+		}
+		close(release)
+		stop()
+		if !reflect.DeepEqual(channels.ids, []string{"first", "second"}) {
+			t.Fatalf("activity lost its channel identity or ordering: %v", channels.ids)
+		}
+	})
 }
 
 type voiceActivityChannelRepo struct {
@@ -126,7 +167,8 @@ func TestVoiceCallbackRegistrationRoutesPayloadsAndBoundsWork(t *testing.T) {
 				service.err = errors.New("fixture voice failure")
 			}
 			users, channels, servers := &voiceActivityUserRepo{}, &voiceActivityChannelRepo{}, &voiceActivityServerRepo{}
-			registerVoiceCallbacks(registrar, service, users, channels, servers)
+			stop := registerVoiceCallbacks(registrar, service, users, channels, servers)
+			t.Cleanup(stop)
 			if registrar.join == nil || registrar.leave == nil || registrar.state == nil || registrar.admin == nil || registrar.move == nil || registrar.disconnect == nil || registrar.watch == nil || registrar.activity == nil {
 				t.Fatal("missing voice registration")
 			}
@@ -139,6 +181,7 @@ func TestVoiceCallbackRegistrationRoutesPayloadsAndBoundsWork(t *testing.T) {
 			registrar.disconnect("disconnecter", "target")
 			registrar.watch("viewer", "streamer", true)
 			registrar.activity("active-user")
+			stop()
 			want := [][]any{{"join", "user", "username", "display", "avatar", "joined-channel", true, false}, {"leave", "leaver"}, {"state", "user", &yes, (*bool)(nil), &no}, {"admin", "moderator", "target", (*bool)(nil), &no}, {"move", "mover", "target", "destination"}, {"disconnect", "disconnecter", "target"}, {"watch", "viewer", "streamer", true}, {"activity", "active-user"}}
 			if !reflect.DeepEqual(service.calls, want) {
 				t.Fatalf("routing=%#v want=%#v", service.calls, want)

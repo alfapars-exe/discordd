@@ -32,6 +32,7 @@ function resetStore() {
   useVoiceStore.setState({
     voiceStates: {},
     currentVoiceChannelId: null,
+    pendingVoiceChannelId: null,
     isMuted: false,
     isDeafened: false,
     muteBeforeDeafen: null,
@@ -843,6 +844,108 @@ describe("voiceStore", () => {
     expect(tokens.mock.calls.map(call => call[1])).toEqual(["new"]);
   });
 
+  describe("voice token request ownership", () => {
+    let signals: AbortSignal[];
+    beforeEach(() => {
+      signals = [];
+      addToast.mockClear();
+      vi.mocked(voiceApi.getVoiceToken).mockReset().mockImplementation((_server, _channel, options) => {
+        const signal = options!.signal!;
+        signals.push(signal);
+        return new Promise((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+        });
+      });
+    });
+
+    it("aborts an in-flight join when the user selects another channel", async () => {
+      const first = useVoiceStore.getState().joinVoiceChannel("old");
+      await vi.waitFor(() => expect(signals).toHaveLength(1));
+      vi.mocked(voiceApi.getVoiceToken).mockResolvedValueOnce({
+        success: true, data: { channel_id: "new", token: "latest", url: "wss://example.test" },
+      });
+      const latest = useVoiceStore.getState().joinVoiceChannel("new");
+      expect(signals[0].aborted).toBe(true);
+      await expect(first).resolves.toBeNull();
+      await latest;
+      expect(useVoiceStore.getState()).toMatchObject({ currentVoiceChannelId: "new", livekitToken: "latest" });
+      expect(addToast).not.toHaveBeenCalled();
+    });
+
+    it.each(["leave", "disconnect", "afk", "replace"] as const)("aborts a pending join on %s", async (action) => {
+      const pending = useVoiceStore.getState().joinVoiceChannel("old");
+      await vi.waitFor(() => expect(signals).toHaveLength(1));
+      const store = useVoiceStore.getState();
+      if (action === "leave") store.leaveVoiceChannel();
+      if (action === "disconnect") store.handleForceDisconnect();
+      if (action === "afk") store.handleAFKKick("voice", "server");
+      if (action === "replace") store.handleVoiceReplaced();
+      expect(signals[0].aborted).toBe(true);
+      await expect(pending).resolves.toBeNull();
+      expect(useVoiceStore.getState()).toMatchObject({ pendingVoiceChannelId: null, currentVoiceChannelId: null, livekitToken: null });
+      expect(addToast).not.toHaveBeenCalled();
+    });
+
+    it.each(["disconnect", "afk", "replace"] as const)("does not invalidate the accepted leave cue on a duplicate %s", (action) => {
+      useVoiceStore.setState({ currentVoiceChannelId: "voice" });
+      const retire = () => {
+        const state = useVoiceStore.getState();
+        if (action === "disconnect") state.handleForceDisconnect();
+        if (action === "afk") state.handleAFKKick("voice", "server");
+        if (action === "replace") state.handleVoiceReplaced();
+      };
+      retire();
+      const cueGeneration = useVoiceStore.getState()._joinGeneration;
+      retire();
+      expect(useVoiceStore.getState()._joinGeneration).toBe(cueGeneration);
+      expect(useVoiceStore.getState().currentVoiceChannelId).toBeNull();
+    });
+
+    it("replaces a pending refresh and cancels the replacement on leave without reporting recovery failure", async () => {
+      useVoiceStore.setState({ currentVoiceChannelId: "voice" });
+      const first = useVoiceStore.getState().refreshVoiceToken("voice", true);
+      const second = useVoiceStore.getState().refreshVoiceToken("voice", true);
+      expect(signals).toHaveLength(2);
+      expect(signals[0].aborted).toBe(true);
+      await expect(first).resolves.toBeNull();
+      useVoiceStore.getState().leaveVoiceChannel();
+      expect(signals[1].aborted).toBe(true);
+      await expect(second).resolves.toBeNull();
+    });
+
+    it("a new join cancels the old room's refresh and rejects further old-room refreshes", async () => {
+      useVoiceStore.setState({ currentVoiceChannelId: "old" });
+      const refresh = useVoiceStore.getState().refreshVoiceToken("old", true);
+      const join = useVoiceStore.getState().joinVoiceChannel("new");
+      expect(signals[0].aborted).toBe(true);
+      await expect(refresh).resolves.toBeNull();
+      await vi.waitFor(() => expect(signals).toHaveLength(2));
+      await expect(useVoiceStore.getState().refreshVoiceToken("old", true)).resolves.toBeNull();
+      expect(signals[1].aborted).toBe(false);
+      expect(signals).toHaveLength(2);
+      useVoiceStore.getState().leaveVoiceChannel();
+      await expect(join).resolves.toBeNull();
+    });
+
+    it.each(["owner", "generation"] as const)("aborts join and refresh work at an auth %s boundary", async (boundary) => {
+      const { publishAuthGenerationChange, publishAuthOwnerChange } = await import("../api/authSessionEvents");
+      const retire = (id: number) => boundary === "owner"
+        ? publishAuthOwnerChange(`voice-cancellation-owner-${id}`) : publishAuthGenerationChange(id);
+      const join = useVoiceStore.getState().joinVoiceChannel("voice");
+      await vi.waitFor(() => expect(signals).toHaveLength(1));
+      retire(201);
+      expect(signals[0].aborted).toBe(true);
+      await expect(join).resolves.toBeNull();
+      expect(useVoiceStore.getState().pendingVoiceChannelId).toBeNull();
+      useVoiceStore.setState({ currentVoiceChannelId: "voice" });
+      const refresh = useVoiceStore.getState().refreshVoiceToken("voice", true);
+      retire(202);
+      expect(signals[1].aborted).toBe(true);
+      await expect(refresh).resolves.toBeNull();
+      expect(addToast).not.toHaveBeenCalled();
+    });
+  });
+
   it("keeps foreground join and leave usable when the background service rejects", async () => {
     const start = vi.spyOn(nativePlugins, "startVoiceCallService").mockRejectedValue(new Error("denied"));
     const stop = vi.spyOn(nativePlugins, "stopVoiceCallService").mockRejectedValue(new Error("denied"));
@@ -873,7 +976,7 @@ describe("voiceStore", () => {
         success: false, status: 503, error: "upstream unavailable (reference 4012)",
       });
       expect(await useVoiceStore.getState().joinVoiceChannel("voice")).toBeNull();
-      expect(ensureFreshToken).toHaveBeenCalledTimes(1);
+      expect(ensureFreshToken).not.toHaveBeenCalled();
     });
 
     it("returns null and toasts the timed-out-specific message when the server reports an active timeout", async () => {

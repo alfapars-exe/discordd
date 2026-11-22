@@ -104,6 +104,9 @@ test("real IPC cleanup starts every owner once and still awaits tracker if a sib
   const calls: string[] = [];
   const context = {
     stops: [] as Array<() => unknown>,
+    electron_1: { ipcMain: {} }, api_request_cancellation_1: { apiRequestCancellation: {} },
+    api_request_ipc_1: { registerApiRequestIPC: () => () => { calls.push("api"); } },
+    assertTrustedMainWindowSender: () => {},
     stopping: false, overlayMediaPolicy: { privateFixture: true } as unknown,
     isTrustedMainWindowSender: () => true,
     voice_overlay_contract_1: { applyAcknowledgedVoiceOverlaySnapshot: () => true },
@@ -133,7 +136,7 @@ test("real IPC cleanup starts every owner once and still awaits tracker if a sib
   let finished = false;
   const observed = first.catch(error => { finished = true; assert.equal(error.message, "IPC cleanup failed"); });
   await flush();
-  assert.deepEqual(calls, ["renderers", "overlay", "tracker", "registry", "subscription", "media", "shortcut", "join"]);
+  assert.deepEqual(calls, ["renderers", "overlay", "tracker", "registry", "subscription", "media", "shortcut", "join", "api"]);
   assert.equal(finished, false);
   tracker.resolve(); await observed;
   assert.equal(finished, true);
@@ -204,6 +207,9 @@ test("a partially acquired IPC owner cleans only its acquired prefix in reverse 
   const calls: string[] = [];
   const context = {
     stops: [] as Array<() => unknown>, stopping: false, overlayMediaPolicy: { fixture: true } as unknown,
+    electron_1: { ipcMain: {} }, api_request_cancellation_1: { apiRequestCancellation: {} },
+    api_request_ipc_1: { registerApiRequestIPC: () => () => { calls.push("api"); } },
+    assertTrustedMainWindowSender: () => {},
     gameJoin: { dispose: () => { calls.push("join"); } },
     overlayShortcut: { dispose: () => { calls.push("shortcut"); } },
     overlayMedia: { revoke: () => { calls.push("media"); } },
@@ -213,7 +219,7 @@ test("a partially acquired IPC owner cleans only its acquired prefix in reverse 
   vm.runInNewContext(acquired.join("\n"), context);
   const dispose = vm.runInNewContext(`(function () { ${code.slice(start, end)} return dispose; })()`, context) as () => Promise<void>;
   await dispose(); await dispose();
-  assert.deepEqual(calls, ["media", "shortcut", "join"]);
+  assert.deepEqual(calls, ["shortcut", "join", "api"]);
   assert.equal(context.overlayMediaPolicy, null);
   assert.equal(context.stopping, true);
 });

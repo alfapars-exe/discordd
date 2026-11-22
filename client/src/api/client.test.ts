@@ -82,8 +82,47 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  delete window.electronAPI;
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+});
+
+describe("desktop abortable request leases", () => {
+  it("uses a fresh lease for a 401 retry while shared auth refresh remains independent", async () => {
+    platform.electron = true;
+    platform.appProtocolPage = true;
+    const reserveApiRequest = vi.fn().mockResolvedValueOnce("first").mockResolvedValueOnce("retry");
+    const cancelApiRequest = vi.fn().mockResolvedValue(true);
+    window.electronAPI = { reserveApiRequest, cancelApiRequest } as unknown as NonNullable<Window["electronAPI"]>;
+    const { apiClient } = await loadClient();
+    fetchMock.mockResolvedValueOnce(jsonResponse({ success: false }, 401))
+      .mockResolvedValueOnce(jsonResponse({ success: true, data: { access_token: "refreshed", user: { id: "account" } } }))
+      .mockResolvedValueOnce(jsonResponse({ success: true, data: { token: "voice" } }));
+    const controller = new AbortController();
+    await expect(apiClient("/voice/token", { method: "POST", signal: controller.signal })).resolves.toMatchObject({ success: true });
+    expect(reserveApiRequest).toHaveBeenCalledTimes(2);
+    const leaseHeaders = fetchMock.mock.calls.map(call => new Headers(initOf(call)?.headers).get("X-HiChat-Request-Id"));
+    expect(leaseHeaders).toEqual(["first", null, "retry"]);
+    expect(fetchMock.mock.calls[1][0]).toBe("app://hichat/api/auth/refresh");
+    expect(cancelApiRequest.mock.calls).toEqual([["first"], ["retry"]]);
+  });
+
+  it("settles promptly and cancels a late native registration without sending a request", async () => {
+    platform.electron = true;
+    platform.appProtocolPage = true;
+    let acknowledge!: (id: string) => void;
+    const reserveApiRequest = vi.fn().mockReturnValue(new Promise<string>(resolve => { acknowledge = resolve; }));
+    const cancelApiRequest = vi.fn().mockResolvedValue(true);
+    window.electronAPI = { reserveApiRequest, cancelApiRequest } as unknown as NonNullable<Window["electronAPI"]>;
+    const { apiClient } = await loadClient();
+    const controller = new AbortController();
+    const pending = apiClient("/voice/token", { signal: controller.signal });
+    controller.abort();
+    await expect(pending).resolves.toMatchObject({ success: false, error: "request_cancelled" });
+    acknowledge("late");
+    await vi.waitFor(() => expect(cancelApiRequest).toHaveBeenCalledWith("late"));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
 
 describe("apiClient client-hint header", () => {

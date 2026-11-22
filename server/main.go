@@ -238,7 +238,8 @@ func main() {
 	// messageService/reactionService — no setter call needed here anymore.
 
 	// 10. Hub callbacks (must be after services, before hub.Run)
-	stopPresenceDebounce := registerHubCallbacks(hub, repos.User, repos.DM, svcs.Voice, svcs.P2PCall, repos.Channel, repos.Server, svcs.ChannelPermission, svcs.GameActivity, svcs.OnlineFriendNotifier)
+	stopHubCallbacks := registerHubCallbacks(hub, repos.User, repos.DM, svcs.Voice, svcs.P2PCall, repos.Channel, repos.Server, svcs.ChannelPermission, svcs.GameActivity, svcs.OnlineFriendNotifier)
+	defer stopHubCallbacks()
 
 	// hub.Run is the single goroutine processing every WS register/unregister
 	// for the whole server — a panic here would otherwise crash the entire
@@ -504,11 +505,9 @@ func main() {
 	stopFriendAnniversaries()
 	stopEmailDelivery()
 	stopReadiness()
-	// Cancel any pending presence-offline debounce timers (presence_debounce.go)
-	// before the Hub and DB pool below are torn down — see stopAll's doc
-	// comment for why an in-flight timer firing after shutdown begins is
-	// unsafe rather than merely wasteful.
-	stopPresenceDebounce()
+	// Stop callback-owned timers and drain best-effort voice activity before
+	// the Hub and DB pool are torn down.
+	stopHubCallbacks()
 	stopVoiceMaintenance()
 	metricsCollector.Stop()
 	svcs.Voice.ShutdownVoiceStateFanout()

@@ -1,0 +1,359 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-22",
+  "scope": "Windows packaged Electron API cancellation; local fixture, no production traffic or existing profile",
+  "testOnly": true,
+  "installed": false,
+  "published": false,
+  "sourceBase": "bae67629f06cdfc5c3a4ce4af5c565b14aa1599f",
+  "sourceHasLocalChanges": true,
+  "reproductionCommand": "node scripts/verify-packaged-api-cancellation.cjs --exe release/voice-responsive-qa-ipc/win-unpacked/HiChat.exe --cert e2e/.tmp/hichat-e2e-pg.b5Nnp2/server.crt --key e2e/.tmp/hichat-e2e-pg.b5Nnp2/server.key",
+  "reproductionPrerequisites": [
+    "Windows with e2e Playwright dependencies installed",
+    "The local certificate/key paths are ephemeral QA fixtures; supply another local TLS pair after cleanup. The script pins its SPKI and never writes key material to reports."
+  ],
+  "timestampSemantics": {
+    "abortIssuedAtUnixMs": "Observed Date.now() immediately before renderer AbortController.abort(), not the scheduled timer deadline.",
+    "requestStartedAtUnixMs": "Observed Date.now() when the local HTTPS upstream handler receives the request.",
+    "responseClosedAtUnixMs": "Observed Date.now() on the local upstream ServerResponse close event.",
+    "requestAbortedAtUnixMs": "Observed Date.now() on the local upstream IncomingMessage aborted event.",
+    "serverRelativeMs": "All server requestAbortedMs/responseClosedMs/responseFinishedMs subtract upstream requestStartedAtUnixMs.",
+    "upstreamClosedAfterAbortMs": "Upstream responseClosedAtUnixMs minus renderer abortIssuedAtUnixMs; same host wall clock, millisecond resolution.",
+    "baseline": "The signal-only baseline recorded a scheduled 150 ms abort and relative completion times; it did not record actual abort issuance timestamps. Header response finished 5004 ms and closed 5005 ms; streamed body finished/closed 5011 ms. Neither request was aborted upstream."
+  },
+  "candidate": {
+    "kind": "packaged renderer / trusted IPC / protocol proxy / HTTPS upstream cancellation",
+    "fixture": "loopback TLS with pinned test certificate; non-loopback traffic denied; fresh profile",
+    "upstreamDelayMs": 5000,
+    "rendererAbortMs": 150,
+    "upstreamCloseLimitMs": 1500,
+    "checks": [
+      {
+        "name": "renderer-control",
+        "outcome": "fulfilled",
+        "elapsedMs": 176,
+        "abortIssuedAtUnixMs": null,
+        "server": {
+          "requestStartedAtUnixMs": 1795369997235,
+          "requestAbortedAtUnixMs": null,
+          "responseClosedAtUnixMs": 1795369997344,
+          "requestAbortedMs": null,
+          "responseClosedMs": 109,
+          "responseFinishedMs": 109,
+          "leakedPrivateHeader": false
+        },
+        "upstreamClosedAfterAbortMs": null,
+        "passed": true
+      },
+      {
+        "name": "renderer-headers",
+        "outcome": "AbortError",
+        "elapsedMs": 160,
+        "abortIssuedAtUnixMs": 1795369997512,
+        "server": {
+          "requestStartedAtUnixMs": 1795369997355,
+          "requestAbortedAtUnixMs": 1795369997514,
+          "responseClosedAtUnixMs": 1795369997514,
+          "requestAbortedMs": 159,
+          "responseClosedMs": 159,
+          "responseFinishedMs": null,
+          "leakedPrivateHeader": false
+        },
+        "upstreamClosedAfterAbortMs": 2,
+        "passed": true
+      },
+      {
+        "name": "renderer-body",
+        "outcome": "AbortError",
+        "elapsedMs": 164,
+        "abortIssuedAtUnixMs": 1795369997680,
+        "server": {
+          "requestStartedAtUnixMs": 1795369997520,
+          "requestAbortedAtUnixMs": 1795369997681,
+          "responseClosedAtUnixMs": 1795369997681,
+          "requestAbortedMs": 161,
+          "responseClosedMs": 161,
+          "responseFinishedMs": null,
+          "leakedPrivateHeader": false
+        },
+        "upstreamClosedAfterAbortMs": 1,
+        "passed": true
+      },
+      {
+        "name": "cancel-before-dispatch",
+        "outcome": "TypeError",
+        "passed": true
+      }
+    ],
+    "asarSha256": "30ed7ae6c5aa5d25aa0698138b7ae0108e5ae951dda53fc990c933a84dfc8c93",
+    "runtime": {
+      "appVersion": "2.11.130",
+      "electron": "45.3.0"
+    },
+    "passed": true
+  },
+  "signalOnlyBaseline": {
+    "kind": "packaged Chromium to Electron protocol to HTTPS cancellation",
+    "fixture": "loopback TLS9553 with locally pinned certificate; non-loopback traffic denied by local proxy9554",
+    "checks": [
+      {
+        "name": "renderer-control",
+        "outcome": "fulfilled",
+        "elapsedMs": 226,
+        "server": {
+          "requestAbortedMs": null,
+          "responseClosedMs": 163,
+          "responseFinishedMs": 163
+        }
+      },
+      {
+        "name": "renderer-headers",
+        "outcome": "AbortError",
+        "elapsedMs": 162,
+        "server": {
+          "requestAbortedMs": null,
+          "responseClosedMs": null,
+          "responseFinishedMs": null
+        }
+      },
+      {
+        "name": "renderer-body",
+        "outcome": "AbortError",
+        "elapsedMs": 151,
+        "server": {
+          "requestAbortedMs": null,
+          "responseClosedMs": null,
+          "responseFinishedMs": null
+        }
+      },
+      {
+        "name": "main-direct",
+        "outcome": "AbortError",
+        "elapsedMs": 152,
+        "server": {
+          "requestAbortedMs": 151,
+          "responseClosedMs": 151,
+          "responseFinishedMs": null
+        }
+      }
+    ],
+    "runtime": {
+      "appVersion": "2.11.130",
+      "electron": "45.3.0"
+    },
+    "lateRendererUpstream": [
+      {
+        "name": "renderer-headers",
+        "abortedMs": null,
+        "closedMs": 5005,
+        "finishedMs": 5004
+      },
+      {
+        "name": "renderer-body",
+        "abortedMs": null,
+        "closedMs": 5011,
+        "finishedMs": 5011
+      }
+    ]
+  },
+  "artifactValidation": {
+    "entries": 685,
+    "maps": 0,
+    "tests": 0,
+    "comparedBuildFiles": 307,
+    "requiredDependencies": [
+      "electron-updater",
+      "uiohook-napi",
+      "builder-util-runtime",
+      "fs-extra",
+      "graceful-fs",
+      "jsonfile",
+      "universalify",
+      "semver",
+      "lazy-val",
+      "js-yaml"
+    ],
+    "nativeExecutablesMatchWorkspace": true,
+    "asarSha256": "30ed7ae6c5aa5d25aa0698138b7ae0108e5ae951dda53fc990c933a84dfc8c93",
+    "mismatches": []
+  },
+  "checks": {
+    "focusedClientFiles": 3,
+    "focusedClientTestsPassed": 74,
+    "electronTestsTotal": 419,
+    "electronTestsPassed": 418,
+    "electronTestsSkipped": 1,
+    "clientTypecheck": "passed",
+    "electronTypecheck": "passed",
+    "clientFocusedEslint": "passed",
+    "clientProductionBuild": "passed"
+  },
+  "limitations": [
+    "Controlled cancellation acceptance only; voice join and media timings are measured separately.",
+    "The probe calls the fixed preload reserve/cancel methods with renderer fetch; common apiClient integration, late acknowledgements, 401 retry leases and refresh isolation have separate unit coverage.",
+    "One final packaged observation per case; earlier same-code probes also passed. App version intentionally unchanged at 2.11.130."
+  ],
+  "commandTemplate": "node scripts/verify-packaged-api-cancellation.cjs --exe <packaged-HiChat.exe> --cert <local-test-certificate.crt> --key <local-test-key.key> --output <qa-output-directory>",
+  "artifacts": [
+    {
+      "name": "hichat-voice-responsive-test-2.11.130-win-x64.zip",
+      "bytes": 201744262,
+      "sha256": "08e06dc1ee8b52d0c51a4ca5e7b94c5b592b35e814c539adf2edc65f933d5f9f"
+    },
+    {
+      "name": "win-unpacked/HiChat.exe",
+      "bytes": 249310720,
+      "sha256": "65f21f4d345a6c3276b0befa939e22cb389639107f32f0f1c3c40de531779bca"
+    },
+    {
+      "name": "win-unpacked/resources/app.asar",
+      "bytes": 88835850,
+      "sha256": "30ed7ae6c5aa5d25aa0698138b7ae0108e5ae951dda53fc990c933a84dfc8c93"
+    }
+  ],
+  "zipIntegrity": "131 entries; CRC validation passed; embedded ASAR SHA256 matches the probed unpacked app",
+  "coldPackageCandidate": {
+    "kind": "packaged renderer / trusted IPC / protocol proxy / HTTPS upstream cancellation",
+    "fixture": "loopback TLS with pinned test certificate; non-loopback traffic denied; fresh profile",
+    "upstreamDelayMs": 5000,
+    "rendererAbortMs": 150,
+    "upstreamCloseLimitMs": 1500,
+    "checks": [
+      {
+        "name": "renderer-control",
+        "outcome": "fulfilled",
+        "elapsedMs": 298,
+        "abortIssuedAtUnixMs": null,
+        "server": {
+          "requestStartedAtUnixMs": 1795373424837,
+          "requestAbortedAtUnixMs": null,
+          "responseClosedAtUnixMs": 1795373424943,
+          "requestAbortedMs": null,
+          "responseClosedMs": 106,
+          "responseFinishedMs": 106,
+          "leakedPrivateHeader": false
+        },
+        "upstreamClosedAfterAbortMs": null,
+        "passed": true
+      },
+      {
+        "name": "renderer-headers",
+        "outcome": "AbortError",
+        "elapsedMs": 158,
+        "abortIssuedAtUnixMs": 1795373425229,
+        "server": {
+          "requestStartedAtUnixMs": 1795373425074,
+          "requestAbortedAtUnixMs": 1795373425231,
+          "responseClosedAtUnixMs": 1795373425231,
+          "requestAbortedMs": 157,
+          "responseClosedMs": 157,
+          "responseFinishedMs": null,
+          "leakedPrivateHeader": false
+        },
+        "upstreamClosedAfterAbortMs": 2,
+        "passed": true
+      },
+      {
+        "name": "renderer-body",
+        "outcome": "AbortError",
+        "elapsedMs": 163,
+        "abortIssuedAtUnixMs": 1795373425396,
+        "server": {
+          "requestStartedAtUnixMs": 1795373425236,
+          "requestAbortedAtUnixMs": 1795373425396,
+          "responseClosedAtUnixMs": 1795373425396,
+          "requestAbortedMs": 160,
+          "responseClosedMs": 160,
+          "responseFinishedMs": null,
+          "leakedPrivateHeader": false
+        },
+        "upstreamClosedAfterAbortMs": 0,
+        "passed": true
+      },
+      {
+        "name": "cancel-before-dispatch",
+        "outcome": "TypeError",
+        "passed": true
+      }
+    ],
+    "asarSha256": "e97ed2832fb9addf5e7b02eeedde3dc005480cbde148ca953f26d28a66a35f1f",
+    "runtime": {
+      "appVersion": "2.11.130",
+      "electron": "45.3.0"
+    },
+    "passed": true
+  },
+  "coldPackageReproductionCommand": "node scripts/verify-packaged-api-cancellation.cjs --exe release/voice-responsive-cold/win-unpacked/HiChat.exe --cert <local-test-certificate.crt> --key <local-test-key.key>",
+  "finalColdFastPackageCandidate": {
+    "kind": "packaged renderer / trusted IPC / protocol proxy / HTTPS upstream cancellation",
+    "fixture": "loopback TLS with pinned test certificate; non-loopback traffic denied; fresh profile",
+    "upstreamDelayMs": 5000,
+    "rendererAbortMs": 150,
+    "upstreamCloseLimitMs": 1500,
+    "checks": [
+      {
+        "name": "renderer-control",
+        "outcome": "fulfilled",
+        "elapsedMs": 261,
+        "abortIssuedAtUnixMs": null,
+        "server": {
+          "requestStartedAtUnixMs": 1795374094226,
+          "requestAbortedAtUnixMs": null,
+          "responseClosedAtUnixMs": 1795374094332,
+          "requestAbortedMs": null,
+          "responseClosedMs": 106,
+          "responseFinishedMs": 105,
+          "leakedPrivateHeader": false
+        },
+        "upstreamClosedAfterAbortMs": null,
+        "passed": true
+      },
+      {
+        "name": "renderer-headers",
+        "outcome": "AbortError",
+        "elapsedMs": 166,
+        "abortIssuedAtUnixMs": 1795374094602,
+        "server": {
+          "requestStartedAtUnixMs": 1795374094442,
+          "requestAbortedAtUnixMs": 1795374094604,
+          "responseClosedAtUnixMs": 1795374094604,
+          "requestAbortedMs": 162,
+          "responseClosedMs": 162,
+          "responseFinishedMs": null,
+          "leakedPrivateHeader": false
+        },
+        "upstreamClosedAfterAbortMs": 2,
+        "passed": true
+      },
+      {
+        "name": "renderer-body",
+        "outcome": "AbortError",
+        "elapsedMs": 163,
+        "abortIssuedAtUnixMs": 1795374094769,
+        "server": {
+          "requestStartedAtUnixMs": 1795374094609,
+          "requestAbortedAtUnixMs": 1795374094770,
+          "responseClosedAtUnixMs": 1795374094770,
+          "requestAbortedMs": 161,
+          "responseClosedMs": 161,
+          "responseFinishedMs": null,
+          "leakedPrivateHeader": false
+        },
+        "upstreamClosedAfterAbortMs": 1,
+        "passed": true
+      },
+      {
+        "name": "cancel-before-dispatch",
+        "outcome": "TypeError",
+        "passed": true
+      }
+    ],
+    "asarSha256": "4c68b8021ee556cc787f32291860cf9931dd49e3cd745977172c53d63e0fa6eb",
+    "runtime": {
+      "appVersion": "2.11.130",
+      "electron": "45.3.0"
+    },
+    "passed": true
+  },
+  "finalColdFastPackageReproductionCommand": "node scripts/verify-packaged-api-cancellation.cjs --exe release/voice-responsive-cold-fast/win-unpacked/HiChat.exe --cert <local-test-certificate.crt> --key <local-test-key.key>"
+}

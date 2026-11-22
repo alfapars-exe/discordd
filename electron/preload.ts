@@ -27,6 +27,8 @@ function subscribeIPC<T>(channel: string, callback: (value: T) => void): () => v
 }
 
 contextBridge.exposeInMainWorld("electronAPI", {
+  reserveApiRequest: (binding: { url: string; method: string; upstream: string }): Promise<string> => ipcRenderer.invoke("reserve-api-request", binding),
+  cancelApiRequest: (id: string): Promise<boolean> => ipcRenderer.invoke("cancel-api-request", id),
   syncGameJoinContext: (context: GameJoinContext | null): Promise<GameJoinContextAck> => ipcRenderer.invoke("sync-game-join-context", context),
   launchCS2GameJoin: (request: CS2JoinRequest): Promise<CS2JoinStatus> => ipcRenderer.invoke("launch-cs2-game-join", request),
   setRegisteredGameJoinAdapter: (id: string, adapter: "none" | "cs2-steam"): Promise<boolean> => ipcRenderer.invoke("set-registered-game-join-adapter", id, adapter),

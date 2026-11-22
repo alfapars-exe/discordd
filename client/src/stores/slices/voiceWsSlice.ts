@@ -1,7 +1,7 @@
 /**
  * voiceWsSlice — WebSocket event handlers for voice state.
  *
- * Pure state transformers — no side effects beyond updating Zustand state.
+ * State transformers; terminal events also retire pending voice requests.
  * Handlers cross-slice: disconnect handlers also reset screenshare fields
  * owned by voiceScreenShareSlice. Legal because slices share a single store.
  */
@@ -39,7 +39,7 @@ export const createVoiceWsSlice: StateCreator<
   [],
   [],
   VoiceWsSlice
-> = (set) => {
+> = (set, get) => {
   // These overlays contain only deltas newer than the most recent snapshot.
   // They are connection-local and are discarded when the server epoch changes.
   const userRevisions = new Map<string, { revision: number; state: VoiceState | null }>();
@@ -261,6 +261,7 @@ export const createVoiceWsSlice: StateCreator<
   },
 
   handleForceDisconnect: () => {
+    get()._cancelVoiceRequests();
     console.warn("[voiceStore] handleForceDisconnect CALLED", { timestamp: new Date().toISOString() });
     clearVoiceRecoveryMark();
     // Admin force-disconnected us — same cleanup as leave but no WS event sent
@@ -284,6 +285,7 @@ export const createVoiceWsSlice: StateCreator<
   },
 
   handleAFKKick: (channelName: string, serverName: string) => {
+    get()._cancelVoiceRequests();
     console.warn("[voiceStore] handleAFKKick CALLED", { timestamp: new Date().toISOString(), channelName, serverName });
     clearVoiceRecoveryMark();
     set({
@@ -308,6 +310,7 @@ export const createVoiceWsSlice: StateCreator<
   dismissAFKKick: () => set({ afkKickInfo: null }),
 
   handleVoiceReplaced: () => {
+    get()._cancelVoiceRequests();
     console.warn("[voiceStore] handleVoiceReplaced CALLED", { timestamp: new Date().toISOString() });
     clearVoiceRecoveryMark();
     // Another session took over voice — leave silently, skip auto-rejoin.
