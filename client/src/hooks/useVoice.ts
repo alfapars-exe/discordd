@@ -10,6 +10,8 @@ import { useCallback } from "react";
 import { useVoiceStore } from "../stores/voiceStore";
 import { useP2PCallStore } from "../stores/p2pCallStore";
 import { useGroupCallAudioControlStore, toggleGroupCallMicrophone } from "../stores/groupCallAudioControlStore";
+import { getAuthSessionSnapshot } from "../api/authSessionEvents";
+import { playJoinSound, playLeaveSound } from "../utils/sounds";
 
 type VoiceActions = {
   joinVoice: (channelId: string) => Promise<void>;
@@ -46,10 +48,12 @@ export function useVoice({
 
   const joinVoice = useCallback(
     async (channelId: string) => {
-      const currentChannel = useVoiceStore.getState().currentVoiceChannelId;
+      const state = useVoiceStore.getState();
+      const currentChannel = state.currentVoiceChannelId;
+      const auth = getAuthSessionSnapshot();
 
       // Already in this channel
-      if (currentChannel === channelId) return;
+      if ((state.pendingVoiceChannelId ?? currentChannel) === channelId) return;
 
       // In a different channel — leave locally first (LiveKit connection
       // teardown is a client concern), but do NOT send a WS "voice_leave"
@@ -89,7 +93,9 @@ export function useVoice({
       const request = joinVoiceChannel(channelId);
       const generation = useVoiceStore.getState()._joinGeneration;
       const tokenData = await request;
-      if (useVoiceStore.getState()._joinGeneration !== generation) return;
+      const currentAuth = getAuthSessionSnapshot();
+      if (useVoiceStore.getState()._joinGeneration !== generation
+        || currentAuth.ownerId !== auth.ownerId || currentAuth.generation !== auth.generation) return;
       if (!tokenData) {
         // Ghost-state guard: we already left the old channel locally above
         // (LiveKit disconnected, store cleared) but — since we deliberately
@@ -103,14 +109,21 @@ export function useVoice({
         return;
       }
 
+      if (useVoiceStore.getState().currentVoiceChannelId !== channelId) return;
       sendVoiceJoin(channelId);
+      // Self broadcasts are silent; this accepted transition owns its cue.
+      playJoinSound();
     },
     [joinVoiceChannel, leaveVoiceChannel, sendVoiceJoin, sendVoiceLeave]
   );
 
   const leaveVoice = useCallback(() => {
+    const state = useVoiceStore.getState();
+    const wasConnected = !!state.currentVoiceChannelId;
+    if (!wasConnected && !state.pendingVoiceChannelId) return;
     sendVoiceLeave();
     leaveVoiceChannel();
+    if (wasConnected) playLeaveSound();
   }, [leaveVoiceChannel, sendVoiceLeave]);
 
   const toggleMute = useCallback(() => {

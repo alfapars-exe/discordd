@@ -321,12 +321,61 @@ it.each(Object.entries(VOICE_SOUND_ASSETS))("plays recorded %s exactly once", as
  expect(h.oscillatorNodes[0].start).toHaveBeenCalledOnce();
  expect(h.gains[0]).toBe(1);
 });
-it("updates recorded cue volume and silences it when deafened", async () => {
- playJoinSound(); await vi.waitFor(() => expect(h.gainNodes).toHaveLength(1));
+it("updates other recorded cue volume and silences it when deafened", async () => {
+ playVoiceEventSound("streamStart"); await vi.waitFor(() => expect(h.gainNodes).toHaveLength(1));
  const previous = h.voice; h.voice = { ...previous, masterVolume: 25 };
  h.voiceListeners.forEach(fn => fn(h.voice, previous));
  expect(h.gainNodes[0].gain.setValueAtTime).toHaveBeenLastCalledWith(0.25, 0);
  const beforeDeafen = h.voice; h.voice = { ...beforeDeafen, isDeafened: true };
  h.voiceListeners.forEach(fn => fn(h.voice, beforeDeafen));
  expect(h.gainNodes[0].gain.setValueAtTime).toHaveBeenLastCalledWith(0, 0);
+});
+
+describe("channel notifications while deafened", () => {
+  it.each(["join", "leave"] as const)("keeps %s audible under self and server deafen without changing either flag", async event => {
+    h.voice = { ...h.voice, isDeafened: true, isServerDeafened: true, masterVolume: 25, outputDevice: "headphones" };
+    playVoiceEventSound(event);
+    await vi.waitFor(() => expect(h.gainNodes).toHaveLength(1));
+    expect(h.sinkCalls).toEqual(["headphones"]);
+    expect(h.gains[0]).toBe(0.25);
+    expect(h.voice.isDeafened).toBe(true);
+    expect(h.voice.isServerDeafened).toBe(true);
+    const previous = h.voice;
+    h.voice = { ...h.voice, masterVolume: 0 };
+    h.voiceListeners.forEach(listener => listener(h.voice, previous));
+    expect(h.gainNodes[0].gain.setValueAtTime).toHaveBeenLastCalledWith(0, 0);
+  });
+
+  it.each(["sounds-disabled", "mute-all", "join-disabled", "leave-disabled"])("honors %s while deafened", async mode => {
+    h.voice.isDeafened = true;
+    if (mode === "sounds-disabled") h.voice.soundsEnabled = false;
+    else if (mode === "mute-all") h.prefs.muteAllSounds = true;
+    else Object.assign(h.prefs, { [mode === "join-disabled" ? "voiceJoinSound" : "voiceLeaveSound"]: false });
+    playVoiceEventSound(mode === "leave-disabled" ? "leave" : "join");
+    await vi.advanceTimersByTimeAsync(100);
+    expect(h.oscillatorNodes).toHaveLength(0);
+  });
+
+  it("does not silence an active channel cue when deafen changes", async () => {
+    playJoinSound();
+    await vi.waitFor(() => expect(h.gainNodes).toHaveLength(1));
+    const previous = h.voice;
+    h.voice = { ...h.voice, isDeafened: true, isServerDeafened: true };
+    h.voiceListeners.forEach(listener => listener(h.voice, previous));
+    expect(h.gainNodes[0].gain.setValueAtTime).toHaveBeenLastCalledWith(1, 0);
+  });
+
+  it("drops a channel cue awaiting routing when a newer channel transition wins", async () => {
+    let release!: () => void;
+    h.sinkPromise = new Promise<void>(resolve => { release = resolve; });
+    h.voice = { ...h.voice, currentVoiceChannelId: "old", _joinGeneration: 1, isDeafened: true };
+    playJoinSound();
+    await vi.waitFor(() => expect(h.sinkCalls).toHaveLength(1));
+    const previous = h.voice;
+    h.voice = { ...h.voice, currentVoiceChannelId: "new", _joinGeneration: 2 };
+    h.voiceListeners.forEach(listener => listener(h.voice, previous));
+    release();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(h.oscillatorNodes).toHaveLength(0);
+  });
 });

@@ -5,7 +5,7 @@ import { useVoiceStore } from "../stores/voiceStore";
 import { useAuthStore } from "../stores/authStore";
 import { useAccessibilityStore } from "../stores/accessibilityStore";
 import { getNotificationPreferences } from "./notificationPreferences";
-import { subscribeAuthGenerationChanges, subscribeAuthOwnerChanges } from "../api/authSessionEvents";
+import { getAuthSessionSnapshot, subscribeAuthGenerationChanges, subscribeAuthOwnerChanges } from "../api/authSessionEvents";
 
 import joinUrl from "../assets/voice-sounds/join.m4a?url&no-inline";
 import leaveUrl from "../assets/voice-sounds/leave.m4a?url&no-inline";
@@ -16,7 +16,7 @@ import watchStartUrl from "../assets/voice-sounds/watchStart.m4a?url&no-inline";
 /** Lazily initialized — created on first sound play, resumed if suspended. */
 let audioCtx: AudioContext | null = null;
 type SinkAudioContext = AudioContext & { setSinkId?: (sinkId: string) => Promise<void> };
-type ActiveTone = { osc: OscillatorNode | AudioBufferSourceNode; gain: GainNode; volume: number; followsMaster: boolean; start: number; end: number; recorded?: boolean; cancel: () => void };
+type ActiveTone = { osc: OscillatorNode | AudioBufferSourceNode; gain: GainNode; volume: number; followsMaster: boolean; start: number; end: number; recorded?: boolean; audibleWhenDeafened?: boolean; cancel: () => void };
 const activeTones = new Set<ActiveTone>();
 const requests = new Set<{ authorized: () => boolean; cancel: () => void }>();
 const effectsAllowed = () => useVoiceStore.getState().soundsEnabled && !getNotificationPreferences().muteAllSounds;
@@ -47,7 +47,7 @@ function cancelTones(): void {
 
 function effectiveVolume(tone: ActiveTone): number {
   const state = useVoiceStore.getState();
-  if (state.isDeafened || state.isServerDeafened) return 0;
+  if (!tone.audibleWhenDeafened && (state.isDeafened || state.isServerDeafened)) return 0;
   return tone.volume * (tone.followsMaster ? Math.max(0, Math.min(100, state.masterVolume)) / 100 : 1);
 }
 
@@ -263,7 +263,7 @@ export function playToneAt(
 
 export const VOICE_SOUND_ASSETS = { join: joinUrl, leave: leaveUrl, streamStart: streamStartUrl, streamStop: streamStopUrl, watchStart: watchStartUrl } as const;
 const audioBuffers = new Map<string, Promise<AudioBuffer>>();
-function playRecordedSound(url: string, authorized: () => boolean): void {
+function playRecordedSound(url: string, authorized: () => boolean, audibleWhenDeafened = false): void {
   let source: AudioBufferSourceNode | undefined;
   let tone: ActiveTone | undefined;
   let cancelled = false;
@@ -300,7 +300,7 @@ function playRecordedSound(url: string, authorized: () => boolean): void {
       source = ctx.createBufferSource();
       source.buffer = decoded;
       const gain = ctx.createGain();
-      tone = { osc: source, gain, volume: 1, followsMaster: true, start: ctx.currentTime, end: ctx.currentTime + decoded.duration, recorded: true, cancel };
+      tone = { osc: source, gain, volume: 1, followsMaster: true, start: ctx.currentTime, end: ctx.currentTime + decoded.duration, recorded: true, audibleWhenDeafened, cancel };
       activeTones.add(tone);
       gain.gain.setValueAtTime(effectiveVolume(tone), ctx.currentTime);
       source.connect(gain);
@@ -318,10 +318,21 @@ export const VOICE_SOUND_PREFERENCES = {streamStart:"voiceStreamStartSound",stre
 /** Current call effects and explicit previews share exactly the same cue and policy. */
 export function playVoiceEventSound(event: VoiceSoundEvent): void {
   const revision=voiceEventRevisions.get(event)??0;
-  const authorized = () => revision===(voiceEventRevisions.get(event)??0) && effectsAllowed() && getNotificationPreferences()[VOICE_SOUND_PREFERENCES[event]] !== false;
+  const session = useVoiceStore.getState();
+  const auth = getAuthSessionSnapshot();
+  const authorized = () => {
+    const current = useVoiceStore.getState();
+    const currentAuth = getAuthSessionSnapshot();
+    return current.currentVoiceChannelId === session.currentVoiceChannelId && current._joinGeneration === session._joinGeneration
+      && currentAuth.ownerId === auth.ownerId && currentAuth.generation === auth.generation
+      && revision === (voiceEventRevisions.get(event) ?? 0) && effectsAllowed()
+      && getNotificationPreferences()[VOICE_SOUND_PREFERENCES[event]] !== false;
+  };
   if (!authorized()) return;
   if (event in VOICE_SOUND_ASSETS) {
-    playRecordedSound(VOICE_SOUND_ASSETS[event as keyof typeof VOICE_SOUND_ASSETS], authorized);
+    // Channel placement notices stay audible when speech is deafened. They
+    // still follow the selected output, master volume and sound preferences.
+    playRecordedSound(VOICE_SOUND_ASSETS[event as keyof typeof VOICE_SOUND_ASSETS], authorized, event === "join" || event === "leave");
     return;
   }
   const notes = {

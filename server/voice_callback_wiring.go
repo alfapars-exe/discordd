@@ -20,33 +20,15 @@ type voiceCallbackRegistrar interface {
 }
 
 func registerVoiceCallbacks(hub voiceCallbackRegistrar, voiceService services.VoiceService,
-	userRepo repository.UserRepository, channelRepo repository.ChannelRepository, serverRepo repository.ServerRepository) {
+	userRepo repository.UserRepository, channelRepo repository.ChannelRepository, serverRepo repository.ServerRepository) func() {
+	activity := newVoiceActivityWriter(voiceActivityWrite(userRepo, channelRepo, serverRepo))
 	hub.OnVoiceJoin(func(userID, username, displayName, avatarURL, channelID string, isMuted, isDeafened bool) {
 		if err := voiceService.JoinChannel(userID, username, displayName, avatarURL, channelID, isMuted, isDeafened); err != nil {
 			hubLogger.Error("voice join failed", "area", "voice", "user_id", userID, "channel_id", channelID, "err", pkg.ErrText(err))
 			return
 		}
 
-		// Activity tracking runs after the in-memory join has already taken
-		// effect, so it is pure bookkeeping — one bounded budget covers all
-		// three writes rather than letting each stall independently.
-		ctx, cancel := services.BroadcastContext()
-		defer cancel()
-
-		// Track last voice activity for admin panel
-		if actErr := userRepo.UpdateLastVoiceActivity(ctx, userID); actErr != nil {
-			hubLogger.Error("failed to update user voice activity", "area", "voice", "user_id", userID, "err", pkg.ErrText(actErr))
-		}
-
-		// Track server-level voice activity
-		ch, chErr := channelRepo.GetByID(ctx, channelID)
-		if chErr != nil {
-			hubLogger.Error("channel lookup for activity tracking failed", "area", "voice", "channel_id", channelID, "err", pkg.ErrText(chErr))
-			return
-		}
-		if actErr := serverRepo.UpdateLastVoiceActivity(ctx, ch.ServerID); actErr != nil {
-			hubLogger.Error("failed to update server voice activity", "area", "voice", "server_id", ch.ServerID, "err", pkg.ErrText(actErr))
-		}
+		activity.enqueue(userID, channelID)
 	})
 	hub.OnVoiceLeave(func(userID string) {
 		if err := voiceService.LeaveChannel(userID); err != nil {
@@ -91,5 +73,5 @@ func registerVoiceCallbacks(hub voiceCallbackRegistrar, voiceService services.Vo
 	hub.OnVoiceActivity(func(userID string) {
 		voiceService.UpdateActivity(userID)
 	})
-
+	return activity.stop
 }

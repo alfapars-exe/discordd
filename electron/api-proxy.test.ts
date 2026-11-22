@@ -7,6 +7,8 @@ import { redirectFixture } from "./redirect-test-fixture";
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import type { WebContents } from "electron";
+import { API_REQUEST_HEADER, createApiRequestCancellation } from "./api-request-cancellation";
 import {
   DEFAULT_UPSTREAM,
   UPSTREAM_HEADER,
@@ -203,6 +205,102 @@ test("rethrows upstream network failures so the renderer sees a fetch error", as
     () => proxyApiRequest(new Request("app://hichat/api/health"), impl),
     /ERR_CONNECTION_REFUSED/
   );
+});
+
+test("aborting a desktop request aborts the pending upstream fetch", async () => {
+  const controller = new AbortController();
+  const request = new Request("app://hichat/api/servers/s/voice/token", { signal: controller.signal });
+  let upstreamSignal: AbortSignal | null | undefined;
+  const pending = proxyApiRequest(request, (_url, init) => new Promise<Response>((_resolve, reject) => {
+    upstreamSignal = init.signal;
+    init.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+  }));
+  const rejected = assert.rejects(pending, { name: "AbortError" });
+  controller.abort();
+  await rejected;
+  assert.equal(upstreamSignal?.aborted, true);
+});
+
+test("keeps an already cancelled desktop request cancelled upstream", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const request = new Request("app://hichat/api/servers/s/voice/token", { signal: controller.signal });
+  await assert.rejects(proxyApiRequest(request, async (_url, init) => {
+    assert.equal(init.signal?.aborted, true);
+    init.signal?.throwIfAborted();
+    return new Response("{}");
+  }), { name: "AbortError" });
+});
+
+function registeredRequest() {
+  const frame = {}, sender = { isDestroyed: () => false, mainFrame: frame } as unknown as WebContents;
+  const owner = { sender, frame: sender.mainFrame }, cancellation = createApiRequestCancellation();
+  const binding = { url: "app://hichat/api/servers/a/voice/token", method: "POST", upstream: "https://api.example" };
+  const id = cancellation.reserve(owner, binding);
+  const request = new Request(binding.url, { method: binding.method, headers: { [UPSTREAM_HEADER]: binding.upstream, [API_REQUEST_HEADER]: id }, body: "{}" });
+  return { owner, cancellation, id, request };
+}
+
+test("registered desktop cancellation aborts upstream even while the protocol signal stays live", async () => {
+  const h = registeredRequest();
+  let upstreamSignal: AbortSignal | null | undefined;
+  const pending = proxyApiRequest(h.request, (_url, init) => new Promise<Response>((_resolve, reject) => {
+    assert.equal(new Headers(init.headers).get(API_REQUEST_HEADER), null);
+    upstreamSignal = init.signal;
+    init.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+  }), h);
+  const rejected = assert.rejects(pending, { name: "AbortError" });
+  h.cancellation.cancel(h.owner, h.id);
+  await rejected;
+  assert.equal(h.request.signal.aborted, false);
+  assert.equal(upstreamSignal?.aborted, true);
+  assert.equal(h.cancellation.size, 0);
+});
+
+test("a registered lease survives headers and is released only after body EOF", async () => {
+  const h = registeredRequest();
+  let finish!: () => void;
+  const res = await proxyApiRequest(h.request, async () => new Response(new ReadableStream({
+    start(controller) { controller.enqueue(new TextEncoder().encode("hello")); finish = () => controller.close(); },
+  })), h);
+  assert.equal(h.cancellation.size, 1);
+  const body = res.text();
+  finish();
+  assert.equal(await body, "hello");
+  assert.equal(h.cancellation.size, 0);
+});
+
+test("registered cancellation interrupts an active upstream response body", async () => {
+  const h = registeredRequest();
+  const res = await proxyApiRequest(h.request, async (_url, init) => new Response(new ReadableStream({
+    start(controller) { controller.enqueue(new Uint8Array([1])); init.signal?.addEventListener("abort", () => controller.error(init.signal?.reason)); },
+  })), h);
+  const body = res.text(), rejected = assert.rejects(body, { name: "AbortError" });
+  h.cancellation.cancel(h.owner, h.id);
+  await rejected;
+  assert.equal(h.cancellation.size, 0);
+});
+
+test("body cancellation, fetch failure and null responses release registered leases", async () => {
+  for (const mode of ["body", "failure", "empty"] as const) {
+    const h = registeredRequest();
+    let sourceCancelled = false;
+    if (mode === "failure") {
+      await assert.rejects(proxyApiRequest(h.request, async () => { throw Error("unavailable"); }, h), /unavailable/);
+    } else {
+      const res = await proxyApiRequest(h.request, async () => mode === "empty" ? new Response(null, { status: 204 }) : new Response(new ReadableStream({ cancel() { sourceCancelled = true; } })), h);
+      if (mode === "body") { await res.body!.cancel(); assert.equal(sourceCancelled, true); }
+    }
+    assert.equal(h.cancellation.size, 0);
+  }
+});
+
+test("unknown or retired private IDs are rejected before any upstream fetch", async () => {
+  const h = registeredRequest(), calls: string[] = [];
+  h.cancellation.cancel(h.owner, h.id);
+  await assert.rejects(proxyApiRequest(h.request, async url => { calls.push(url); return new Response("{}"); }, h), /unavailable/);
+  await assert.rejects(proxyApiRequest(h.request, async url => { calls.push(url); return new Response("{}"); }), /unavailable/);
+  assert.deepEqual(calls, []);
 });
 
 test("a proxied API read cannot follow an upstream redirect into a second server", async t => {

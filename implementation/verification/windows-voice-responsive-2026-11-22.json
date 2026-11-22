@@ -1,0 +1,133 @@
+{
+  "date": "2026-11-22",
+  "baseRevision": "bae67629",
+  "branch": "fix/windows-voice-responsive-20261122",
+  "status": "implementation and local packaged checks complete; production performance remains unverified",
+  "changes": [
+    "Superseded join and refresh requests are aborted through the common HTTP client and main-owned Electron request leases; leave, terminal voice events and account retirement fence pending work. Shared authentication refresh remains independent.",
+    "Join, leave and forced-move cues remain audible under self/server deafen, with global/event preferences, master volume and output routing preserved.",
+    "Local accepted transitions own self cues; self WebSocket fanout is silent, preventing move-cue duplication and teardown cancellation.",
+    "Duplicate terminal events preserve the disconnected generation so an accepted leave cue can finish.",
+    "Post-join activity writes use a lifecycle-owned, nonblocking 256-slot FIFO worker with five-second task and drain budgets.",
+    "English and Turkish notification settings describe the new audible channel-cue policy."
+  ],
+  "databaseDependency": {
+    "commit": "b1a2342e",
+    "alreadyInBase": true,
+    "newMigrationAdded": false,
+    "existingMigrationVerified": "056_queue_wake_notify.sql",
+    "publishedSourceObservation": "On 2026-11-22 the connected Hugging Face source reader returned server/database/postgres.go with 4 open / 2 idle defaults, and queue_wake.go was absent. Runtime revision and environment overrides were not available through the repository details tool; this is source evidence, not proof of active pool settings."
+  },
+  "windowsTestPackage": {
+    "path": "release/voice-responsive-qa-ipc/hichat-voice-responsive-test-2.11.130-win-x64.zip",
+    "applicationVersion": "2.11.130",
+    "electronVersion": "45.3.0",
+    "runtimeMatchesLock": true,
+    "bytes": 201744262,
+    "sha256": "08e06dc1ee8b52d0c51a4ca5e7b94c5b592b35e814c539adf2edc65f933d5f9f",
+    "asarSha256": "30ed7ae6c5aa5d25aa0698138b7ae0108e5ae951dda53fc990c933a84dfc8c93",
+    "verification": "ZIP CRC passed for all 131 entries; 307 packaged build files and both native helpers matched source outputs; required updater/native transitive dependencies present; no source maps or test modules included. Root independently verified ZIP and ASAR SHA256.",
+    "testOnly": true,
+    "installedOrPublished": false
+  },
+  "windowsBenchmark": {
+    "evidence": "windows-voice-benchmark-2026-11-22.json",
+    "conditions": "Loopback Go/PostgreSQL/LiveKit, real E2EE, isolated Windows profiles, synthetic speech; physical output muted. Main timing series disables noise reduction identically; separate default RNNoise functional check passed.",
+    "baselineElectron": "45.1.0",
+    "candidateElectron": "45.3.0",
+    "successfulMeasuredActions": 90,
+    "failedRounds": 0,
+    "warmJoinDecodedAudioP95Ms": { "baseline": 459, "candidate": 393, "samplesPerBuild": 19 },
+    "moveDecodedAudioP95Ms": { "baseline": 405, "candidate": 377, "samplesPerBuild": 20 },
+    "warmJoinParticipantListP95Ms": { "baseline": 113, "candidate": 110 },
+    "moveParticipantListP95Ms": { "baseline": 52, "candidate": 51 },
+    "freshProcessFirstJoinDecodedAudioMs": {
+      "baseline": { "median": 1637, "p95": 1649 },
+      "candidate": { "median": 1927, "p95": 2222 },
+      "samplesPerBuild": 5,
+      "assessment": "Candidate first joins were slower than the installed baseline. Different Electron versions and installed source confound attribution; this is not evidence of a cold-start improvement. The separate main-run first candidate join took 2246 ms."
+    },
+    "warmAcceptanceTargets": { "participantListP95Ms": 500, "decodedAudioP95Ms": 2000, "result": "passed locally" },
+    "deafenedMove": {
+      "positiveAudioControlsPassed": true,
+      "baselineAudibleJoinCues": 0,
+      "candidateAudibleJoinCues": 1,
+      "deafenPreserved": true,
+      "microphonePublicationAbsent": true,
+      "remoteSpeechUnsubscribed": true,
+      "defaultNoiseRepeatPassed": true
+    }
+  },
+  "checks": [
+    {
+      "command": "vitest run --maxWorkers=3",
+      "result": "passed",
+      "files": 512,
+      "passed": 5636,
+      "skipped": 1,
+      "failed": 0,
+      "durationSeconds": 422.25,
+      "log": "e2e/.tmp/final-client-vitest.log",
+      "checkpoint": "Final client implementation, including native cancellation integration"
+    },
+    {
+      "command": "npm run electron:test",
+      "result": "passed",
+      "passed": 418,
+      "skipped": 1,
+      "failed": 0,
+      "skipReason": "Symlink creation is unavailable on this Windows host."
+    },
+    {
+      "check": "Final packaged Windows request cancellation before headers and during response streaming",
+      "result": "passed: HTTPS upstream closed 2 ms and 1 ms after observed renderer abort; cancelled-before-dispatch request never reached upstream; control request succeeded; internal headers were stripped",
+      "evidence": "windows-voice-cancellation-2026-11-22.json"
+    },
+    {
+      "check": "Desktop request ownership, shared refresh isolation, late IPC acknowledgement and 401 retry tests",
+      "result": "passed",
+      "files": 3,
+      "tests": 74
+    },
+    {
+      "checks": "Client and Electron TypeScript compilation; client production build; focused ESLint",
+      "result": "passed"
+    },
+    {
+      "command": "vitest run src/stores/voiceStore.test.ts src/utils/sounds.test.ts src/hooks/ws/voiceEventHandlers.test.ts --maxWorkers=2",
+      "result": "passed",
+      "tests": 180,
+      "files": 3
+    },
+    {
+      "command": "go test -race -count=1 -timeout=8m . ./ws -run 'TestVoiceActivity|TestVoiceCallback|TestPresenceCallbackDispatcherSerializesUsersWithoutBlockingOtherUsers|TestPresenceCallbackReadySchedulingSurvivesSameUserPoolSaturation'",
+      "environment": "isolated Linux Docker container, Go 1.26.11, read-only source mount",
+      "result": "passed both packages"
+    },
+    {
+      "command": "go vet . ./ws",
+      "environment": "Windows Go 1.27.4, CGO_ENABLED=0",
+      "result": "passed"
+    },
+    {
+      "checks": "Voice callback/writer, WS ordering/ownership, stale-move/source cleanup, pool configuration and queue backoff tests",
+      "result": "passed"
+    },
+    {
+      "check": "TestQueueWakeListenerReceivesQueueInsert",
+      "environment": "isolated PostgreSQL 18 with verified local TLS",
+      "result": "passed; migrations including 056 applied"
+    },
+    {
+      "check": "Native audio-capture and game-window helpers rebuilt from source",
+      "result": "passed; DEP, ASLR, High Entropy VA and CFG verified"
+    }
+  ],
+  "limitations": [
+    "No production deployment or installation into the user's current profile has been performed.",
+    "The reported five-second normal join delay was not reproduced on the local network; WAN/TURN and production database load remain unverified.",
+    "Fresh-process first joins were slower in the candidate than the installed baseline; runtime and installed source differences prevent isolating the cause from this comparison.",
+    "Synthetic decoded audio and rendered notification PCM measurements do not establish physical microphone or speaker audibility."
+  ],
+  "cleanup": "Owned Go fixture and local LiveKit/PostgreSQL containers stopped after all measurements. User's installed application and existing profile were not modified."
+}

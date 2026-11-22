@@ -1,4 +1,6 @@
 import { registerOverlayControlIPC } from "./overlay-control-ipc";
+import { registerApiRequestIPC } from "./api-request-ipc";
+import { apiRequestCancellation } from "./api-request-cancellation";
 import { observeOverlayRenderers } from "./overlay-renderer-lifecycle";
 import { registerAppCommandIPC } from "./app-command-ipc";
 import { registerCaptureCommandIPC } from "./capture-command-ipc";
@@ -88,6 +90,7 @@ export function registerIpcHandlers(onCleanup?: (dispose: () => Promise<void>) =
     return cleanup;
   };
   onCleanup?.(dispose);
+  stops.push(registerApiRequestIPC(ipcMain, { trusted: assertTrustedMainWindowSender, requests: apiRequestCancellation }));
   const gameJoin = registerCS2JoinIPC(ipcMain, assertTrustedMainWindowSender, {
     fetch: (url, init) => net.fetch(url, init), openExternal: url => shell.openExternal(url),
     allowLoopback: !app.isPackaged, supported: process.platform === "win32",

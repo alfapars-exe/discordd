@@ -29,6 +29,7 @@
  */
 
 import { APP_HOST, APP_SCHEME } from "./resolve-path";
+import { API_REQUEST_HEADER, type createApiRequestCancellation } from "./api-request-cancellation";
 
 /** Must match client/src/api/client.ts UPSTREAM_HEADER. */
 export const UPSTREAM_HEADER = "x-hichat-upstream";
@@ -129,7 +130,7 @@ export function buildUpstreamUrl(rawUrl: string, upstreamOrigin: string): string
 export async function proxyApiRequest(
   request: Request,
   fetchImpl: FetchLike,
-  { allowLoopback = false }: { allowLoopback?: boolean } = {}
+  { allowLoopback = false, cancellation }: { allowLoopback?: boolean; cancellation?: ReturnType<typeof createApiRequestCancellation> } = {}
 ): Promise<Response> {
   const upstreamOrigin =
     sanitizeUpstreamOrigin(request.headers.get(UPSTREAM_HEADER), { allowLoopback }) ??
@@ -137,13 +138,30 @@ export async function proxyApiRequest(
   const target = buildUpstreamUrl(request.url, upstreamOrigin);
 
   const headers = new Headers(request.headers);
+  const requestId = headers.get(API_REQUEST_HEADER);
+  headers.delete(API_REQUEST_HEADER);
   headers.delete(UPSTREAM_HEADER);
   headers.delete("cookie");
+
+  // Electron 45 does not forward a renderer fetch abort to protocol Request.signal.
+  // Opted-in requests use a main-owned lease cancelled through trusted IPC.
+  if (requestId !== null && !cancellation) throw new Error("API request registration unavailable");
+  const lease = requestId === null ? undefined : cancellation!.claim(requestId, {
+    url: request.url, method: request.method, upstream: upstreamOrigin,
+  });
+  const abort = () => lease?.cancel();
+  const finish = () => { request.signal.removeEventListener("abort", abort); lease?.finish(); };
+  if (lease) {
+    if (request.signal.aborted) abort();
+    else request.signal.addEventListener("abort", abort, { once: true });
+  }
 
   const init: RequestInit & { duplex?: "half"; bypassCustomProtocolHandlers?: boolean } = {
     method: request.method,
     headers,
     credentials: "include",
+    // Retiring a renderer request must also release its upstream connection.
+    signal: lease?.signal ?? request.signal,
     // Only the initial API target has passed the upstream policy.
     redirect: "error",
     bypassCustomProtocolHandlers: true,
@@ -155,16 +173,29 @@ export async function proxyApiRequest(
     init.duplex = "half";
   }
 
-  const upstream = await fetchImpl(target, init);
-
-  const responseHeaders = new Headers(upstream.headers);
-  responseHeaders.delete("set-cookie");
-  // The Response constructor rejects a non-null body for these statuses.
-  const nullBodyStatus =
-    upstream.status === 204 || upstream.status === 205 || upstream.status === 304;
-  return new Response(nullBodyStatus ? null : upstream.body, {
-    status: upstream.status,
-    statusText: upstream.statusText,
-    headers: responseHeaders,
-  });
+  try {
+    const upstream = await fetchImpl(target, init);
+    const responseHeaders = new Headers(upstream.headers);
+    responseHeaders.delete("set-cookie");
+    // Keep a lease until the body finishes, not merely until headers arrive.
+    const nullBodyStatus = upstream.status === 204 || upstream.status === 205 || upstream.status === 304;
+    let body = nullBodyStatus ? null : upstream.body;
+    if (lease && body) {
+      const reader = body.getReader();
+      body = new ReadableStream<Uint8Array<ArrayBuffer>>({
+        async pull(controller) {
+          try {
+            const next = await reader.read();
+            if (next.done) { finish(); reader.releaseLock(); controller.close(); }
+            else controller.enqueue(next.value);
+          } catch (error) { finish(); reader.releaseLock(); controller.error(error); }
+        },
+        async cancel(reason) {
+          lease.cancel();
+          try { await reader.cancel(reason); } finally { finish(); reader.releaseLock(); }
+        },
+      });
+    } else finish();
+    return new Response(body, { status: upstream.status, statusText: upstream.statusText, headers: responseHeaders });
+  } catch (error) { lease?.cancel(); finish(); throw error; }
 }

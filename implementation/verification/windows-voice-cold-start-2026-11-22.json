@@ -1,0 +1,2498 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-22",
+  "status": "final product cold and functional validation complete",
+  "script": "scripts/measure-windows-voice.cjs",
+  "rawReportDirectory": "../windows-voice-responsive-20261122/e2e/.tmp/run-1795372200000-221122-7a045ef081c1a003 (ignored, disposable local fixture)",
+  "originalComparison": "implementation/verification/windows-voice-benchmark-2026-11-22.json",
+  "runtimeSourceIntegrity": "../windows-voice-responsive-20261122/release/runtime-matrix.json",
+  "conditions": {
+    "platform": "Windows x64",
+    "network": "same loopback Go/LiveKit fixture for all cells",
+    "input": "same bundled active FLEURS speech segment 10.3–11.3 seconds, converted to PCM16",
+    "noiseReduction": false,
+    "profile": "fresh isolated process/profile per receiver cold sample; UI login before actual channel click",
+    "start": "actual DOM channel click",
+    "endpoint": "first nonzero decoded remote-track PCM; RMS > 0.0001; 40 ms polling",
+    "listPrecondition": "owner sidebar must contain no synthetic member before mark/click; stale prior presence explicitly cleared through owner moderation UI",
+    "hostLoad": "matrix and causal cohorts ran with test/build jobs stopped; native trace used a separate idle slot",
+    "quantiles": "conventional median; nearest-rank p95; n=3 p95 equals maximum"
+  },
+  "diagnosis": {
+    "dominantBlock": "Synchronous first RTCPeerConnection construction, before offer/signaling/ICE or microphone capture",
+    "nativeEvidence": "implementation/verification/windows-voice-cold-constructor-trace-2026-11-22.json",
+    "nativeTimingsMs": {
+      "constructor": 1000.7,
+      "rendererWaitingForSignalingThread": 999.2568,
+      "mediaFoundationVideoEncoderCapabilityDiscovery": 994.7453,
+      "actualPeerConnectionCreateAfterBootstrap": 0.526
+    },
+    "secondDelay": "Current source has approximately 300 ms after fast VoiceProvider asset response before E2EE worker creation. Pure module preimport does not remove this. React Suspense retry throttle is a supported inference, not a direct React trace.",
+    "runtimeFinding": "The controlled 2x2 matrix did not implicate Electron 45.3 as the regression: both old and current source were faster under 45.3 in this cohort. The extra pre-worker delay followed current source across both runtimes.",
+    "excludedAsDominantCauses": "Token fetch about 60 ms, first AudioContext about 50 ms, main key import about 3 ms, microphone capture about 12 ms; signaling/ICE occurs only after blocked constructor returns."
+  },
+  "matrix": {
+    "oldSourceElectron451": {
+      "source": "installed old build",
+      "rawReport": "voice-phase-baseline451.json",
+      "applicationArchiveSha256": "b84aa20420179906109de839e9115c5e5091d07ee7532c8adcecbec0c95ca82b",
+      "runtime": {
+        "electron": "45.1.0",
+        "chrome": "156.0.8078.49",
+        "node": "24.22.1"
+      },
+      "preparationMode": "none",
+      "preparation": [],
+      "samples": [
+        {
+          "sample": 1,
+          "resolvedActionAt": 1795372350483,
+          "actionObserver": "member DOM click",
+          "listObservedAt": 1795372350604,
+          "decodedAt": 1795372352105,
+          "listMs": 121,
+          "decodedAudioMs": 1622,
+          "connectionMs": 1467,
+          "tokenFetchMs": 64,
+          "phasesMsAfterAction": {
+            "permissionResolved": 3,
+            "tokenFetchStarted": 3,
+            "tokenFetched": 67,
+            "tokenCommitted": 67,
+            "firstAudioContextStart": 98,
+            "firstAudioContextCreated": 154,
+            "e2eeWorkerCreated": 165,
+            "mainKeyImportReady": 178,
+            "peerConnectionConstructorStart": 188,
+            "peerConnectionCreated": 1364,
+            "initialOfferReady": 1388,
+            "signalingSocketOpen": 1400,
+            "firstIceCandidate": 1418,
+            "iceConnected": 1463,
+            "peerConnectionConnected": 1467,
+            "keyAdmissionAcknowledged": 1479,
+            "microphoneCaptureStarted": 1486,
+            "microphoneCaptureReady": 1502,
+            "localEncoderTransformConfigured": 1543,
+            "microphonePublished": null,
+            "remoteMicrophoneSubscribed": null,
+            "decodedPcm": 1623
+          },
+          "synchronousPeerConnectionConstructorMs": 1176,
+          "synchronousFirstAudioContextConstructorMs": 56,
+          "preActionActivity": null,
+          "capabilityQueriesAfterInstrumentation": [],
+          "longTasks": null,
+          "assetRequests": null
+        },
+        {
+          "sample": 2,
+          "resolvedActionAt": 1795372361212,
+          "actionObserver": "member DOM click",
+          "listObservedAt": 1795372361325,
+          "decodedAt": 1795372362898,
+          "listMs": 113,
+          "decodedAudioMs": 1686,
+          "connectionMs": 1547,
+          "tokenFetchMs": 65,
+          "phasesMsAfterAction": {
+            "permissionResolved": 3,
+            "tokenFetchStarted": 3,
+            "tokenFetched": 68,
+            "tokenCommitted": 69,
+            "firstAudioContextStart": 104,
+            "firstAudioContextCreated": 161,
+            "e2eeWorkerCreated": 400,
+            "mainKeyImportReady": 414,
+            "peerConnectionConstructorStart": 422,
+            "peerConnectionCreated": 1454,
+            "initialOfferReady": 1473,
+            "signalingSocketOpen": 1487,
+            "firstIceCandidate": 1502,
+            "iceConnected": 1543,
+            "peerConnectionConnected": 1547,
+            "keyAdmissionAcknowledged": 1558,
+            "microphoneCaptureStarted": 1566,
+            "microphoneCaptureReady": 1580,
+            "localEncoderTransformConfigured": 1617,
+            "microphonePublished": null,
+            "remoteMicrophoneSubscribed": null,
+            "decodedPcm": 1686
+          },
+          "synchronousPeerConnectionConstructorMs": 1032,
+          "synchronousFirstAudioContextConstructorMs": 57,
+          "preActionActivity": null,
+          "capabilityQueriesAfterInstrumentation": [],
+          "longTasks": null,
+          "assetRequests": null
+        },
+        {
+          "sample": 3,
+          "resolvedActionAt": 1795372371912,
+          "actionObserver": "member DOM click",
+          "listObservedAt": 1795372372043,
+          "decodedAt": 1795372373353,
+          "listMs": 131,
+          "decodedAudioMs": 1441,
+          "connectionMs": 1314,
+          "tokenFetchMs": 64,
+          "phasesMsAfterAction": {
+            "permissionResolved": 4,
+            "tokenFetchStarted": 4,
+            "tokenFetched": 68,
+            "tokenCommitted": 69,
+            "firstAudioContextStart": 102,
+            "firstAudioContextCreated": 157,
+            "e2eeWorkerCreated": 168,
+            "mainKeyImportReady": 181,
+            "peerConnectionConstructorStart": 190,
+            "peerConnectionCreated": 1222,
+            "initialOfferReady": 1241,
+            "signalingSocketOpen": 1254,
+            "firstIceCandidate": 1271,
+            "iceConnected": 1309,
+            "peerConnectionConnected": 1314,
+            "keyAdmissionAcknowledged": 1326,
+            "microphoneCaptureStarted": 1333,
+            "microphoneCaptureReady": 1346,
+            "localEncoderTransformConfigured": 1382,
+            "microphonePublished": null,
+            "remoteMicrophoneSubscribed": null,
+            "decodedPcm": 1441
+          },
+          "synchronousPeerConnectionConstructorMs": 1032,
+          "synchronousFirstAudioContextConstructorMs": 54,
+          "preActionActivity": null,
+          "capabilityQueriesAfterInstrumentation": [],
+          "longTasks": null,
+          "assetRequests": null
+        }
+      ],
+      "summary": {
+        "decodedPcmMs": {
+          "n": 3,
+          "median": 1622,
+          "p95": 1686
+        },
+        "peerConnectionConstructorMs": {
+          "n": 3,
+          "median": 1032,
+          "p95": 1176
+        },
+        "workerCreatedAfterClickMs": {
+          "n": 3,
+          "median": 168,
+          "p95": 400
+        },
+        "peerConnectionCreatedAfterClickMs": {
+          "n": 3,
+          "median": 1364,
+          "p95": 1454
+        },
+        "peerConnectionConnectedAfterClickMs": {
+          "n": 3,
+          "median": 1467,
+          "p95": 1547
+        },
+        "microphonePublishedAfterClickMs": {
+          "n": 0,
+          "median": null,
+          "p95": null
+        },
+        "localEncoderTransformAfterClickMs": {
+          "n": 3,
+          "median": 1543,
+          "p95": 1617
+        },
+        "listMs": {
+          "n": 3,
+          "median": 121,
+          "p95": 131
+        }
+      }
+    },
+    "oldSourceElectron453": {
+      "source": "old build executing assets identical under 45.3; packaging excludes old tests and updates build metadata",
+      "rawReport": "voice-phase-baseline453-clean.json",
+      "applicationArchiveSha256": "1bb8c6044974009cc56d9cf79b5382fe31d7e93209d5e45ad5e23834fc258da5",
+      "runtime": {
+        "electron": "45.3.0",
+        "chrome": "156.0.8078.96",
+        "node": "24.22.2"
+      },
+      "preparationMode": "none",
+      "preparation": [],
+      "samples": [
+        {
+          "sample": 1,
+          "resolvedActionAt": 1795372606606,
+          "actionObserver": "member DOM click",
+          "listObservedAt": 1795372606730,
+          "decodedAt": 1795372608024,
+          "listMs": 124,
+          "decodedAudioMs": 1418,
+          "connectionMs": 1305,
+          "tokenFetchMs": 62,
+          "phasesMsAfterAction": {
+            "permissionResolved": 3,
+            "tokenFetchStarted": 3,
+            "tokenFetched": 65,
+            "tokenCommitted": 66,
+            "firstAudioContextStart": 102,
+            "firstAudioContextCreated": 154,
+            "e2eeWorkerCreated": 163,
+            "mainKeyImportReady": 173,
+            "peerConnectionConstructorStart": 182,
+            "peerConnectionCreated": 1214,
+            "initialOfferReady": 1235,
+            "signalingSocketOpen": 1247,
+            "firstIceCandidate": 1263,
+            "iceConnected": 1301,
+            "peerConnectionConnected": 1305,
+            "keyAdmissionAcknowledged": 1310,
+            "microphoneCaptureStarted": 1318,
+            "microphoneCaptureReady": 1356,
+            "localEncoderTransformConfigured": 1388,
+            "microphonePublished": null,
+            "remoteMicrophoneSubscribed": null,
+            "decodedPcm": 1418
+          },
+          "synchronousPeerConnectionConstructorMs": 1032,
+          "synchronousFirstAudioContextConstructorMs": 52,
+          "preActionActivity": null,
+          "capabilityQueriesAfterInstrumentation": [],
+          "longTasks": [
+            {
+              "at": 1795372606708.4001,
+              "durationMs": 53,
+              "sinceActionMs": 102.400146484375
+            },
+            {
+              "at": 1795372606784.9001,
+              "durationMs": 1051,
+              "sinceActionMs": 178.900146484375
+            }
+          ],
+          "assetRequests": null
+        },
+        {
+          "sample": 2,
+          "resolvedActionAt": 1795372617302,
+          "actionObserver": "member DOM click",
+          "listObservedAt": 1795372617401,
+          "decodedAt": 1795372618759,
+          "listMs": 99,
+          "decodedAudioMs": 1457,
+          "connectionMs": 1282,
+          "tokenFetchMs": 62,
+          "phasesMsAfterAction": {
+            "permissionResolved": 3,
+            "tokenFetchStarted": 3,
+            "tokenFetched": 65,
+            "tokenCommitted": 66,
+            "firstAudioContextStart": 102,
+            "firstAudioContextCreated": 154,
+            "e2eeWorkerCreated": 164,
+            "mainKeyImportReady": 176,
+            "peerConnectionConstructorStart": 184,
+            "peerConnectionCreated": 1193,
+            "initialOfferReady": 1212,
+            "signalingSocketOpen": 1223,
+            "firstIceCandidate": 1239,
+            "iceConnected": 1278,
+            "peerConnectionConnected": 1282,
+            "keyAdmissionAcknowledged": 1292,
+            "microphoneCaptureStarted": 1299,
+            "microphoneCaptureReady": 1311,
+            "localEncoderTransformConfigured": 1343,
+            "microphonePublished": null,
+            "remoteMicrophoneSubscribed": null,
+            "decodedPcm": 1457
+          },
+          "synchronousPeerConnectionConstructorMs": 1009,
+          "synchronousFirstAudioContextConstructorMs": 52,
+          "preActionActivity": null,
+          "capabilityQueriesAfterInstrumentation": [],
+          "longTasks": [
+            {
+              "at": 1795372617402.8,
+              "durationMs": 56,
+              "sinceActionMs": 100.800048828125
+            },
+            {
+              "at": 1795372617483.4,
+              "durationMs": 1026,
+              "sinceActionMs": 181.39990234375
+            }
+          ],
+          "assetRequests": null
+        },
+        {
+          "sample": 3,
+          "resolvedActionAt": 1795372627953,
+          "actionObserver": "member DOM click",
+          "listObservedAt": 1795372628084,
+          "decodedAt": 1795372629394,
+          "listMs": 131,
+          "decodedAudioMs": 1441,
+          "connectionMs": 1298,
+          "tokenFetchMs": 69,
+          "phasesMsAfterAction": {
+            "permissionResolved": 4,
+            "tokenFetchStarted": 4,
+            "tokenFetched": 73,
+            "tokenCommitted": 73,
+            "firstAudioContextStart": 104,
+            "firstAudioContextCreated": 158,
+            "e2eeWorkerCreated": 168,
+            "mainKeyImportReady": 177,
+            "peerConnectionConstructorStart": 186,
+            "peerConnectionCreated": 1207,
+            "initialOfferReady": 1227,
+            "signalingSocketOpen": 1239,
+            "firstIceCandidate": 1255,
+            "iceConnected": 1293,
+            "peerConnectionConnected": 1298,
+            "keyAdmissionAcknowledged": 1310,
+            "microphoneCaptureStarted": 1317,
+            "microphoneCaptureReady": 1327,
+            "localEncoderTransformConfigured": 1357,
+            "microphonePublished": null,
+            "remoteMicrophoneSubscribed": null,
+            "decodedPcm": 1441
+          },
+          "synchronousPeerConnectionConstructorMs": 1021,
+          "synchronousFirstAudioContextConstructorMs": 54,
+          "preActionActivity": null,
+          "capabilityQueriesAfterInstrumentation": [],
+          "longTasks": [
+            {
+              "at": 1795372628057.3,
+              "durationMs": 56,
+              "sinceActionMs": 104.300048828125
+            },
+            {
+              "at": 1795372628136.3,
+              "durationMs": 1038,
+              "sinceActionMs": 183.300048828125
+            }
+          ],
+          "assetRequests": null
+        }
+      ],
+      "summary": {
+        "decodedPcmMs": {
+          "n": 3,
+          "median": 1441,
+          "p95": 1457
+        },
+        "peerConnectionConstructorMs": {
+          "n": 3,
+          "median": 1021,
+          "p95": 1032
+        },
+        "workerCreatedAfterClickMs": {
+          "n": 3,
+          "median": 164,
+          "p95": 168
+        },
+        "peerConnectionCreatedAfterClickMs": {
+          "n": 3,
+          "median": 1207,
+          "p95": 1214
+        },
+        "peerConnectionConnectedAfterClickMs": {
+          "n": 3,
+          "median": 1298,
+          "p95": 1305
+        },
+        "microphonePublishedAfterClickMs": {
+          "n": 0,
+          "median": null,
+          "p95": null
+        },
+        "localEncoderTransformAfterClickMs": {
+          "n": 3,
+          "median": 1357,
+          "p95": 1388
+        },
+        "listMs": {
+          "n": 3,
+          "median": 124,
+          "p95": 131
+        }
+      }
+    },
+    "currentSourceElectron451": {
+      "source": "prior voice fix source, exact ASAR 30ed7ae6 shared with 45.3",
+      "rawReport": "voice-phase-current451.json",
+      "applicationArchiveSha256": "30ed7ae6c5aa5d25aa0698138b7ae0108e5ae951dda53fc990c933a84dfc8c93",
+      "runtime": {
+        "electron": "45.1.0",
+        "chrome": "156.0.8078.49",
+        "node": "24.22.1"
+      },
+      "preparationMode": "none",
+      "preparation": [],
+      "samples": [
+        {
+          "sample": 1,
+          "resolvedActionAt": 1795372669341,
+          "actionObserver": "member DOM click",
+          "listObservedAt": 1795372669454,
+          "decodedAt": 1795372671075,
+          "listMs": 113,
+          "decodedAudioMs": 1734,
+          "connectionMs": 1546,
+          "tokenFetchMs": 66,
+          "phasesMsAfterAction": {
+            "permissionResolved": 3,
+            "tokenFetchStarted": 6,
+            "tokenFetched": 72,
+            "tokenCommitted": 72,
+            "firstAudioContextStart": 97,
+            "firstAudioContextCreated": 152,
+            "e2eeWorkerCreated": 407,
+            "mainKeyImportReady": 417,
+            "peerConnectionConstructorStart": 425,
+            "peerConnectionCreated": 1455,
+            "initialOfferReady": 1475,
+            "signalingSocketOpen": 1486,
+            "firstIceCandidate": 1502,
+            "iceConnected": 1542,
+            "peerConnectionConnected": 1546,
+            "keyAdmissionAcknowledged": 1559,
+            "microphoneCaptureStarted": 1566,
+            "microphoneCaptureReady": 1578,
+            "localEncoderTransformConfigured": 1609,
+            "microphonePublished": null,
+            "remoteMicrophoneSubscribed": null,
+            "decodedPcm": 1734
+          },
+          "synchronousPeerConnectionConstructorMs": 1030,
+          "synchronousFirstAudioContextConstructorMs": 55,
+          "preActionActivity": null,
+          "capabilityQueriesAfterInstrumentation": [],
+          "longTasks": [
+            {
+              "at": 1795372669413.6,
+              "durationMs": 80,
+              "sinceActionMs": 72.60009765625
+            },
+            {
+              "at": 1795372669763.5,
+              "durationMs": 1046,
+              "sinceActionMs": 422.5
+            }
+          ],
+          "assetRequests": [
+            {
+              "asset": "livekitScreenShareUpdate-Z-7PUcRT.js",
+              "startAt": 1795372669431.581,
+              "responseEndAt": 1795372669433.137,
+              "durationMs": 1.556,
+              "sinceActionMs": 90.5810546875
+            },
+            {
+              "asset": "VoiceProvider-SkS8eLtx.js",
+              "startAt": 1795372669431.335,
+              "responseEndAt": 1795372669433.039,
+              "durationMs": 1.704,
+              "sinceActionMs": 90.3349609375
+            },
+            {
+              "asset": "livekit-client.e2ee.worker-DvT-EaAv.js",
+              "startAt": 1795372669749.2039,
+              "responseEndAt": 1795372669764.482,
+              "durationMs": 15.278,
+              "sinceActionMs": 408.203857421875
+            }
+          ]
+        },
+        {
+          "sample": 2,
+          "resolvedActionAt": 1795372680025,
+          "actionObserver": "member DOM click",
+          "listObservedAt": 1795372680133,
+          "decodedAt": 1795372681707,
+          "listMs": 108,
+          "decodedAudioMs": 1682,
+          "connectionMs": 1515,
+          "tokenFetchMs": 58,
+          "phasesMsAfterAction": {
+            "permissionResolved": 3,
+            "tokenFetchStarted": 7,
+            "tokenFetched": 65,
+            "tokenCommitted": 65,
+            "firstAudioContextStart": 88,
+            "firstAudioContextCreated": 142,
+            "e2eeWorkerCreated": 397,
+            "mainKeyImportReady": 408,
+            "peerConnectionConstructorStart": 415,
+            "peerConnectionCreated": 1423,
+            "initialOfferReady": 1443,
+            "signalingSocketOpen": 1453,
+            "firstIceCandidate": 1468,
+            "iceConnected": 1510,
+            "peerConnectionConnected": 1515,
+            "keyAdmissionAcknowledged": 1527,
+            "microphoneCaptureStarted": 1534,
+            "microphoneCaptureReady": 1546,
+            "localEncoderTransformConfigured": 1577,
+            "microphonePublished": null,
+            "remoteMicrophoneSubscribed": null,
+            "decodedPcm": 1682
+          },
+          "synchronousPeerConnectionConstructorMs": 1008,
+          "synchronousFirstAudioContextConstructorMs": 54,
+          "preActionActivity": null,
+          "capabilityQueriesAfterInstrumentation": [],
+          "longTasks": [
+            {
+              "at": 1795372680090.5,
+              "durationMs": 77,
+              "sinceActionMs": 65.5
+            },
+            {
+              "at": 1795372680437.8,
+              "durationMs": 1025,
+              "sinceActionMs": 412.800048828125
+            }
+          ],
+          "assetRequests": [
+            {
+              "asset": "VoiceProvider-SkS8eLtx.js",
+              "startAt": 1795372680106.889,
+              "responseEndAt": 1795372680108.5588,
+              "durationMs": 1.67,
+              "sinceActionMs": 81.888916015625
+            },
+            {
+              "asset": "livekitScreenShareUpdate-Z-7PUcRT.js",
+              "startAt": 1795372680107.096,
+              "responseEndAt": 1795372680108.6719,
+              "durationMs": 1.576,
+              "sinceActionMs": 82.095947265625
+            },
+            {
+              "asset": "livekit-client.e2ee.worker-DvT-EaAv.js",
+              "startAt": 1795372680422.844,
+              "responseEndAt": 1795372680440.068,
+              "durationMs": 17.224,
+              "sinceActionMs": 397.843994140625
+            }
+          ]
+        },
+        {
+          "sample": 3,
+          "resolvedActionAt": 1795372690667,
+          "actionObserver": "member DOM click",
+          "listObservedAt": 1795372690770,
+          "decodedAt": 1795372692373,
+          "listMs": 103,
+          "decodedAudioMs": 1706,
+          "connectionMs": 1526,
+          "tokenFetchMs": 53,
+          "phasesMsAfterAction": {
+            "permissionResolved": 3,
+            "tokenFetchStarted": 7,
+            "tokenFetched": 60,
+            "tokenCommitted": 61,
+            "firstAudioContextStart": 84,
+            "firstAudioContextCreated": 139,
+            "e2eeWorkerCreated": 392,
+            "mainKeyImportReady": 402,
+            "peerConnectionConstructorStart": 409,
+            "peerConnectionCreated": 1438,
+            "initialOfferReady": 1457,
+            "signalingSocketOpen": 1470,
+            "firstIceCandidate": 1485,
+            "iceConnected": 1522,
+            "peerConnectionConnected": 1526,
+            "keyAdmissionAcknowledged": 1536,
+            "microphoneCaptureStarted": 1543,
+            "microphoneCaptureReady": 1555,
+            "localEncoderTransformConfigured": 1584,
+            "microphonePublished": null,
+            "remoteMicrophoneSubscribed": null,
+            "decodedPcm": 1706
+          },
+          "synchronousPeerConnectionConstructorMs": 1029,
+          "synchronousFirstAudioContextConstructorMs": 55,
+          "preActionActivity": null,
+          "capabilityQueriesAfterInstrumentation": [],
+          "longTasks": [
+            {
+              "at": 1795372690728,
+              "durationMs": 79,
+              "sinceActionMs": 61
+            },
+            {
+              "at": 1795372691073.9001,
+              "durationMs": 1045,
+              "sinceActionMs": 406.900146484375
+            }
+          ],
+          "assetRequests": [
+            {
+              "asset": "livekitScreenShareUpdate-Z-7PUcRT.js",
+              "startAt": 1795372690745.463,
+              "responseEndAt": 1795372690746.8489,
+              "durationMs": 1.386,
+              "sinceActionMs": 78.462890625
+            },
+            {
+              "asset": "VoiceProvider-SkS8eLtx.js",
+              "startAt": 1795372690745.275,
+              "responseEndAt": 1795372690746.7769,
+              "durationMs": 1.502,
+              "sinceActionMs": 78.27490234375
+            },
+            {
+              "asset": "livekit-client.e2ee.worker-DvT-EaAv.js",
+              "startAt": 1795372691059.604,
+              "responseEndAt": 1795372691074.65,
+              "durationMs": 15.046,
+              "sinceActionMs": 392.60400390625
+            }
+          ]
+        }
+      ],
+      "summary": {
+        "decodedPcmMs": {
+          "n": 3,
+          "median": 1706,
+          "p95": 1734
+        },
+        "peerConnectionConstructorMs": {
+          "n": 3,
+          "median": 1029,
+          "p95": 1030
+        },
+        "workerCreatedAfterClickMs": {
+          "n": 3,
+          "median": 397,
+          "p95": 407
+        },
+        "peerConnectionCreatedAfterClickMs": {
+          "n": 3,
+          "median": 1438,
+          "p95": 1455
+        },
+        "peerConnectionConnectedAfterClickMs": {
+          "n": 3,
+          "median": 1526,
+          "p95": 1546
+        },
+        "microphonePublishedAfterClickMs": {
+          "n": 0,
+          "median": null,
+          "p95": null
+        },
+        "localEncoderTransformAfterClickMs": {
+          "n": 3,
+          "median": 1584,
+          "p95": 1609
+        },
+        "listMs": {
+          "n": 3,
+          "median": 108,
+          "p95": 113
+        }
+      }
+    },
+    "currentSourceElectron453": {
+      "source": "prior voice fix immutable 45.3 package",
+      "rawReport": "voice-phase-current453.json",
+      "applicationArchiveSha256": "30ed7ae6c5aa5d25aa0698138b7ae0108e5ae951dda53fc990c933a84dfc8c93",
+      "runtime": {
+        "electron": "45.3.0",
+        "chrome": "156.0.8078.96",
+        "node": "24.22.2"
+      },
+      "preparationMode": "none",
+      "preparation": [],
+      "samples": [
+        {
+          "sample": 1,
+          "resolvedActionAt": 1795372279930,
+          "actionObserver": "member DOM click",
+          "listObservedAt": 1795372280030,
+          "decodedAt": 1795372281528,
+          "listMs": 100,
+          "decodedAudioMs": 1598,
+          "connectionMs": 1443,
+          "tokenFetchMs": 64,
+          "phasesMsAfterAction": {
+            "permissionResolved": 3,
+            "tokenFetchStarted": 5,
+            "tokenFetched": 69,
+            "tokenCommitted": 70,
+            "firstAudioContextStart": 91,
+            "firstAudioContextCreated": 141,
+            "e2eeWorkerCreated": 403,
+            "mainKeyImportReady": 413,
+            "peerConnectionConstructorStart": 419,
+            "peerConnectionCreated": 1363,
+            "initialOfferReady": 1380,
+            "signalingSocketOpen": 1390,
+            "firstIceCandidate": 1403,
+            "iceConnected": 1440,
+            "peerConnectionConnected": 1443,
+            "keyAdmissionAcknowledged": 1452,
+            "microphoneCaptureStarted": 1458,
+            "microphoneCaptureReady": 1470,
+            "localEncoderTransformConfigured": 1498,
+            "microphonePublished": null,
+            "remoteMicrophoneSubscribed": null,
+            "decodedPcm": 1598
+          },
+          "synchronousPeerConnectionConstructorMs": 944,
+          "synchronousFirstAudioContextConstructorMs": 50,
+          "preActionActivity": null,
+          "capabilityQueriesAfterInstrumentation": [],
+          "longTasks": null,
+          "assetRequests": null
+        },
+        {
+          "sample": 2,
+          "resolvedActionAt": 1795372290605,
+          "actionObserver": "member DOM click",
+          "listObservedAt": 1795372290710,
+          "decodedAt": 1795372292213,
+          "listMs": 105,
+          "decodedAudioMs": 1608,
+          "connectionMs": 1443,
+          "tokenFetchMs": 58,
+          "phasesMsAfterAction": {
+            "permissionResolved": 3,
+            "tokenFetchStarted": 6,
+            "tokenFetched": 64,
+            "tokenCommitted": 65,
+            "firstAudioContextStart": 88,
+            "firstAudioContextCreated": 141,
+            "e2eeWorkerCreated": 395,
+            "mainKeyImportReady": 405,
+            "peerConnectionConstructorStart": 411,
+            "peerConnectionCreated": 1361,
+            "initialOfferReady": 1378,
+            "signalingSocketOpen": 1388,
+            "firstIceCandidate": 1401,
+            "iceConnected": 1439,
+            "peerConnectionConnected": 1443,
+            "keyAdmissionAcknowledged": 1451,
+            "microphoneCaptureStarted": 1458,
+            "microphoneCaptureReady": 1470,
+            "localEncoderTransformConfigured": 1506,
+            "microphonePublished": null,
+            "remoteMicrophoneSubscribed": null,
+            "decodedPcm": 1608
+          },
+          "synchronousPeerConnectionConstructorMs": 950,
+          "synchronousFirstAudioContextConstructorMs": 53,
+          "preActionActivity": null,
+          "capabilityQueriesAfterInstrumentation": [],
+          "longTasks": null,
+          "assetRequests": null
+        },
+        {
+          "sample": 3,
+          "resolvedActionAt": 1795372301273,
+          "actionObserver": "member DOM click",
+          "listObservedAt": 1795372301404,
+          "decodedAt": 1795372302908,
+          "listMs": 131,
+          "decodedAudioMs": 1635,
+          "connectionMs": 1451,
+          "tokenFetchMs": 67,
+          "phasesMsAfterAction": {
+            "permissionResolved": 3,
+            "tokenFetchStarted": 6,
+            "tokenFetched": 73,
+            "tokenCommitted": 73,
+            "firstAudioContextStart": 95,
+            "firstAudioContextCreated": 147,
+            "e2eeWorkerCreated": 404,
+            "mainKeyImportReady": 414,
+            "peerConnectionConstructorStart": 420,
+            "peerConnectionCreated": 1370,
+            "initialOfferReady": 1387,
+            "signalingSocketOpen": 1397,
+            "firstIceCandidate": 1410,
+            "iceConnected": 1448,
+            "peerConnectionConnected": 1451,
+            "keyAdmissionAcknowledged": 1460,
+            "microphoneCaptureStarted": 1466,
+            "microphoneCaptureReady": 1478,
+            "localEncoderTransformConfigured": 1510,
+            "microphonePublished": null,
+            "remoteMicrophoneSubscribed": null,
+            "decodedPcm": 1635
+          },
+          "synchronousPeerConnectionConstructorMs": 950,
+          "synchronousFirstAudioContextConstructorMs": 52,
+          "preActionActivity": null,
+          "capabilityQueriesAfterInstrumentation": [],
+          "longTasks": null,
+          "assetRequests": null
+        }
+      ],
+      "summary": {
+        "decodedPcmMs": {
+          "n": 3,
+          "median": 1608,
+          "p95": 1635
+        },
+        "peerConnectionConstructorMs": {
+          "n": 3,
+          "median": 950,
+          "p95": 950
+        },
+        "workerCreatedAfterClickMs": {
+          "n": 3,
+          "median": 403,
+          "p95": 404
+        },
+        "peerConnectionCreatedAfterClickMs": {
+          "n": 3,
+          "median": 1363,
+          "p95": 1370
+        },
+        "peerConnectionConnectedAfterClickMs": {
+          "n": 3,
+          "median": 1443,
+          "p95": 1451
+        },
+        "microphonePublishedAfterClickMs": {
+          "n": 0,
+          "median": null,
+          "p95": null
+        },
+        "localEncoderTransformAfterClickMs": {
+          "n": 3,
+          "median": 1506,
+          "p95": 1510
+        },
+        "listMs": {
+          "n": 3,
+          "median": 105,
+          "p95": 131
+        }
+      }
+    }
+  },
+  "causalExperiments": {
+    "asynchronousVideoCapability": {
+      "source": "same immutable prior 45.3 package; fixture-only async capability query before click",
+      "rawReport": "voice-phase-video-prepared453.json",
+      "applicationArchiveSha256": "30ed7ae6c5aa5d25aa0698138b7ae0108e5ae951dda53fc990c933a84dfc8c93",
+      "runtime": {
+        "electron": "45.3.0",
+        "chrome": "156.0.8078.96",
+        "node": "24.22.2"
+      },
+      "preparationMode": "video-capability",
+      "preparation": [
+        {
+          "startAt": 1795372775891,
+          "completedAt": 1795372777027,
+          "durationMs": 1136,
+          "callReturnMs": 0.2999999988824129,
+          "capabilitySupported": true,
+          "maxTimerGapMs": 51.79999999888241,
+          "timerTicks": 73,
+          "captures": 0,
+          "phases": [],
+          "longTasks": []
+        },
+        {
+          "startAt": 1795372787515,
+          "completedAt": 1795372788621,
+          "durationMs": 1106,
+          "callReturnMs": 0.30000000074505806,
+          "capabilitySupported": true,
+          "maxTimerGapMs": 53.5,
+          "timerTicks": 69,
+          "captures": 0,
+          "phases": [],
+          "longTasks": []
+        },
+        {
+          "startAt": 1795372798171,
+          "completedAt": 1795372799262,
+          "durationMs": 1091,
+          "callReturnMs": 0.19999999925494194,
+          "capabilitySupported": true,
+          "maxTimerGapMs": 53.59999999962747,
+          "timerTicks": 69,
+          "captures": 0,
+          "phases": [],
+          "longTasks": []
+        }
+      ],
+      "samples": [
+        {
+          "sample": 1,
+          "resolvedActionAt": 1795372779852,
+          "actionObserver": "member DOM click",
+          "listObservedAt": 1795372779962,
+          "decodedAt": 1795372780521,
+          "listMs": 110,
+          "decodedAudioMs": 669,
+          "connectionMs": 502,
+          "tokenFetchMs": 62,
+          "phasesMsAfterAction": {
+            "permissionResolved": 3,
+            "tokenFetchStarted": 6,
+            "tokenFetched": 68,
+            "tokenCommitted": 68,
+            "firstAudioContextStart": 92,
+            "firstAudioContextCreated": 147,
+            "e2eeWorkerCreated": 399,
+            "mainKeyImportReady": 410,
+            "peerConnectionConstructorStart": 417,
+            "peerConnectionCreated": 419,
+            "initialOfferReady": 436,
+            "signalingSocketOpen": 446,
+            "firstIceCandidate": 461,
+            "iceConnected": 499,
+            "peerConnectionConnected": 502,
+            "keyAdmissionAcknowledged": 514,
+            "microphoneCaptureStarted": 522,
+            "microphoneCaptureReady": 532,
+            "localEncoderTransformConfigured": 560,
+            "microphonePublished": null,
+            "remoteMicrophoneSubscribed": null,
+            "decodedPcm": 669
+          },
+          "synchronousPeerConnectionConstructorMs": 2,
+          "synchronousFirstAudioContextConstructorMs": 55,
+          "preActionActivity": null,
+          "capabilityQueriesAfterInstrumentation": [],
+          "longTasks": [
+            {
+              "at": 1795372779920.8,
+              "durationMs": 79,
+              "sinceActionMs": 68.800048828125
+            }
+          ],
+          "assetRequests": [
+            {
+              "asset": "VoiceProvider-SkS8eLtx.js",
+              "startAt": 1795372779938.749,
+              "responseEndAt": 1795372779940.068,
+              "durationMs": 1.319,
+              "sinceActionMs": 86.7490234375
+            },
+            {
+              "asset": "livekitScreenShareUpdate-Z-7PUcRT.js",
+              "startAt": 1795372779938.935,
+              "responseEndAt": 1795372779940.6301,
+              "durationMs": 1.695,
+              "sinceActionMs": 86.93505859375
+            },
+            {
+              "asset": "livekit-client.e2ee.worker-DvT-EaAv.js",
+              "startAt": 1795372780251.806,
+              "responseEndAt": 1795372780269.763,
+              "durationMs": 17.957,
+              "sinceActionMs": 399.805908203125
+            }
+          ]
+        },
+        {
+          "sample": 2,
+          "resolvedActionAt": 1795372790465,
+          "actionObserver": "member DOM click",
+          "listObservedAt": 1795372790562,
+          "decodedAt": 1795372791144,
+          "listMs": 97,
+          "decodedAudioMs": 679,
+          "connectionMs": 498,
+          "tokenFetchMs": 58,
+          "phasesMsAfterAction": {
+            "permissionResolved": 3,
+            "tokenFetchStarted": 7,
+            "tokenFetched": 65,
+            "tokenCommitted": 66,
+            "firstAudioContextStart": 90,
+            "firstAudioContextCreated": 146,
+            "e2eeWorkerCreated": 396,
+            "mainKeyImportReady": 406,
+            "peerConnectionConstructorStart": 413,
+            "peerConnectionCreated": 415,
+            "initialOfferReady": 431,
+            "signalingSocketOpen": 442,
+            "firstIceCandidate": 457,
+            "iceConnected": 495,
+            "peerConnectionConnected": 498,
+            "keyAdmissionAcknowledged": 512,
+            "microphoneCaptureStarted": 524,
+            "microphoneCaptureReady": 534,
+            "localEncoderTransformConfigured": 570,
+            "microphonePublished": null,
+            "remoteMicrophoneSubscribed": null,
+            "decodedPcm": 679
+          },
+          "synchronousPeerConnectionConstructorMs": 2,
+          "synchronousFirstAudioContextConstructorMs": 56,
+          "preActionActivity": null,
+          "capabilityQueriesAfterInstrumentation": [],
+          "longTasks": [
+            {
+              "at": 1795372790531.5,
+              "durationMs": 81,
+              "sinceActionMs": 66.5
+            }
+          ],
+          "assetRequests": [
+            {
+              "asset": "livekitScreenShareUpdate-Z-7PUcRT.js",
+              "startAt": 1795372790548.617,
+              "responseEndAt": 1795372790550.045,
+              "durationMs": 1.428,
+              "sinceActionMs": 83.616943359375
+            },
+            {
+              "asset": "VoiceProvider-SkS8eLtx.js",
+              "startAt": 1795372790548.431,
+              "responseEndAt": 1795372790549.9329,
+              "durationMs": 1.502,
+              "sinceActionMs": 83.430908203125
+            },
+            {
+              "asset": "livekit-client.e2ee.worker-DvT-EaAv.js",
+              "startAt": 1795372790861.4048,
+              "responseEndAt": 1795372790876.6978,
+              "durationMs": 15.293,
+              "sinceActionMs": 396.40478515625
+            }
+          ]
+        },
+        {
+          "sample": 3,
+          "resolvedActionAt": 1795372801127,
+          "actionObserver": "member DOM click",
+          "listObservedAt": 1795372801252,
+          "decodedAt": 1795372801824,
+          "listMs": 125,
+          "decodedAudioMs": 697,
+          "connectionMs": 498,
+          "tokenFetchMs": 58,
+          "phasesMsAfterAction": {
+            "permissionResolved": 3,
+            "tokenFetchStarted": 7,
+            "tokenFetched": 65,
+            "tokenCommitted": 66,
+            "firstAudioContextStart": 89,
+            "firstAudioContextCreated": 143,
+            "e2eeWorkerCreated": 398,
+            "mainKeyImportReady": 408,
+            "peerConnectionConstructorStart": 414,
+            "peerConnectionCreated": 417,
+            "initialOfferReady": 432,
+            "signalingSocketOpen": 444,
+            "firstIceCandidate": 458,
+            "iceConnected": 494,
+            "peerConnectionConnected": 498,
+            "keyAdmissionAcknowledged": 510,
+            "microphoneCaptureStarted": 517,
+            "microphoneCaptureReady": 529,
+            "localEncoderTransformConfigured": 560,
+            "microphonePublished": null,
+            "remoteMicrophoneSubscribed": null,
+            "decodedPcm": 697
+          },
+          "synchronousPeerConnectionConstructorMs": 3,
+          "synchronousFirstAudioContextConstructorMs": 54,
+          "preActionActivity": null,
+          "capabilityQueriesAfterInstrumentation": [],
+          "longTasks": [
+            {
+              "at": 1795372801193,
+              "durationMs": 78,
+              "sinceActionMs": 66
+            }
+          ],
+          "assetRequests": [
+            {
+              "asset": "livekitScreenShareUpdate-Z-7PUcRT.js",
+              "startAt": 1795372801211.208,
+              "responseEndAt": 1795372801212.496,
+              "durationMs": 1.288,
+              "sinceActionMs": 84.2080078125
+            },
+            {
+              "asset": "VoiceProvider-SkS8eLtx.js",
+              "startAt": 1795372801211.042,
+              "responseEndAt": 1795372801212.438,
+              "durationMs": 1.396,
+              "sinceActionMs": 84.0419921875
+            },
+            {
+              "asset": "livekit-client.e2ee.worker-DvT-EaAv.js",
+              "startAt": 1795372801526.1418,
+              "responseEndAt": 1795372801540.377,
+              "durationMs": 14.235,
+              "sinceActionMs": 399.141845703125
+            }
+          ]
+        }
+      ],
+      "summary": {
+        "decodedPcmMs": {
+          "n": 3,
+          "median": 679,
+          "p95": 697
+        },
+        "peerConnectionConstructorMs": {
+          "n": 3,
+          "median": 2,
+          "p95": 3
+        },
+        "workerCreatedAfterClickMs": {
+          "n": 3,
+          "median": 398,
+          "p95": 399
+        },
+        "peerConnectionCreatedAfterClickMs": {
+          "n": 3,
+          "median": 417,
+          "p95": 419
+        },
+        "peerConnectionConnectedAfterClickMs": {
+          "n": 3,
+          "median": 498,
+          "p95": 502
+        },
+        "microphonePublishedAfterClickMs": {
+          "n": 0,
+          "median": null,
+          "p95": null
+        },
+        "localEncoderTransformAfterClickMs": {
+          "n": 3,
+          "median": 560,
+          "p95": 570
+        },
+        "listMs": {
+          "n": 3,
+          "median": 110,
+          "p95": 125
+        }
+      }
+    },
+    "asynchronousVideoCapabilityAndPureModuleImport": {
+      "source": "same package; capability query then existing VoiceProvider asset import without mounting React",
+      "rawReport": "voice-phase-video-module-prepared453.json",
+      "applicationArchiveSha256": "30ed7ae6c5aa5d25aa0698138b7ae0108e5ae951dda53fc990c933a84dfc8c93",
+      "runtime": {
+        "electron": "45.3.0",
+        "chrome": "156.0.8078.96",
+        "node": "24.22.2"
+      },
+      "preparationMode": "video-and-module",
+      "preparation": [
+        {
+          "startAt": 1795373042167,
+          "completedAt": 1795373043290,
+          "durationMs": 1123,
+          "callReturnMs": 0.2000000011175871,
+          "capabilitySupported": true,
+          "moduleAsset": "VoiceProvider-SkS8eLtx.js",
+          "moduleImportMs": 5.699999999254942,
+          "maxTimerGapMs": 61.20000000111759,
+          "timerTicks": 71,
+          "captures": 0,
+          "peerConnections": 0,
+          "roomBefore": false,
+          "roomAfter": false,
+          "phases": [],
+          "longTasks": []
+        },
+        {
+          "startAt": 1795373053819,
+          "completedAt": 1795373055060,
+          "durationMs": 1241,
+          "callReturnMs": 0.19999999925494194,
+          "capabilitySupported": true,
+          "moduleAsset": "VoiceProvider-SkS8eLtx.js",
+          "moduleImportMs": 6,
+          "maxTimerGapMs": 55.19999999925494,
+          "timerTicks": 79,
+          "captures": 0,
+          "peerConnections": 0,
+          "roomBefore": false,
+          "roomAfter": false,
+          "phases": [],
+          "longTasks": []
+        },
+        {
+          "startAt": 1795373064490,
+          "completedAt": 1795373065718,
+          "durationMs": 1228,
+          "callReturnMs": 0.2000000011175871,
+          "capabilitySupported": true,
+          "moduleAsset": "VoiceProvider-SkS8eLtx.js",
+          "moduleImportMs": 6.200000001117587,
+          "maxTimerGapMs": 61.30000000074506,
+          "timerTicks": 79,
+          "captures": 0,
+          "peerConnections": 0,
+          "roomBefore": false,
+          "roomAfter": false,
+          "phases": [],
+          "longTasks": []
+        }
+      ],
+      "samples": [
+        {
+          "sample": 1,
+          "resolvedActionAt": 1795373046118,
+          "actionObserver": "member DOM click",
+          "listObservedAt": 1795373046223,
+          "decodedAt": 1795373046718,
+          "listMs": 105,
+          "decodedAudioMs": 600,
+          "connectionMs": 508,
+          "tokenFetchMs": 53,
+          "phasesMsAfterAction": {
+            "permissionResolved": 3,
+            "tokenFetchStarted": 6,
+            "tokenFetched": 59,
+            "tokenCommitted": 59,
+            "firstAudioContextStart": 88,
+            "firstAudioContextCreated": 145,
+            "e2eeWorkerCreated": 390,
+            "mainKeyImportReady": 403,
+            "peerConnectionConstructorStart": 411,
+            "peerConnectionCreated": 413,
+            "initialOfferReady": 431,
+            "signalingSocketOpen": 444,
+            "firstIceCandidate": 461,
+            "iceConnected": 504,
+            "peerConnectionConnected": 508,
+            "keyAdmissionAcknowledged": 515,
+            "microphoneCaptureStarted": 524,
+            "microphoneCaptureReady": 533,
+            "localEncoderTransformConfigured": 572,
+            "microphonePublished": null,
+            "remoteMicrophoneSubscribed": null,
+            "decodedPcm": 600
+          },
+          "synchronousPeerConnectionConstructorMs": 2,
+          "synchronousFirstAudioContextConstructorMs": 57,
+          "preActionActivity": null,
+          "capabilityQueriesAfterInstrumentation": [],
+          "longTasks": [
+            {
+              "at": 1795373046177.6,
+              "durationMs": 87,
+              "sinceActionMs": 59.60009765625
+            }
+          ],
+          "assetRequests": [
+            {
+              "asset": "livekit-client.e2ee.worker-DvT-EaAv.js",
+              "startAt": 1795373046509.242,
+              "responseEndAt": 1795373046527.092,
+              "durationMs": 17.85,
+              "sinceActionMs": 391.241943359375
+            }
+          ]
+        },
+        {
+          "sample": 2,
+          "resolvedActionAt": 1795373056771,
+          "actionObserver": "member DOM click",
+          "listObservedAt": 1795373056909,
+          "decodedAt": 1795373057500,
+          "listMs": 138,
+          "decodedAudioMs": 729,
+          "connectionMs": 515,
+          "tokenFetchMs": 59,
+          "phasesMsAfterAction": {
+            "permissionResolved": 4,
+            "tokenFetchStarted": 7,
+            "tokenFetched": 66,
+            "tokenCommitted": 66,
+            "firstAudioContextStart": 93,
+            "firstAudioContextCreated": 156,
+            "e2eeWorkerCreated": 397,
+            "mainKeyImportReady": 408,
+            "peerConnectionConstructorStart": 416,
+            "peerConnectionCreated": 418,
+            "initialOfferReady": 435,
+            "signalingSocketOpen": 448,
+            "firstIceCandidate": 465,
+            "iceConnected": 510,
+            "peerConnectionConnected": 515,
+            "keyAdmissionAcknowledged": 527,
+            "microphoneCaptureStarted": 536,
+            "microphoneCaptureReady": 548,
+            "localEncoderTransformConfigured": 586,
+            "microphonePublished": null,
+            "remoteMicrophoneSubscribed": null,
+            "decodedPcm": 729
+          },
+          "synchronousPeerConnectionConstructorMs": 2,
+          "synchronousFirstAudioContextConstructorMs": 63,
+          "preActionActivity": null,
+          "capabilityQueriesAfterInstrumentation": [],
+          "longTasks": [
+            {
+              "at": 1795373056837.7,
+              "durationMs": 90,
+              "sinceActionMs": 66.699951171875
+            }
+          ],
+          "assetRequests": [
+            {
+              "asset": "livekit-client.e2ee.worker-DvT-EaAv.js",
+              "startAt": 1795373057169.279,
+              "responseEndAt": 1795373057185.374,
+              "durationMs": 16.095,
+              "sinceActionMs": 398.279052734375
+            }
+          ]
+        },
+        {
+          "sample": 3,
+          "resolvedActionAt": 1795373067443,
+          "actionObserver": "member DOM click",
+          "listObservedAt": 1795373067544,
+          "decodedAt": 1795373068062,
+          "listMs": 101,
+          "decodedAudioMs": 619,
+          "connectionMs": 505,
+          "tokenFetchMs": 54,
+          "phasesMsAfterAction": {
+            "permissionResolved": 3,
+            "tokenFetchStarted": 6,
+            "tokenFetched": 60,
+            "tokenCommitted": 61,
+            "firstAudioContextStart": 86,
+            "firstAudioContextCreated": 144,
+            "e2eeWorkerCreated": 391,
+            "mainKeyImportReady": 403,
+            "peerConnectionConstructorStart": 411,
+            "peerConnectionCreated": 413,
+            "initialOfferReady": 430,
+            "signalingSocketOpen": 443,
+            "firstIceCandidate": 458,
+            "iceConnected": 500,
+            "peerConnectionConnected": 505,
+            "keyAdmissionAcknowledged": 514,
+            "microphoneCaptureStarted": 523,
+            "microphoneCaptureReady": 555,
+            "localEncoderTransformConfigured": 581,
+            "microphonePublished": null,
+            "remoteMicrophoneSubscribed": null,
+            "decodedPcm": 619
+          },
+          "synchronousPeerConnectionConstructorMs": 2,
+          "synchronousFirstAudioContextConstructorMs": 58,
+          "preActionActivity": null,
+          "capabilityQueriesAfterInstrumentation": [],
+          "longTasks": [
+            {
+              "at": 1795373067504.2,
+              "durationMs": 84,
+              "sinceActionMs": 61.199951171875
+            }
+          ],
+          "assetRequests": [
+            {
+              "asset": "livekit-client.e2ee.worker-DvT-EaAv.js",
+              "startAt": 1795373067834.481,
+              "responseEndAt": 1795373067851.845,
+              "durationMs": 17.364,
+              "sinceActionMs": 391.48095703125
+            }
+          ]
+        }
+      ],
+      "summary": {
+        "decodedPcmMs": {
+          "n": 3,
+          "median": 619,
+          "p95": 729
+        },
+        "peerConnectionConstructorMs": {
+          "n": 3,
+          "median": 2,
+          "p95": 2
+        },
+        "workerCreatedAfterClickMs": {
+          "n": 3,
+          "median": 391,
+          "p95": 397
+        },
+        "peerConnectionCreatedAfterClickMs": {
+          "n": 3,
+          "median": 413,
+          "p95": 418
+        },
+        "peerConnectionConnectedAfterClickMs": {
+          "n": 3,
+          "median": 508,
+          "p95": 515
+        },
+        "microphonePublishedAfterClickMs": {
+          "n": 0,
+          "median": null,
+          "p95": null
+        },
+        "localEncoderTransformAfterClickMs": {
+          "n": 3,
+          "median": 581,
+          "p95": 586
+        },
+        "listMs": {
+          "n": 3,
+          "median": 105,
+          "p95": 138
+        }
+      }
+    },
+    "inference": "Async capability query returned immediately, completed off the main thread and reduced subsequent first PC construction from about 950 ms to 2–3 ms. Module preimport had no reliable effect on the remaining pre-worker gap.",
+    "operation": "VideoEncoder.isConfigSupported({codec:'avc1.42001E',width:640,height:480,hardwareAcceleration:'prefer-hardware'})",
+    "excludedOperations": "No VideoEncoder instance/configure/frames, getUserMedia, media tracks, Room, ICE/SDP/offer or peer connection during async capability preparation."
+  },
+  "rejectedMeasurements": [
+    {
+      "rawReport": "voice-phase-baseline453.json",
+      "samples": 0,
+      "reason": "No-member precondition timed out on retained reconnect-grace presence before first click; no timings accepted. Added explicit synthetic-member cleanup and reran separately."
+    }
+  ],
+  "priorReportCorrection": "One old candidate cold-list sample of −1731 ms was invalidated; its original value retained and its independent 1949 ms audio timing kept. Old raw report preserved. Old durable report has 90 valid audio and 89 valid list samples.",
+  "limitations": [
+    "Runtime/source matrix has only three fresh-process samples per cell; sequential runs do not eliminate all host variation.",
+    "Causal preparation experiments intentionally perform setup before click and report its full duration plus main-thread LongTasks/heartbeat. They are not product-fix acceptance measurements.",
+    "Fake microphone, hidden windows, loopback, filtered external STUN/TURN and muted physical audio do not validate WAN/TURN or physical-device output latency.",
+    "The harness installs observation after launch then reloads the packaged page before UI login. A product startup query may begin during initial page load; observed later query timing must not be represented as uncached process-start timing.",
+    "The first two phase cohorts predate LongTask and Playwright asset-request collection; absent fields are null, not evidence of zero work."
+  ],
+  "gpuOnlyProductCheckpoint": {
+    "source": "actual startup GPU query/gate product build; no fixture preparation; React.lazy unchanged",
+    "rawReport": "voice-cold-gpu-only453.json",
+    "applicationArchiveSha256": "e97ed2832fb9addf5e7b02eeedde3dc005480cbde148ca953f26d28a66a35f1f",
+    "runtime": {
+      "electron": "45.3.0",
+      "chrome": "156.0.8078.96",
+      "node": "24.22.2"
+    },
+    "preparationMode": "none",
+    "preparation": [],
+    "samples": [
+      {
+        "sample": 1,
+        "resolvedActionAt": 1795373835312,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795373835423,
+        "decodedAt": 1795373835982,
+        "listMs": 111,
+        "decodedAudioMs": 670,
+        "connectionMs": 500,
+        "tokenFetchMs": 54,
+        "phasesMsAfterAction": {
+          "permissionResolved": 3,
+          "tokenFetchStarted": 6,
+          "tokenFetched": 60,
+          "tokenCommitted": 60,
+          "firstAudioContextStart": 89,
+          "firstAudioContextCreated": 143,
+          "e2eeWorkerCreated": 395,
+          "mainKeyImportReady": 407,
+          "peerConnectionConstructorStart": 414,
+          "peerConnectionCreated": 417,
+          "initialOfferReady": 433,
+          "signalingSocketOpen": 444,
+          "firstIceCandidate": 459,
+          "iceConnected": 496,
+          "peerConnectionConnected": 500,
+          "keyAdmissionAcknowledged": 512,
+          "microphoneCaptureStarted": 519,
+          "microphoneCaptureReady": 530,
+          "localEncoderTransformConfigured": 561,
+          "microphonePublished": null,
+          "remoteMicrophoneSubscribed": null,
+          "decodedPcm": 670
+        },
+        "synchronousPeerConnectionConstructorMs": 3,
+        "synchronousFirstAudioContextConstructorMs": 54,
+        "preActionActivity": {
+          "captureRequests": 0,
+          "peerConnectionsCreated": 0,
+          "roomExposed": false
+        },
+        "capabilityQueriesAfterInstrumentation": [
+          {
+            "startedAt": 1795373828272,
+            "callReturnMs": 0,
+            "completedAt": 1795373829169,
+            "durationMs": 897,
+            "supported": true
+          }
+        ],
+        "longTasks": [
+          {
+            "at": 1795373835372.9,
+            "durationMs": 83,
+            "sinceActionMs": 60.89990234375
+          }
+        ],
+        "assetRequests": [
+          {
+            "asset": "livekitScreenShareUpdate-BI0Oanti.js",
+            "startAt": 1795373835395.935,
+            "responseEndAt": 1795373835397.341,
+            "durationMs": 1.406,
+            "sinceActionMs": 83.93505859375
+          },
+          {
+            "asset": "VoiceProvider-BUT3iRVE.js",
+            "startAt": 1795373835395.745,
+            "responseEndAt": 1795373835397.239,
+            "durationMs": 1.494,
+            "sinceActionMs": 83.7451171875
+          },
+          {
+            "asset": "livekit-client.e2ee.worker-DvT-EaAv.js",
+            "startAt": 1795373835707.619,
+            "responseEndAt": 1795373835725.0989,
+            "durationMs": 17.48,
+            "sinceActionMs": 395.618896484375
+          }
+        ]
+      },
+      {
+        "sample": 2,
+        "resolvedActionAt": 1795373844958,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795373845063,
+        "decodedAt": 1795373845592,
+        "listMs": 105,
+        "decodedAudioMs": 634,
+        "connectionMs": 498,
+        "tokenFetchMs": 62,
+        "phasesMsAfterAction": {
+          "permissionResolved": 3,
+          "tokenFetchStarted": 6,
+          "tokenFetched": 68,
+          "tokenCommitted": 69,
+          "firstAudioContextStart": 90,
+          "firstAudioContextCreated": 147,
+          "e2eeWorkerCreated": 388,
+          "mainKeyImportReady": 402,
+          "peerConnectionConstructorStart": 410,
+          "peerConnectionCreated": 412,
+          "initialOfferReady": 428,
+          "signalingSocketOpen": 439,
+          "firstIceCandidate": 456,
+          "iceConnected": 493,
+          "peerConnectionConnected": 498,
+          "keyAdmissionAcknowledged": 510,
+          "microphoneCaptureStarted": 519,
+          "microphoneCaptureReady": 533,
+          "localEncoderTransformConfigured": 569,
+          "microphonePublished": null,
+          "remoteMicrophoneSubscribed": null,
+          "decodedPcm": 634
+        },
+        "synchronousPeerConnectionConstructorMs": 2,
+        "synchronousFirstAudioContextConstructorMs": 57,
+        "preActionActivity": {
+          "captureRequests": 0,
+          "peerConnectionsCreated": 0,
+          "roomExposed": false
+        },
+        "capabilityQueriesAfterInstrumentation": [
+          {
+            "startedAt": 1795373838919,
+            "callReturnMs": 0,
+            "completedAt": 1795373839893,
+            "durationMs": 974,
+            "supported": true
+          }
+        ],
+        "longTasks": [
+          {
+            "at": 1795373845027.4001,
+            "durationMs": 78,
+            "sinceActionMs": 69.400146484375
+          }
+        ],
+        "assetRequests": [
+          {
+            "asset": "livekitScreenShareUpdate-BI0Oanti.js",
+            "startAt": 1795373845042.917,
+            "responseEndAt": 1795373845044.132,
+            "durationMs": 1.215,
+            "sinceActionMs": 84.9169921875
+          },
+          {
+            "asset": "VoiceProvider-BUT3iRVE.js",
+            "startAt": 1795373845042.759,
+            "responseEndAt": 1795373845044.068,
+            "durationMs": 1.309,
+            "sinceActionMs": 84.759033203125
+          },
+          {
+            "asset": "livekit-client.e2ee.worker-DvT-EaAv.js",
+            "startAt": 1795373845347.211,
+            "responseEndAt": 1795373845366.093,
+            "durationMs": 18.882,
+            "sinceActionMs": 389.2109375
+          }
+        ]
+      },
+      {
+        "sample": 3,
+        "resolvedActionAt": 1795373854617,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795373854744,
+        "decodedAt": 1795373855273,
+        "listMs": 127,
+        "decodedAudioMs": 656,
+        "connectionMs": 516,
+        "tokenFetchMs": 59,
+        "phasesMsAfterAction": {
+          "permissionResolved": 4,
+          "tokenFetchStarted": 8,
+          "tokenFetched": 67,
+          "tokenCommitted": 67,
+          "firstAudioContextStart": 94,
+          "firstAudioContextCreated": 159,
+          "e2eeWorkerCreated": 399,
+          "mainKeyImportReady": 412,
+          "peerConnectionConstructorStart": 420,
+          "peerConnectionCreated": 422,
+          "initialOfferReady": 439,
+          "signalingSocketOpen": 452,
+          "firstIceCandidate": 469,
+          "iceConnected": 511,
+          "peerConnectionConnected": 516,
+          "keyAdmissionAcknowledged": 528,
+          "microphoneCaptureStarted": 537,
+          "microphoneCaptureReady": 552,
+          "localEncoderTransformConfigured": 591,
+          "microphonePublished": null,
+          "remoteMicrophoneSubscribed": null,
+          "decodedPcm": 656
+        },
+        "synchronousPeerConnectionConstructorMs": 2,
+        "synchronousFirstAudioContextConstructorMs": 65,
+        "preActionActivity": {
+          "captureRequests": 0,
+          "peerConnectionsCreated": 0,
+          "roomExposed": false
+        },
+        "capabilityQueriesAfterInstrumentation": [
+          {
+            "startedAt": 1795373848593,
+            "callReturnMs": 0.10000000149011612,
+            "completedAt": 1795373849781,
+            "durationMs": 1188,
+            "supported": true
+          }
+        ],
+        "longTasks": [
+          {
+            "at": 1795373854684.8,
+            "durationMs": 92,
+            "sinceActionMs": 67.800048828125
+          }
+        ],
+        "assetRequests": [
+          {
+            "asset": "livekitScreenShareUpdate-BI0Oanti.js",
+            "startAt": 1795373854704.0269,
+            "responseEndAt": 1795373854705.5479,
+            "durationMs": 1.521,
+            "sinceActionMs": 87.02685546875
+          },
+          {
+            "asset": "VoiceProvider-BUT3iRVE.js",
+            "startAt": 1795373854703.623,
+            "responseEndAt": 1795373854705.559,
+            "durationMs": 1.936,
+            "sinceActionMs": 86.623046875
+          },
+          {
+            "asset": "livekit-client.e2ee.worker-DvT-EaAv.js",
+            "startAt": 1795373855016.764,
+            "responseEndAt": 1795373855034.863,
+            "durationMs": 18.099,
+            "sinceActionMs": 399.763916015625
+          }
+        ]
+      }
+    ],
+    "summary": {
+      "decodedPcmMs": {
+        "n": 3,
+        "median": 656,
+        "p95": 670
+      },
+      "peerConnectionConstructorMs": {
+        "n": 3,
+        "median": 2,
+        "p95": 3
+      },
+      "workerCreatedAfterClickMs": {
+        "n": 3,
+        "median": 395,
+        "p95": 399
+      },
+      "peerConnectionCreatedAfterClickMs": {
+        "n": 3,
+        "median": 417,
+        "p95": 422
+      },
+      "peerConnectionConnectedAfterClickMs": {
+        "n": 3,
+        "median": 500,
+        "p95": 516
+      },
+      "microphonePublishedAfterClickMs": {
+        "n": 0,
+        "median": null,
+        "p95": null
+      },
+      "localEncoderTransformAfterClickMs": {
+        "n": 3,
+        "median": 569,
+        "p95": 591
+      },
+      "listMs": {
+        "n": 3,
+        "median": 111,
+        "p95": 127
+      }
+    }
+  },
+  "finalProduct": {
+    "source": "isolated final GPU preparation/gate plus deferred VoiceProvider loader product build; no fixture preparation or module preload flags",
+    "rawReport": "voice-cold-fixed453.json",
+    "applicationArchiveSha256": "4c68b8021ee556cc787f32291860cf9931dd49e3cd745977172c53d63e0fa6eb",
+    "runtime": {
+      "electron": "45.3.0",
+      "chrome": "156.0.8078.96",
+      "node": "24.22.2"
+    },
+    "preparationMode": "none",
+    "preparation": [],
+    "samples": [
+      {
+        "sample": 1,
+        "resolvedActionAt": 1795374145151,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795374145268,
+        "decodedAt": 1795374145607,
+        "listMs": 117,
+        "decodedAudioMs": 456,
+        "connectionMs": 300,
+        "tokenFetchMs": 66,
+        "phasesMsAfterAction": {
+          "permissionResolved": 3,
+          "tokenFetchStarted": 7,
+          "tokenFetched": 73,
+          "tokenCommitted": 74,
+          "firstAudioContextStart": 99,
+          "firstAudioContextCreated": 158,
+          "e2eeWorkerCreated": 180,
+          "mainKeyImportReady": 193,
+          "peerConnectionConstructorStart": 201,
+          "peerConnectionCreated": 203,
+          "initialOfferReady": 221,
+          "signalingSocketOpen": 235,
+          "firstIceCandidate": 252,
+          "iceConnected": 294,
+          "peerConnectionConnected": 300,
+          "keyAdmissionAcknowledged": 311,
+          "microphoneCaptureStarted": 320,
+          "microphoneCaptureReady": 334,
+          "localEncoderTransformConfigured": 375,
+          "microphonePublished": 425,
+          "remoteMicrophoneSubscribed": 389,
+          "decodedPcm": 456
+        },
+        "synchronousPeerConnectionConstructorMs": 3,
+        "synchronousFirstAudioContextConstructorMs": 59,
+        "preActionActivity": {
+          "captureRequests": 0,
+          "peerConnectionsCreated": 0,
+          "roomExposed": false
+        },
+        "capabilityQueriesAfterInstrumentation": [
+          {
+            "startedAt": 1795374138106,
+            "callReturnMs": 0.09999999962747097,
+            "completedAt": 1795374139136,
+            "durationMs": 1030,
+            "supported": true
+          }
+        ],
+        "longTasks": [
+          {
+            "at": 1795374145225.0999,
+            "durationMs": 85,
+            "sinceActionMs": 74.099853515625
+          }
+        ],
+        "assetRequests": [
+          {
+            "asset": "livekitScreenShareUpdate-D_ovBicd.js",
+            "startAt": 1795374145249.447,
+            "responseEndAt": 1795374145252.716,
+            "durationMs": 3.269,
+            "sinceActionMs": 98.447021484375
+          },
+          {
+            "asset": "VoiceProvider-DmtYZXrH.js",
+            "startAt": 1795374145249.22,
+            "responseEndAt": 1795374145252.63,
+            "durationMs": 3.41,
+            "sinceActionMs": 98.219970703125
+          },
+          {
+            "asset": "livekit-client.e2ee.worker-DvT-EaAv.js",
+            "startAt": 1795374145331.501,
+            "responseEndAt": 1795374145346.748,
+            "durationMs": 15.247,
+            "sinceActionMs": 180.5009765625
+          }
+        ]
+      },
+      {
+        "sample": 2,
+        "resolvedActionAt": 1795374154921,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795374155028,
+        "decodedAt": 1795374155349,
+        "listMs": 107,
+        "decodedAudioMs": 428,
+        "connectionMs": 313,
+        "tokenFetchMs": 57,
+        "phasesMsAfterAction": {
+          "permissionResolved": 3,
+          "tokenFetchStarted": 7,
+          "tokenFetched": 64,
+          "tokenCommitted": 65,
+          "firstAudioContextStart": 93,
+          "firstAudioContextCreated": 156,
+          "e2eeWorkerCreated": 182,
+          "mainKeyImportReady": 198,
+          "peerConnectionConstructorStart": 206,
+          "peerConnectionCreated": 209,
+          "initialOfferReady": 229,
+          "signalingSocketOpen": 242,
+          "firstIceCandidate": 260,
+          "iceConnected": 308,
+          "peerConnectionConnected": 313,
+          "keyAdmissionAcknowledged": 320,
+          "microphoneCaptureStarted": 329,
+          "microphoneCaptureReady": 366,
+          "localEncoderTransformConfigured": 395,
+          "microphonePublished": 445,
+          "remoteMicrophoneSubscribed": 347,
+          "decodedPcm": 428
+        },
+        "synchronousPeerConnectionConstructorMs": 3,
+        "synchronousFirstAudioContextConstructorMs": 63,
+        "preActionActivity": {
+          "captureRequests": 0,
+          "peerConnectionsCreated": 0,
+          "roomExposed": false
+        },
+        "capabilityQueriesAfterInstrumentation": [
+          {
+            "startedAt": 1795374148884,
+            "callReturnMs": 0.09999999962747097,
+            "completedAt": 1795374149931,
+            "durationMs": 1047,
+            "supported": true
+          }
+        ],
+        "longTasks": [
+          {
+            "at": 1795374154986.5,
+            "durationMs": 91,
+            "sinceActionMs": 65.5
+          }
+        ],
+        "assetRequests": [
+          {
+            "asset": "livekitScreenShareUpdate-D_ovBicd.js",
+            "startAt": 1795374155012.481,
+            "responseEndAt": 1795374155016.375,
+            "durationMs": 3.894,
+            "sinceActionMs": 91.48095703125
+          },
+          {
+            "asset": "VoiceProvider-DmtYZXrH.js",
+            "startAt": 1795374155012.258,
+            "responseEndAt": 1795374155016.1812,
+            "durationMs": 3.923,
+            "sinceActionMs": 91.258056640625
+          },
+          {
+            "asset": "livekit-client.e2ee.worker-DvT-EaAv.js",
+            "startAt": 1795374155103.852,
+            "responseEndAt": 1795374155121.56,
+            "durationMs": 17.708,
+            "sinceActionMs": 182.85205078125
+          }
+        ]
+      },
+      {
+        "sample": 3,
+        "resolvedActionAt": 1795374164608,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795374164708,
+        "decodedAt": 1795374165052,
+        "listMs": 100,
+        "decodedAudioMs": 444,
+        "connectionMs": 291,
+        "tokenFetchMs": 55,
+        "phasesMsAfterAction": {
+          "permissionResolved": 4,
+          "tokenFetchStarted": 8,
+          "tokenFetched": 63,
+          "tokenCommitted": 63,
+          "firstAudioContextStart": 92,
+          "firstAudioContextCreated": 150,
+          "e2eeWorkerCreated": 172,
+          "mainKeyImportReady": 186,
+          "peerConnectionConstructorStart": 194,
+          "peerConnectionCreated": 196,
+          "initialOfferReady": 213,
+          "signalingSocketOpen": 225,
+          "firstIceCandidate": 241,
+          "iceConnected": 285,
+          "peerConnectionConnected": 291,
+          "keyAdmissionAcknowledged": 302,
+          "microphoneCaptureStarted": 310,
+          "microphoneCaptureReady": 326,
+          "localEncoderTransformConfigured": 374,
+          "microphonePublished": 428,
+          "remoteMicrophoneSubscribed": 391,
+          "decodedPcm": 444
+        },
+        "synchronousPeerConnectionConstructorMs": 2,
+        "synchronousFirstAudioContextConstructorMs": 58,
+        "preActionActivity": {
+          "captureRequests": 0,
+          "peerConnectionsCreated": 0,
+          "roomExposed": false
+        },
+        "capabilityQueriesAfterInstrumentation": [
+          {
+            "startedAt": 1795374158575,
+            "callReturnMs": 0,
+            "completedAt": 1795374159653,
+            "durationMs": 1078,
+            "supported": true
+          }
+        ],
+        "longTasks": [
+          {
+            "at": 1795374164671.7,
+            "durationMs": 88,
+            "sinceActionMs": 63.699951171875
+          }
+        ],
+        "assetRequests": [
+          {
+            "asset": "livekitScreenShareUpdate-D_ovBicd.js",
+            "startAt": 1795374164698.511,
+            "responseEndAt": 1795374164701.497,
+            "durationMs": 2.986,
+            "sinceActionMs": 90.510986328125
+          },
+          {
+            "asset": "VoiceProvider-DmtYZXrH.js",
+            "startAt": 1795374164698.3281,
+            "responseEndAt": 1795374164701.384,
+            "durationMs": 3.056,
+            "sinceActionMs": 90.328125
+          },
+          {
+            "asset": "livekit-client.e2ee.worker-DvT-EaAv.js",
+            "startAt": 1795374164780.463,
+            "responseEndAt": 1795374164795.2998,
+            "durationMs": 14.837,
+            "sinceActionMs": 172.462890625
+          }
+        ]
+      },
+      {
+        "sample": 4,
+        "resolvedActionAt": 1795374174317,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795374174428,
+        "decodedAt": 1795374174773,
+        "listMs": 111,
+        "decodedAudioMs": 456,
+        "connectionMs": 304,
+        "tokenFetchMs": 59,
+        "phasesMsAfterAction": {
+          "permissionResolved": 4,
+          "tokenFetchStarted": 9,
+          "tokenFetched": 68,
+          "tokenCommitted": 68,
+          "firstAudioContextStart": 94,
+          "firstAudioContextCreated": 152,
+          "e2eeWorkerCreated": 175,
+          "mainKeyImportReady": 189,
+          "peerConnectionConstructorStart": 196,
+          "peerConnectionCreated": 199,
+          "initialOfferReady": 217,
+          "signalingSocketOpen": 230,
+          "firstIceCandidate": 247,
+          "iceConnected": 299,
+          "peerConnectionConnected": 304,
+          "keyAdmissionAcknowledged": 315,
+          "microphoneCaptureStarted": 325,
+          "microphoneCaptureReady": 340,
+          "localEncoderTransformConfigured": 380,
+          "microphonePublished": 428,
+          "remoteMicrophoneSubscribed": 393,
+          "decodedPcm": 457
+        },
+        "synchronousPeerConnectionConstructorMs": 3,
+        "synchronousFirstAudioContextConstructorMs": 58,
+        "preActionActivity": {
+          "captureRequests": 0,
+          "peerConnectionsCreated": 0,
+          "roomExposed": false
+        },
+        "capabilityQueriesAfterInstrumentation": [
+          {
+            "startedAt": 1795374168264,
+            "callReturnMs": 0,
+            "completedAt": 1795374169323,
+            "durationMs": 1059,
+            "supported": true
+          }
+        ],
+        "longTasks": [
+          {
+            "at": 1795374174385.9,
+            "durationMs": 84,
+            "sinceActionMs": 68.89990234375
+          }
+        ],
+        "assetRequests": [
+          {
+            "asset": "livekitScreenShareUpdate-D_ovBicd.js",
+            "startAt": 1795374174409.936,
+            "responseEndAt": 1795374174413.3582,
+            "durationMs": 3.422,
+            "sinceActionMs": 92.93603515625
+          },
+          {
+            "asset": "VoiceProvider-DmtYZXrH.js",
+            "startAt": 1795374174409.7441,
+            "responseEndAt": 1795374174413.2031,
+            "durationMs": 3.459,
+            "sinceActionMs": 92.744140625
+          },
+          {
+            "asset": "livekit-client.e2ee.worker-DvT-EaAv.js",
+            "startAt": 1795374174492.5352,
+            "responseEndAt": 1795374174508.113,
+            "durationMs": 15.578,
+            "sinceActionMs": 175.53515625
+          }
+        ]
+      },
+      {
+        "sample": 5,
+        "resolvedActionAt": 1795374184043,
+        "actionObserver": "member DOM click",
+        "listObservedAt": 1795374184151,
+        "decodedAt": 1795374184514,
+        "listMs": 108,
+        "decodedAudioMs": 471,
+        "connectionMs": 301,
+        "tokenFetchMs": 65,
+        "phasesMsAfterAction": {
+          "permissionResolved": 4,
+          "tokenFetchStarted": 8,
+          "tokenFetched": 73,
+          "tokenCommitted": 73,
+          "firstAudioContextStart": 99,
+          "firstAudioContextCreated": 158,
+          "e2eeWorkerCreated": 180,
+          "mainKeyImportReady": 194,
+          "peerConnectionConstructorStart": 201,
+          "peerConnectionCreated": 203,
+          "initialOfferReady": 222,
+          "signalingSocketOpen": 236,
+          "firstIceCandidate": 254,
+          "iceConnected": 296,
+          "peerConnectionConnected": 301,
+          "keyAdmissionAcknowledged": 311,
+          "microphoneCaptureStarted": 320,
+          "microphoneCaptureReady": 334,
+          "localEncoderTransformConfigured": 371,
+          "microphonePublished": 418,
+          "remoteMicrophoneSubscribed": 416,
+          "decodedPcm": 471
+        },
+        "synchronousPeerConnectionConstructorMs": 2,
+        "synchronousFirstAudioContextConstructorMs": 59,
+        "preActionActivity": {
+          "captureRequests": 0,
+          "peerConnectionsCreated": 0,
+          "roomExposed": false
+        },
+        "capabilityQueriesAfterInstrumentation": [
+          {
+            "startedAt": 1795374178011,
+            "callReturnMs": 0,
+            "completedAt": 1795374179032,
+            "durationMs": 1021,
+            "supported": true
+          }
+        ],
+        "longTasks": [
+          {
+            "at": 1795374184116.6,
+            "durationMs": 86,
+            "sinceActionMs": 73.60009765625
+          }
+        ],
+        "assetRequests": [
+          {
+            "asset": "livekitScreenShareUpdate-D_ovBicd.js",
+            "startAt": 1795374184141.368,
+            "responseEndAt": 1795374184144.5898,
+            "durationMs": 3.222,
+            "sinceActionMs": 98.367919921875
+          },
+          {
+            "asset": "VoiceProvider-DmtYZXrH.js",
+            "startAt": 1795374184141.1418,
+            "responseEndAt": 1795374184144.4739,
+            "durationMs": 3.332,
+            "sinceActionMs": 98.141845703125
+          },
+          {
+            "asset": "livekit-client.e2ee.worker-DvT-EaAv.js",
+            "startAt": 1795374184223.686,
+            "responseEndAt": 1795374184239.7021,
+            "durationMs": 16.016,
+            "sinceActionMs": 180.68603515625
+          }
+        ]
+      }
+    ],
+    "summary": {
+      "decodedPcmMs": {
+        "n": 5,
+        "median": 456,
+        "p95": 471
+      },
+      "peerConnectionConstructorMs": {
+        "n": 5,
+        "median": 3,
+        "p95": 3
+      },
+      "workerCreatedAfterClickMs": {
+        "n": 5,
+        "median": 180,
+        "p95": 182
+      },
+      "peerConnectionCreatedAfterClickMs": {
+        "n": 5,
+        "median": 203,
+        "p95": 209
+      },
+      "peerConnectionConnectedAfterClickMs": {
+        "n": 5,
+        "median": 301,
+        "p95": 313
+      },
+      "microphonePublishedAfterClickMs": {
+        "n": 5,
+        "median": 428,
+        "p95": 445
+      },
+      "localEncoderTransformAfterClickMs": {
+        "n": 5,
+        "median": 375,
+        "p95": 395
+      },
+      "listMs": {
+        "n": 5,
+        "median": 108,
+        "p95": 117
+      }
+    }
+  },
+  "sameFixtureComparison": {
+    "oldInstalledSourceElectron451": {
+      "n": 3,
+      "median": 1622,
+      "p95": 1686
+    },
+    "priorCandidateSourceElectron453": {
+      "n": 3,
+      "median": 1608,
+      "p95": 1635
+    },
+    "gpuOnlyProductCheckpoint": {
+      "n": 3,
+      "median": 656,
+      "p95": 670
+    },
+    "finalProduct": {
+      "n": 5,
+      "median": 456,
+      "p95": 471
+    },
+    "finalValuesMs": [
+      456,
+      428,
+      444,
+      456,
+      471
+    ],
+    "observedWorkerReductionMs": 215,
+    "loaderInterpretation": "Observed Worker creation median fell by 215 ms between GPU-only and final loader builds. This is an observed checkpoint difference, not a claim that exactly 300 ms of every join was removed."
+  },
+  "finalFunctional": {
+    "rawReport": "voice-cold-fixed453-default-noise.json",
+    "applicationArchiveSha256": "4c68b8021ee556cc787f32291860cf9931dd49e3cd745977172c53d63e0fa6eb",
+    "conditions": {
+      "noiseReduction": true,
+      "microphoneProfile": "speech",
+      "input": "looped active speech segment 10.3–11.3 seconds; no long source silence"
+    },
+    "preparationMode": "none",
+    "firstJoinSampleCount": 1,
+    "firstJoin": {
+      "sample": 1,
+      "resolvedActionAt": 1795374241435,
+      "actionObserver": "member DOM click",
+      "listObservedAt": 1795374241542,
+      "decodedAt": 1795374241864,
+      "listMs": 107,
+      "decodedAudioMs": 429,
+      "connectionMs": 263,
+      "tokenFetchMs": 63,
+      "phasesMsAfterAction": {
+        "permissionResolved": 3,
+        "tokenFetchStarted": 6,
+        "tokenFetched": 69,
+        "tokenCommitted": 69,
+        "firstAudioContextStart": 90,
+        "firstAudioContextCreated": 143,
+        "e2eeWorkerCreated": 160,
+        "mainKeyImportReady": 172,
+        "peerConnectionConstructorStart": 178,
+        "peerConnectionCreated": 180,
+        "initialOfferReady": 195,
+        "signalingSocketOpen": 205,
+        "firstIceCandidate": 218,
+        "iceConnected": 259,
+        "peerConnectionConnected": 263,
+        "keyAdmissionAcknowledged": 272,
+        "microphoneCaptureStarted": 278,
+        "microphoneCaptureReady": 289,
+        "localEncoderTransformConfigured": 333,
+        "microphonePublished": 377,
+        "remoteMicrophoneSubscribed": 376,
+        "decodedPcm": 429
+      },
+      "synchronousPeerConnectionConstructorMs": 2,
+      "synchronousFirstAudioContextConstructorMs": 53,
+      "preActionActivity": {
+        "captureRequests": 0,
+        "peerConnectionsCreated": 0,
+        "roomExposed": false
+      },
+      "capabilityQueriesAfterInstrumentation": [
+        {
+          "startedAt": 1795374234394,
+          "callReturnMs": 0.10000000149011612,
+          "completedAt": 1795374235474,
+          "durationMs": 1080,
+          "supported": true
+        }
+      ],
+      "longTasks": [
+        {
+          "at": 1795374241504.7,
+          "durationMs": 74,
+          "sinceActionMs": 69.699951171875
+        }
+      ],
+      "assetRequests": [
+        {
+          "asset": "livekitScreenShareUpdate-D_ovBicd.js",
+          "startAt": 1795374241524.81,
+          "responseEndAt": 1795374241527.591,
+          "durationMs": 2.781,
+          "sinceActionMs": 89.81005859375
+        },
+        {
+          "asset": "VoiceProvider-DmtYZXrH.js",
+          "startAt": 1795374241524.611,
+          "responseEndAt": 1795374241527.5032,
+          "durationMs": 2.892,
+          "sinceActionMs": 89.611083984375
+        },
+        {
+          "asset": "livekit-client.e2ee.worker-DvT-EaAv.js",
+          "startAt": 1795374241597.02,
+          "responseEndAt": 1795374241609.029,
+          "durationMs": 12.009,
+          "sinceActionMs": 162.02001953125
+        },
+        {
+          "asset": "workletEngine-fiHaOsWh.js",
+          "startAt": 1795374241755.1438,
+          "responseEndAt": 1795374241756.004,
+          "durationMs": 0.86,
+          "sinceActionMs": 320.143798828125
+        },
+        {
+          "asset": "rnnoise_simd.wasm",
+          "startAt": 1795374241757.225,
+          "responseEndAt": 1795374241758.2551,
+          "durationMs": 1.03,
+          "sinceActionMs": 322.22509765625
+        }
+      ]
+    },
+    "pipeline": {
+      "requestedEngine": "rnnoise",
+      "activeEngine": "rnnoise",
+      "phase": "ready",
+      "sampleRate": 48000,
+      "gateAvailable": true,
+      "gateEnabled": true,
+      "gainAvailable": true,
+      "inputDb": -10.473397865153151,
+      "outputDb": -13.297809358576174,
+      "gateOpen": true
+    },
+    "joinDecodedPcmPeakRms": 0.11666222306216863,
+    "defaultNoiseWarmProcessAdminMove": {
+      "n": 1,
+      "decodedPcmMs": 316,
+      "resolvedActionAt": 1795374251683,
+      "decodedAt": 1795374251999,
+      "listObservedAt": 1795374251703,
+      "listMs": 20
+    },
+    "positiveCueControl": {
+      "kind": "actual product Join preview in stable non-deafened room",
+      "cues": [
+        {
+          "sincePreparationMs": 1999,
+          "duration": 0.8629375,
+          "asset": "join-B_xQuNtw.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.22735296816881612,
+          "gainAfterAudioQuantum": 1,
+          "samples": 24
+        }
+      ],
+      "passed": true
+    },
+    "deafenedMove": {
+      "deafenPreserved": true,
+      "microphonePublicationAbsent": true,
+      "remoteSpeechUnsubscribed": true,
+      "remotePcmPeakRms": 0,
+      "audibleJoinCueCount": 1,
+      "cues": [
+        {
+          "sincePreparationMs": 69,
+          "duration": 1.6065208333333334,
+          "asset": "leave-DCg-ybOa.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.1881750098863665,
+          "gainAfterAudioQuantum": 1,
+          "samples": 43,
+          "sinceActionMs": -7910
+        },
+        {
+          "sincePreparationMs": 8040,
+          "duration": 0.8629375,
+          "asset": "join-B_xQuNtw.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.21250752259522318,
+          "gainAfterAudioQuantum": 1,
+          "samples": 23,
+          "sinceActionMs": 61
+        }
+      ],
+      "actionAt": 1795374276700
+    },
+    "cancellation": {
+      "upstreamCancelledBeforeRelease": true,
+      "selfJoinChannels": [
+        "bench-alpha"
+      ],
+      "latestTargetVisible": "Voice Connected\n1 ms\nWindows Voice Benchmark / bench-alpha\nReturn to call ↗\nNoise Reduction"
+    }
+  },
+  "implementationVerification": {
+    "sourceBase": "bae67629f06cdfc5c3a4ce4af5c565b14aa1599f",
+    "branch": "fix/windows-voice-cold-20261122",
+    "workspace": "windows-voice-cold-20261122",
+    "sourceIsolation": "Owned voice changes transferred to a separate worktree; unrelated concurrent screen-sharing edits were excluded and left intact. Independent review passed.",
+    "changes": [
+      "Windows Electron queries hardware encoder capabilities asynchronously during application startup, without capture, encoder allocation, peer connection or room creation. Readiness gates encrypted voice admission, with a two-second fallback; encryption preparation continues in parallel.",
+      "A cached dynamic-import loader replaces voice-specific React.lazy/Suspense wrappers in all three AppLayout branches. It preserves active-session loading, stable provider identity, obsolete-mount retirement and existing error-boundary retries.",
+      "Earlier request cancellation, server activity queue and deafened channel-cue fixes remain included."
+    ],
+    "fullClientSuite": {
+      "checkpoint": "GPU preparation and admission gate before the subsequent deferred-loader change",
+      "filesPassed": 513,
+      "testsPassed": 5651,
+      "testsSkipped": 1,
+      "durationSeconds": 427.76,
+      "exitCode": 0,
+      "log": "e2e/.tmp/final-cold-client-vitest.log"
+    },
+    "finalLoaderFocusedTests": {
+      "filesPassed": 4,
+      "testsPassed": 21,
+      "scope": "Deferred loader lifecycle/cache/error recovery, App route guards, ShellV2 layouts and VoiceProvider encryption wiring"
+    },
+    "electronSuite": {
+      "testsPassed": 418,
+      "testsSkipped": 1,
+      "skipReason": "Host does not support symlink creation"
+    },
+    "staticAndBuildChecks": [
+      "Client and Electron typechecks passed",
+      "Focused ESLint passed",
+      "Production build passed",
+      "git diff --check passed",
+      "Benchmark script node --check passed"
+    ],
+    "windowsTestPackage": {
+      "path": "release/voice-responsive-cold-fast/hichat-voice-responsive-cold-fast-test-2.11.130-win-x64.zip",
+      "bytes": 201744661,
+      "sha256": "d3824b0829b700c824a587711d7e6f725489943c94f37e52f20d25b41193c603",
+      "asarSha256": "4c68b8021ee556cc787f32291860cf9931dd49e3cd745977172c53d63e0fa6eb",
+      "verification": "131 ZIP entries pass CRC; embedded ASAR matches measured unpacked app. 307 compiled files, native executables and required dependencies verified. Root independently verified ZIP and ASAR SHA256.",
+      "manifest": "release/voice-responsive-cold-fast/test-build-report.json",
+      "applicationVersion": "2.11.130",
+      "electronVersion": "45.3.0",
+      "testOnly": true,
+      "installedOrPublished": false
+    },
+    "packagedCancellation": "Final package passed all four checks; upstream closed 2 ms and 1 ms after renderer abort for headers/body cases, private cancellation headers stripped, cancelled-before-dispatch request did not reach upstream.",
+    "cleanup": "Owned a003 Go fixture stopped after completed measurements, wrapper exited and owner.json removed. Only the two disposable PostgreSQL/LiveKit containers created for this follow-up were stopped, verified exited and removed. Raw local measurement reports preserved."
+  }
+}

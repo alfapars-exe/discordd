@@ -88,6 +88,8 @@ interface ElectronCrashRecord {
 }
 
 interface ElectronAPI {
+  reserveApiRequest?: (binding: { url: string; method: string; upstream: string }) => Promise<string>;
+  cancelApiRequest?: (id: string) => Promise<boolean>;
   getVersion: () => Promise<string>;
   relaunch: () => Promise<void>;
   /**

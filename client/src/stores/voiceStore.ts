@@ -26,7 +26,7 @@ import {
   nativeVoiceSetMic, nativeVoiceSetDeafened,
 } from "../utils/nativePlugins";
 import { ensureMicPermission } from "../utils/devicePermissions";
-import { ensureFreshToken, getAuthGeneration } from "../api/client";
+import { getAuthGeneration } from "../api/client";
 import { useServerStore } from "./serverStore";
 import { useAuthStore } from "./authStore";
 import { useToastStore } from "./toastStore";
@@ -163,6 +163,8 @@ type VoiceCoreState = {
 
 type VoiceCoreActions = {
   joinVoiceChannel: (channelId: string) => Promise<VoiceTokenResponse | null>;
+  /** Retire pending admission when the server ends this voice session. */
+  _cancelVoiceRequests: () => void;
   /** Hot-swap LiveKit token without disconnect cycle — used for auto-rejoin. */
   refreshVoiceToken: (channelId: string, reportFailure?: boolean) => Promise<VoiceTokenResponse | null>;
   leaveVoiceChannel: () => void;
@@ -192,7 +194,15 @@ export type VoiceStore =
 // Re-export so legacy direct imports still resolve
 export type { VoiceStateUpdateData };
 
-let voiceTokenRefreshIntent = 0;
+let voiceJoinRequest: AbortController | null = null;
+let voiceRefreshRequest: AbortController | null = null;
+
+function cancelVoiceTokenRequests(): void {
+  voiceJoinRequest?.abort();
+  voiceRefreshRequest?.abort();
+  voiceJoinRequest = null;
+  voiceRefreshRequest = null;
+}
 
 export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
   // ─── Slices ───
@@ -232,10 +242,26 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
   registerOnLeave: (fn) => set({ _onLeaveCallback: fn }),
   registerWsSend: (fn) => set({ _wsSend: fn }),
 
+  _cancelVoiceRequests: () => {
+    const state = get();
+    // A duplicate terminal event must not retire the already-disconnected
+    // session again: its accepted leave cue may still be decoding/playing.
+    if (!voiceJoinRequest && !voiceRefreshRequest && !state.currentVoiceChannelId && !state.pendingVoiceChannelId) return;
+    cancelVoiceTokenRequests();
+    set({ pendingVoiceChannelId: null, _joinGeneration: state._joinGeneration + 1 });
+  },
+
   joinVoiceChannel: async (channelId: string) => {
     const serverId = useServerStore.getState().activeServerId;
     if (!serverId) return null;
+    cancelVoiceTokenRequests();
+    const controller = new AbortController();
+    voiceJoinRequest = controller;
     const gen = get()._joinGeneration + 1;
+    const authGeneration = getAuthGeneration();
+    const owner = getOwnUserId();
+    const current = () => voiceJoinRequest === controller && !controller.signal.aborted
+      && get()._joinGeneration === gen && getAuthGeneration() === authGeneration && getOwnUserId() === owner;
     const startedAt = performance.now();
     set({ _joinGeneration: gen, pendingVoiceChannelId: channelId });
     try {
@@ -243,13 +269,17 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
         console.debug("[voice] microphone permission resolved", { channelId, gen, elapsedMs: performance.now() - startedAt });
         return granted;
       });
-      const [micGranted] = await Promise.all([permission, ensureFreshToken()]);
-      if (!micGranted || get()._joinGeneration !== gen) return null;
+      const micGranted = await permission;
+      if (!micGranted || !current()) return null;
 
-      const response = await voiceApi.getVoiceToken(serverId, channelId);
+      // The API client owns the shared auth refresh; cancelling this request
+      // stops its wait without cancelling refreshes needed by other requests.
+      const response = await voiceApi.getVoiceToken(serverId, channelId, {
+        timeoutMs: 15_000, signal: controller.signal, isCurrent: current,
+      });
 
       // Discard stale response if generation changed (leave/join interleaved)
-      if (get()._joinGeneration !== gen) {
+      if (!current()) {
         console.warn("[voiceStore] Stale response discarded", { expectedGen: gen, currentGen: get()._joinGeneration });
         return null;
       }
@@ -300,7 +330,7 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
         await nativeVoiceConnect(response.data.url, response.data.token, initialMuted, initialDeafened);
       }
 
-      if (get()._joinGeneration !== gen) return null;
+      if (!current()) return null;
 
       // Start native foreground service for background audio (mobile only)
       void startVoiceCallService().catch(() => {
@@ -309,40 +339,47 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
 
       return response.data;
     } catch (err) {
-      if (get()._joinGeneration !== gen) return null;
+      if (!current()) return null;
       console.error("[voiceStore] Voice join error:", err);
       useToastStore.getState().addToast("error", i18n.t("voice:voiceJoinFailed"));
       return null;
     } finally {
+      if (voiceJoinRequest === controller) voiceJoinRequest = null;
       if (get()._joinGeneration === gen) set({ pendingVoiceChannelId: null });
     }
   },
 
   refreshVoiceToken: async (channelId: string, reportFailure = false) => {
-    const request = ++voiceTokenRefreshIntent;
+    // An old room's reconnect must never replace a newer join in progress.
+    if (get().currentVoiceChannelId !== channelId || get().pendingVoiceChannelId || get().wasReplaced) return null;
+    const serverId = get().currentVoiceServerId ?? useServerStore.getState().activeServerId;
+    if (!serverId) return null;
+    voiceRefreshRequest?.abort();
+    const controller = new AbortController();
+    voiceRefreshRequest = controller;
     const joinGeneration = get()._joinGeneration;
     const authGeneration = getAuthGeneration();
     const owner = useAuthStore.getState().user?.id ?? null;
+    const current = () => voiceRefreshRequest === controller && !controller.signal.aborted
+      && !get().wasReplaced && !get().pendingVoiceChannelId && get().currentVoiceChannelId === channelId
+      && get()._joinGeneration === joinGeneration && getAuthGeneration() === authGeneration && getOwnUserId() === owner;
     try {
-      const serverId = get().currentVoiceServerId ?? useServerStore.getState().activeServerId;
-      if (!serverId) return null;
-
       console.warn("[voiceStore] refreshVoiceToken START", {
         timestamp: new Date().toISOString(),
         channelId,
         serverId,
       });
 
-      await ensureFreshToken();
-      const response = await voiceApi.getVoiceToken(serverId, channelId, reportFailure ? { timeoutMs: 15_000 } : undefined);
+      const response = await voiceApi.getVoiceToken(serverId, channelId, {
+        timeoutMs: 15_000, signal: controller.signal, isCurrent: current,
+      });
 
       // Race guard — callers (useVoiceAutoRejoin, systemEventHandlers
       // re-register) fire this around suspend/resume, so the user may have
       // left or switched channels while the token request was in flight.
       // Applying the stale credentials would re-mount LiveKitRoom for a
       // channel we're no longer in.
-      if (get().wasReplaced || get().currentVoiceChannelId !== channelId || get()._joinGeneration !== joinGeneration || request !== voiceTokenRefreshIntent
-        || getAuthGeneration() !== authGeneration || (useAuthStore.getState().user?.id ?? null) !== owner) {
+      if (!current()) {
         console.warn("[voiceStore] refreshVoiceToken STALE — channel changed during fetch", {
           requestedChannelId: channelId,
           currentVoiceChannelId: get().currentVoiceChannelId,
@@ -371,13 +408,17 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
       console.warn("[voiceStore] refreshVoiceToken SUCCESS");
       return response.data;
     } catch (err) {
+      if (!current()) return null;
       console.error("[voiceStore] refreshVoiceToken error:", err);
       if (reportFailure) throw err;
       return null;
+    } finally {
+      if (voiceRefreshRequest === controller) voiceRefreshRequest = null;
     }
   },
 
   leaveVoiceChannel: () => {
+    cancelVoiceTokenRequests();
     clearVoiceRecoveryMark();
     const _dbg = get();
     console.warn("[voiceStore] leaveVoiceChannel CALLED", {
@@ -594,6 +635,9 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
 // Same-account call/channel teardown retains the explicit device privacy state.
 function fenceQueuedUnmute(): void {
   const state = useVoiceStore.getState();
+  const joining = voiceJoinRequest !== null;
+  cancelVoiceTokenRequests();
+  if (joining) useVoiceStore.setState({ pendingVoiceChannelId: null, _joinGeneration: state._joinGeneration + 1 });
   if (!state.isDeafened) return;
   const next: VoiceMuteIntent = { isMuted: true, isDeafened: true, muteBeforeDeafen: true };
   useVoiceStore.setState(next);

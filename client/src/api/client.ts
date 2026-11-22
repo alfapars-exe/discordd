@@ -23,6 +23,7 @@ import { clearStartupCache } from "../utils/startupCache";
  */
 
 import type { APIResponse } from "../types";
+import { createDesktopRequestOwner } from "./desktopRequestCancellation";
 import { publishAuthGenerationChange } from "./authSessionEvents";
 import {
   API_BASE_URL,
@@ -419,6 +420,7 @@ export async function apiClient<T>(
   if (cancelled()) return cancellation();
 
   const lifetime = requestLifetime(timeoutMs, signal);
+  const desktopRequest = createDesktopRequestOwner(Boolean(signal) && viaSameOriginProxy(), lifetime.signal);
   try {
     const headers: Record<string, string> = withUpstreamHeader({
       ...extraHeaders,
@@ -469,7 +471,7 @@ export async function apiClient<T>(
         body instanceof FormData ? body : JSON.stringify(body);
     }
 
-    let res = await lifetime.wait(() => fetch(apiUrl(endpoint), fetchOptions));
+    let res = await lifetime.wait(() => desktopRequest.fetch(apiUrl(endpoint), fetchOptions));
 
     // 401 — attempt token refresh.
     //
@@ -491,7 +493,7 @@ export async function apiClient<T>(
       if (cancelled()) return cancellation();
       if (refreshed) {
         headers["Authorization"] = `Bearer ${getAccessToken()}`;
-        res = await lifetime.wait(() => fetch(apiUrl(endpoint), { ...fetchOptions, headers }));
+        res = await lifetime.wait(() => desktopRequest.fetch(apiUrl(endpoint), { ...fetchOptions, headers }));
         if (isDev) {
           console.warn(`[apiClient] retry after refresh: ${method} request status=${res.status}`);
         }
@@ -557,6 +559,7 @@ export async function apiClient<T>(
     // that may have reached the server could otherwise duplicate it.
     return { success: false, error: message, isNetworkError: true } as APIResponse<T>;
   } finally {
+    desktopRequest.dispose();
     lifetime.dispose();
   }
 }

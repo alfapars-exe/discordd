@@ -41,15 +41,7 @@ import ImageLightbox from "../shared/ImageLightbox";
 import DownloadPromptModal from "../shared/DownloadPromptModal";
 import WelcomeModal from "../shared/WelcomeModal";
 const SettingsModal = lazy(() => import("../settings/SettingsModal"));
-// VoiceProvider is lazy + conditionally mounted so the ~528 KiB livekit chunk
-// stays off /channels' initial load (Mayıs 28 2026 Lighthouse audit). The
-// component itself short-circuits when !isInVoice (see VoiceProvider.tsx:217),
-// so a non-voice mount would be cheap — but the *module load* still pulled in
-// `@livekit/components-react` statically. Gating on `isInVoiceActive` here
-// means the chunk is fetched only when the user actually joins a voice
-// channel; the brief Suspense fallback during that fetch is hidden behind the
-// existing "Connecting..." UX from useVoice's join flow.
-const VoiceProvider = lazy(() => import("../voice/VoiceProvider"));
+import DeferredVoiceProvider from "./DeferredVoiceProvider";
 import GroupCallProvider from "../dm/GroupCallProvider";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { useGameActivity } from "../../hooks/useGameActivity";
@@ -466,19 +458,15 @@ function AppLayout() {
     </>
   );
 
-  // VoiceProvider only mounts when the user is (or is rejoining) a voice
-  // channel. Outside of voice the lazy chunk + livekit bundle (~528 KiB) stays
-  // off the wire entirely — measured on Lighthouse 13 (Mayıs 28 2026).
-  // Suspense fallback returns the same body so the screen never blanks during
-  // the chunk fetch on first voice join; the existing "Connecting..." toast
-  // covers the perceived gap.
+  // Import and mount the voice provider only for an active session. The loader
+  // displays this same body until ready, without a Suspense retry delay.
   const isVoiceSessionActive = !!currentVoiceChannelId;
 
   // This owner is stable across desktop/mobile breakpoints and destination changes.
   // Do not put VoiceProvider inside ShellV2 or key it by the selected conversation.
   if (UI_SHELL_V2) {
     const body = <><ShellV2 sidebarProps={sidebarProps} sendTyping={sendTyping} sendDMTyping={sendDMTyping} />{overlays}</>;
-    return <>{isVoiceSessionActive ? <Suspense fallback={body}><SectionErrorBoundary section="voice"><VoiceProvider>{body}</VoiceProvider></SectionErrorBoundary></Suspense> : body}<GroupCallProvider/></>;
+    return <>{isVoiceSessionActive ? <SectionErrorBoundary section="voice"><DeferredVoiceProvider>{body}</DeferredVoiceProvider></SectionErrorBoundary> : body}<GroupCallProvider/></>;
   }
 
   // Mobile layout
@@ -495,13 +483,10 @@ function AppLayout() {
     );
 
     const mobileContent = isVoiceSessionActive ? (
-      <Suspense fallback={mobileBody}>
-        {/* Voice-stack crashes recover via inline retry instead of taking the
-            whole app down to the reload pump in the root ErrorBoundary. */}
-        <SectionErrorBoundary section="voice">
-          <VoiceProvider>{mobileBody}</VoiceProvider>
-        </SectionErrorBoundary>
-      </Suspense>
+      // Voice-stack crashes, including module-load failures, retain inline retry.
+      <SectionErrorBoundary section="voice">
+        <DeferredVoiceProvider>{mobileBody}</DeferredVoiceProvider>
+      </SectionErrorBoundary>
     ) : (
       mobileBody
     );
@@ -537,12 +522,9 @@ function AppLayout() {
       <Sidebar {...sidebarProps} />
 
       {isVoiceSessionActive ? (
-        <Suspense fallback={desktopBody}>
-          {/* Same voice-crash isolation as the mobile branch above. */}
-          <SectionErrorBoundary section="voice">
-            <VoiceProvider>{desktopBody}</VoiceProvider>
-          </SectionErrorBoundary>
-        </Suspense>
+        <SectionErrorBoundary section="voice">
+          <DeferredVoiceProvider>{desktopBody}</DeferredVoiceProvider>
+        </SectionErrorBoundary>
       ) : (
         desktopBody
       )}

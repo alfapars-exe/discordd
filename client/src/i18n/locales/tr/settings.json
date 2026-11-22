@@ -1456,7 +1456,7 @@
     "delaySeconds": "{{count}} saniye",
     "backgroundLimits": "Bu bildirimleri almak için HiChat çalışmaya devam etmelidir (Windows tepsisi dahil). Tarayıcı kapalıyken web push alınmaz. İşletim sistemi bildiriminin görünme süresini işletim sistemi belirler.",
     "desktop": "Masaüstü bildirimleri",
-    "voiceEffectsDesc": "Görüşme olay sesleri seçili çıkışı ve ana ses düzeyini kullanır. Sağırlaştırıldığında efektler ve önizlemeler sessizdir; sağırlaştırmayı kaldırmak yalnız kendi sesini çalar.",
+    "voiceEffectsDesc": "Görüşme olay sesleri seçili çıkışı ve ana ses düzeyini kullanır. Kanal katılma, ayrılma ve taşıma sesleri ile bunların önizlemeleri sağırlaştırma açıkken de çalar. Diğer efektler sessiz kalır; sağırlaştırmayı kaldırmak yalnız kendi sesini çalar.",
     "voiceEffectPreview": "Önizle: {{event}}",
     "voiceEffects": {"streamStart": "Yayın başladı", "streamStop": "Yayın sona erdi", "join": "Katılma", "leave": "Ayrılma", "watchStart": "İzlemeye başlama", "watchStop": "İzlemeyi bırakma", "mute": "Susturma", "unmute": "Susturmayı kaldırma", "deafen": "Sağırlaştırma", "undeafen": "Sağırlaştırmayı kaldırma"},
     "sounds": "Sesler",

@@ -4,13 +4,15 @@ import { useVoiceStore } from "../../stores/voiceStore";
 import { handleVoiceEvent } from "./voiceEventHandlers";
 import type { WSHandlerContext } from "./types";
 import type { WSPayloadMap } from "../../types/ws";
+import { playJoinSound, playLeaveSound } from "../../utils/sounds";
+import { publishAuthGenerationChange, publishAuthOwnerChange } from "../../api/authSessionEvents";
 
 // vi.hoisted: the toastStore factory below runs before top-level consts are
 // initialised, so the spy must be created in the hoisted scope (§4 TDZ trap).
 const addToast = vi.hoisted(() => vi.fn());
 
 vi.mock("../../api/voice", () => ({}));
-vi.mock("../../api/client", () => ({ ensureFreshToken: vi.fn() }));
+vi.mock("../../api/client", () => ({ ensureFreshToken: vi.fn(), getAuthGeneration: () => 1 }));
 vi.mock("../../utils/sounds", () => ({
   playJoinSound: vi.fn(),
   playVoiceEventSound: vi.fn(),
@@ -23,7 +25,7 @@ vi.mock("../../stores/preferencesStore", () => ({
   usePreferencesStore: { getState: () => ({ set: vi.fn() }) },
 }));
 vi.mock("../../stores/serverStore", () => ({
-  useServerStore: { getState: () => ({ activeServerId: "srv1" }) },
+  useServerStore: { getState: () => ({ activeServerId: "srv1", servers: [] }) },
 }));
 vi.mock("../../stores/channelStore", () => ({
   useChannelStore: { getState: () => ({ categories: [] }) },
@@ -57,6 +59,7 @@ function resetStore() {
   useVoiceStore.setState({
     voiceStates: {},
     currentVoiceChannelId: null,
+    pendingVoiceChannelId: null,
     watchingScreenShares: {},
     screenShareQualityGradeByPublisher: {},
     screenShareQualityHistoryByPublisher: {},
@@ -187,6 +190,116 @@ describe("handleVoiceEvent — voice_state_update stream-stop cleanup", () => {
     );
 
     expect(useVoiceStore.getState().watchingScreenShares.streamer1).toBe(true);
+  });
+});
+
+describe("self channel notification ownership", () => {
+  const token = { token: "token", url: "wss://voice.example", channel_id: "ch2" };
+  let joinSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    resetStore();
+    vi.clearAllMocks();
+    publishAuthOwnerChange("me");
+    publishAuthGenerationChange(1);
+    useVoiceStore.setState({
+      currentVoiceChannelId: "ch1", isMuted: true, isDeafened: true,
+      isServerMuted: true, isServerDeafened: true, wasReplaced: false,
+    });
+    joinSpy = vi.spyOn(useVoiceStore.getState(), "joinVoiceChannel").mockImplementation(async channelId => {
+      useVoiceStore.setState({ _joinGeneration: useVoiceStore.getState()._joinGeneration + 1, currentVoiceChannelId: channelId });
+      return { ...token, channel_id: channelId };
+    });
+  });
+
+  afterEach(() => joinSpy.mockRestore());
+
+  const selfFanout = async () => {
+    for (const [channelId, action] of [["ch1", "leave"], ["ch2", "join"]] as const) {
+      await handleVoiceEvent({ op: "voice_state_update", d: {
+        ...baseStateUpdate, user_id: "me", channel_id: channelId, action,
+        is_streaming: false, is_muted: true, is_deafened: true, is_server_muted: true, is_server_deafened: true,
+      } }, ctx);
+    }
+  };
+
+  it.each(["before", "after"])("announces a forced move once when self fanout arrives %s it", async order => {
+    if (order === "before") await selfFanout();
+    await handleVoiceEvent({ op: "voice_force_move", d: { channel_id: "ch2" } }, ctx);
+    if (order === "after") await selfFanout();
+    expect(playJoinSound).toHaveBeenCalledOnce();
+    expect(playLeaveSound).not.toHaveBeenCalled();
+    expect(ctx.sendVoiceJoin).toHaveBeenCalledExactlyOnceWith("ch2");
+    expect(useVoiceStore.getState()).toMatchObject({ currentVoiceChannelId: "ch2", isMuted: true, isDeafened: true, isServerMuted: true, isServerDeafened: true });
+    await handleVoiceEvent({ op: "voice_force_move", d: { channel_id: "ch2" } }, ctx);
+    expect(joinSpy).toHaveBeenCalledOnce();
+    expect(playJoinSound).toHaveBeenCalledOnce();
+  });
+
+  it("ignores a duplicate move while its token is pending and emits no premature cue", async () => {
+    let resolve!: (value: typeof token) => void;
+    joinSpy.mockImplementation(() => {
+      useVoiceStore.setState({ _joinGeneration: useVoiceStore.getState()._joinGeneration + 1, pendingVoiceChannelId: "ch2" });
+      return new Promise(done => { resolve = done; });
+    });
+    await handleVoiceEvent({ op: "voice_force_move", d: { channel_id: "ch2" } }, ctx);
+    await selfFanout();
+    await handleVoiceEvent({ op: "voice_force_move", d: { channel_id: "ch2" } }, ctx);
+    expect(joinSpy).toHaveBeenCalledOnce();
+    expect(playJoinSound).not.toHaveBeenCalled();
+    useVoiceStore.setState({ currentVoiceChannelId: "ch2", pendingVoiceChannelId: null });
+    resolve(token);
+    await vi.waitFor(() => expect(playJoinSound).toHaveBeenCalledOnce());
+    expect(playLeaveSound).not.toHaveBeenCalled();
+  });
+
+  it("keeps a failed move silent and reconciles membership", async () => {
+    const send = vi.fn();
+    useVoiceStore.setState({ _wsSend: send });
+    joinSpy.mockResolvedValue(null);
+    await handleVoiceEvent({ op: "voice_force_move", d: { channel_id: "ch2" } }, ctx);
+    expect(send).toHaveBeenCalledWith("voice_leave", {});
+    expect(playJoinSound).not.toHaveBeenCalled();
+    expect(playLeaveSound).not.toHaveBeenCalled();
+  });
+
+  it.each(["newer-move", "auth-change"])("ignores an old token after %s", async change => {
+    let resolve!: (value: typeof token) => void;
+    joinSpy.mockImplementationOnce(() => {
+      useVoiceStore.setState({ _joinGeneration: useVoiceStore.getState()._joinGeneration + 1, pendingVoiceChannelId: "ch2" });
+      return new Promise(done => { resolve = done; });
+    });
+    await handleVoiceEvent({ op: "voice_force_move", d: { channel_id: "ch2" } }, ctx);
+    if (change === "newer-move") {
+      await handleVoiceEvent({ op: "voice_force_move", d: { channel_id: "ch3" } }, ctx);
+    } else publishAuthGenerationChange(2);
+    const cueCount = vi.mocked(playJoinSound).mock.calls.length;
+    resolve(token);
+    await Promise.resolve();
+    expect(playJoinSound).toHaveBeenCalledTimes(cueCount);
+    expect(ctx.sendVoiceJoin).not.toHaveBeenCalledWith("ch2");
+    expect(playLeaveSound).not.toHaveBeenCalled();
+  });
+
+  it.each(["voice_force_disconnect", "voice_afk_kick"] as const)("announces %s once after cleanup, independently of self fanout", async op => {
+    const event = op === "voice_force_disconnect"
+      ? { op, d: {} } as const
+      : { op, d: { channel_name: "General", server_name: "Server" } } as const;
+    await selfFanout();
+    await handleVoiceEvent(event, ctx);
+    expect(useVoiceStore.getState().currentVoiceChannelId).toBeNull();
+    expect(playLeaveSound).toHaveBeenCalledOnce();
+    expect(playJoinSound).not.toHaveBeenCalled();
+    await handleVoiceEvent(event, ctx);
+    expect(playLeaveSound).toHaveBeenCalledOnce();
+  });
+
+  it("keeps session replacement and self snapshot synchronization silent", async () => {
+    await handleVoiceEvent({ op: "voice_replaced", d: {} }, ctx);
+    await handleVoiceEvent({ op: "voice_states_sync", d: { states: [] } }, ctx);
+    await selfFanout();
+    expect(playJoinSound).not.toHaveBeenCalled();
+    expect(playLeaveSound).not.toHaveBeenCalled();
   });
 });
 

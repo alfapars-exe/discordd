@@ -23,6 +23,8 @@ import { renderHook, act } from "@testing-library/react";
 import { useVoice } from "./useVoice";
 import { useVoiceStore } from "../stores/voiceStore";
 import * as voiceApi from "../api/voice";
+import { playJoinSound, playLeaveSound, closeAudioContext } from "../utils/sounds";
+import { publishAuthGenerationChange, publishAuthOwnerChange } from "../api/authSessionEvents";
 
 vi.mock("../api/voice", () => ({ getVoiceToken: vi.fn() }));
 vi.mock("../api/client", () => ({ ensureFreshToken: vi.fn(), getAuthGeneration: () => 1 }));
@@ -45,6 +47,7 @@ vi.mock("../stores/toastStore", () => ({
 function resetStore() {
   useVoiceStore.setState({
     currentVoiceChannelId: null,
+    pendingVoiceChannelId: null,
     currentVoiceServerId: null,
     livekitUrl: null,
     livekitToken: null,
@@ -71,6 +74,9 @@ function renderVoice() {
 describe("useVoice — joinVoice channel-switch WS framing", () => {
   beforeEach(() => {
     resetStore();
+    vi.clearAllMocks();
+    publishAuthOwnerChange("me");
+    publishAuthGenerationChange(1);
     vi.mocked(voiceApi.getVoiceToken).mockReset();
   });
 
@@ -88,6 +94,8 @@ describe("useVoice — joinVoice channel-switch WS framing", () => {
 
     expect(sendVoiceLeave).not.toHaveBeenCalled();
     expect(sendVoiceJoin).toHaveBeenCalledWith("ch2");
+    expect(playJoinSound).toHaveBeenCalledOnce();
+    expect(playLeaveSound).not.toHaveBeenCalled();
   });
 
   it("sends voice_leave (ghost-state guard) when the switch's token fetch fails", async () => {
@@ -104,6 +112,8 @@ describe("useVoice — joinVoice channel-switch WS framing", () => {
 
     expect(sendVoiceLeave).toHaveBeenCalledTimes(1);
     expect(sendVoiceJoin).not.toHaveBeenCalled();
+    expect(playJoinSound).not.toHaveBeenCalled();
+    expect(playLeaveSound).not.toHaveBeenCalled();
   });
 
   it("does NOT send voice_leave on a fresh join (no prior channel) even if it fails — no ghost state to reconcile", async () => {
@@ -132,6 +142,7 @@ describe("useVoice — joinVoice channel-switch WS framing", () => {
     expect(sendVoiceLeave).not.toHaveBeenCalled();
     expect(sendVoiceJoin).not.toHaveBeenCalled();
     expect(voiceApi.getVoiceToken).not.toHaveBeenCalled();
+    expect(playJoinSound).not.toHaveBeenCalled();
   });
 
   it("preserves isServerMuted/isServerDeafened across a successful switch (belt-and-suspenders restore)", async () => {
@@ -153,5 +164,50 @@ describe("useVoice — joinVoice channel-switch WS framing", () => {
     const state = useVoiceStore.getState();
     expect(state.isServerMuted).toBe(true);
     expect(state.isServerDeafened).toBe(true);
+  });
+
+  it("plays a fresh accepted join once and ignores repeat clicks on its pending target", async () => {
+    let resolve!: (value: Awaited<ReturnType<typeof voiceApi.getVoiceToken>>) => void;
+    vi.mocked(voiceApi.getVoiceToken).mockReturnValue(new Promise(done => { resolve = done; }));
+    const { result, sendVoiceJoin } = renderVoice();
+    let joining!: Promise<void>;
+    await act(async () => { joining = result.current.joinVoice("ch1"); });
+    await act(async () => { await result.current.joinVoice("ch1"); });
+    expect(voiceApi.getVoiceToken).toHaveBeenCalledOnce();
+    expect(playJoinSound).not.toHaveBeenCalled();
+    await act(async () => {
+      resolve({ success: true, data: { token: "tok", url: "wss://lk.example.com", channel_id: "ch1" } });
+      await joining;
+    });
+    expect(sendVoiceJoin).toHaveBeenCalledOnce();
+    expect(playJoinSound).toHaveBeenCalledOnce();
+  });
+
+  it("plays one leave cue after cleanup and stays silent on repeated leave", () => {
+    useVoiceStore.setState({ currentVoiceChannelId: "ch1", isMuted: true, isDeafened: true });
+    const { result } = renderVoice();
+    act(() => result.current.leaveVoice());
+    expect(playLeaveSound).toHaveBeenCalledOnce();
+    expect(vi.mocked(closeAudioContext).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(playLeaveSound).mock.invocationCallOrder[0]);
+    expect(useVoiceStore.getState().isDeafened).toBe(true);
+    act(() => result.current.leaveVoice());
+    expect(playLeaveSound).toHaveBeenCalledOnce();
+  });
+
+  it.each(["leave", "auth"])("does not announce a delayed join after %s supersedes it", async change => {
+    let resolve!: (value: Awaited<ReturnType<typeof voiceApi.getVoiceToken>>) => void;
+    vi.mocked(voiceApi.getVoiceToken).mockReturnValue(new Promise(done => { resolve = done; }));
+    const { result, sendVoiceJoin } = renderVoice();
+    let joining!: Promise<void>;
+    await act(async () => { joining = result.current.joinVoice("ch1"); });
+    await act(async () => {
+      if (change === "leave") result.current.leaveVoice();
+      else publishAuthGenerationChange(2);
+      resolve({ success: true, data: { token: "tok", url: "wss://lk.example.com", channel_id: "ch1" } });
+      await joining;
+    });
+    expect(sendVoiceJoin).not.toHaveBeenCalled();
+    expect(playJoinSound).not.toHaveBeenCalled();
+    expect(playLeaveSound).not.toHaveBeenCalled();
   });
 });

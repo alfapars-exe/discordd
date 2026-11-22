@@ -3,8 +3,9 @@ vi.mock("../../video/videoPresentation",()=>({isPresentedVideoContext:()=>false,
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { RoomEvent } from "livekit-client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-const fixture=vi.hoisted(()=>({ admission:{room:{} as object|null,connect:true,publishReady:false,error:null as unknown}, room:vi.fn(), failure:vi.fn(), admissionInput:vi.fn(), native:false, suspended:false }));
-vi.mock("../../hooks/useE2EEKeyProvider",()=>({useE2EEKeyProvider:()=>({keyProvider:{},e2eeWorker:{},keyReady:true,keyError:null,keyScope:"key",ownerScope:"owner"})}));
+const fixture=vi.hoisted(()=>({ admission:{room:{} as object|null,connect:true,publishReady:false,error:null as unknown}, room:vi.fn(), failure:vi.fn(), admissionInput:vi.fn(), encryptionInput:vi.fn(), native:false, suspended:false, transportReady:true }));
+vi.mock("../../hooks/useVoiceTransportReady",()=>({useVoiceTransportReady:()=>fixture.transportReady}));
+vi.mock("../../hooks/useE2EEKeyProvider",()=>({useE2EEKeyProvider:(_passphrase:unknown,options:unknown)=>{fixture.encryptionInput(options);return {keyProvider:{},e2eeWorker:{},keyReady:true,keyError:null,keyScope:"key",ownerScope:"owner"};}}));
 vi.mock("../../hooks/useEncryptedRoomAdmission",()=>({useEncryptedRoomAdmission:(input:unknown)=>{fixture.admissionInput(input);return fixture.admission;}}));
 vi.mock("../../hooks/useVoiceAutoRejoin",()=>({useVoiceAutoRejoin:()=>({handleDisconnected:vi.fn(), handleFailure:fixture.failure, handleConnectionError:vi.fn(), markReady:vi.fn(), restartId:0, suspended:fixture.suspended})}));
 vi.mock("../../utils/nativePlugins",()=>({isNativeVoice:()=>fixture.native}));
@@ -27,8 +28,20 @@ vi.mock("./AudioPlaybackRecovery",()=>({default:()=><div data-testid="playback-r
 vi.mock("./VoiceStateManager",()=>({default:()=><div data-testid="publishers"/>}));
 vi.mock("./StreamerPipPreview",()=>({default:()=><div data-testid="pip"/>}));
 import VoiceProvider from "./VoiceProvider";
-beforeEach(()=>{fixture.admission={room:eventRoom(),connect:true,publishReady:false,error:null};fixture.room.mockClear();fixture.failure.mockClear();fixture.admissionInput.mockClear();fixture.native=false;fixture.suspended=false;});
+beforeEach(()=>{fixture.admission={room:eventRoom(),connect:true,publishReady:false,error:null};fixture.room.mockClear();fixture.failure.mockClear();fixture.admissionInput.mockClear();fixture.encryptionInput.mockClear();fixture.native=false;fixture.suspended=false;fixture.transportReady=true;});
 describe("main encrypted publication wiring",()=>{
+ it("keeps key preparation parallel while pending native capability discovery gates admission",()=>{
+  fixture.transportReady=false;
+  const view=render(<VoiceProvider><p>app</p></VoiceProvider>);
+  expect(fixture.encryptionInput.mock.lastCall![0]).toMatchObject({enabled:true});
+  expect(fixture.admissionInput.mock.lastCall![0]).toMatchObject({enabled:false,keyReady:true});
+  expect(screen.queryByTestId("publishers")).toBeNull();expect(screen.queryByTestId("audio")).toBeNull();
+  fixture.transportReady=true;view.rerender(<VoiceProvider><p>app</p></VoiceProvider>);
+  expect(fixture.admissionInput.mock.lastCall![0]).toMatchObject({enabled:true,keyReady:true});
+  expect(screen.queryByTestId("publishers")).toBeNull(); // The encryption ACK is still required.
+  fixture.suspended=true;view.rerender(<VoiceProvider><p>app</p></VoiceProvider>);
+  expect(fixture.admissionInput.mock.lastCall![0]).toMatchObject({enabled:false});
+ });
  it("leaves SDK auto-capture off and mounts no publication owners until the actual-owner ACK",()=>{
   const view=render(<VoiceProvider><p>app</p></VoiceProvider>);
   expect(fixture.room.mock.lastCall?.[0]).toMatchObject({audio:false,video:false,screen:false,connect:true});

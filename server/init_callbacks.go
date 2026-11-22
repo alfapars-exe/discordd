@@ -40,22 +40,12 @@ func notifyOnlineAfterPresence(notifier services.OnlineFriendPresenceNotifier, u
 
 // registerHubCallbacks wires Hub events to service layer logic.
 //
-// Every callback below runs on its own goroutine. Presence callbacks are
-// launched with `go` by Hub.addClient / Hub.removeClient (ws/hub_clients.go),
-// and the voice / typing / DM callbacks with `go` by the owning client's read
-// pump (ws/client_voice.go, ws/client_presence.go). That is what keeps the
-// mutex discipline safe — a callback may re-enter the Hub to broadcast while
-// add/removeClient still holds the write lock.
-//
-// It is also what makes the bounded contexts below safe *and* necessary:
-// blocking in a callback can never stall the Hub's Run loop or a read pump,
-// but it does pin one goroutine per event. These callbacks have no request
-// context to inherit, so an unbounded context.Background() against a stalled
-// remote database would pin that goroutine forever — a reconnect storm then
-// leaks a goroutine per event with nothing to reap them. Each DB-touching
-// callback therefore derives its context from services.BroadcastContext()
-// (5s, deliberately just above the DB busy_timeout of 5000ms so a legitimate
-// lock wait is not cancelled a moment before it would have succeeded).
+// The Hub owns a bounded dispatcher and orders callbacks for each user.
+// Callbacks run outside Hub.mu, so they may safely re-enter the Hub to
+// broadcast. DB-backed authorization uses bounded contexts; post-join voice
+// activity has its own writer so bookkeeping cannot delay voice controls.
+// The returned cleanup stops callback-owned timers and background work before
+// the database closes.
 //
 // The callbacks that do this work are extracted into named constructors
 // below rather than written inline, because the Hub stores callbacks in
@@ -84,7 +74,7 @@ func registerHubCallbacks(
 	channelPermResolver services.ChannelPermResolver,
 	gameActivity *services.GameActivityService,
 	onlineFriendNotifiers ...services.OnlineFriendPresenceNotifier,
-) (stopPresenceDebounce func()) {
+) (stopCallbacks func()) {
 	onlineFriendNotifier := firstOnlineFriendNotifier(onlineFriendNotifiers)
 	// presenceDebouncer delays the OFFLINE presence transition (DB write +
 	// broadcast) by presenceOfflineGrace so a brief reconnect never flaps
@@ -108,7 +98,7 @@ func registerHubCallbacks(
 
 	// ─── Voice Callbacks ───
 
-	registerVoiceCallbacks(hub, voiceService, userRepo, channelRepo, serverRepo)
+	stopVoiceActivity := registerVoiceCallbacks(hub, voiceService, userRepo, channelRepo, serverRepo)
 
 	// ─── P2P Call Callbacks ───
 
@@ -127,6 +117,7 @@ func registerHubCallbacks(
 	return func() {
 		presenceDebouncer.stopAll()
 		stopGameActivity()
+		stopVoiceActivity()
 	}
 }
 
