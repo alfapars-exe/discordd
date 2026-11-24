@@ -740,6 +740,45 @@ func TestBan_InvalidatesTargetPermissions(t *testing.T) {
 	}
 }
 
+// TestServerSanctions_DisconnectVoiceForTheirServerOnly: a kick, ban or
+// timeout belongs to one server. The voice disconnect each of them triggers
+// names that server, so the voice service can limit what it revokes to it —
+// a voice join the target has in flight into another server is that server's
+// business (voice_join_departure_test.go pins the voice side).
+func TestServerSanctions_DisconnectVoiceForTheirServerOnly(t *testing.T) {
+	const srv, actor, target = "s-1", "mod", "victim"
+	sanctions := []struct {
+		name  string
+		apply func(h *memberServiceHarness) error
+	}{
+		{"kick", func(h *memberServiceHarness) error { return h.svc.Kick(context.Background(), srv, actor, target) }},
+		{"ban", func(h *memberServiceHarness) error {
+			return h.svc.Ban(context.Background(), srv, actor, target, "spam", nil)
+		}},
+		{"timeout", func(h *memberServiceHarness) error {
+			return h.svc.Timeout(context.Background(), srv, actor, target, time.Now().Add(time.Minute), "spam")
+		}},
+	}
+	for _, sanction := range sanctions {
+		t.Run(sanction.name, func(t *testing.T) {
+			h := newMemberHarness()
+			h.stubHierarchy(actor, target, srv)
+			h.userRepo.GetByIDFn = func(_ context.Context, id string) (*models.User, error) {
+				return &models.User{ID: id, Username: id}, nil
+			}
+			if err := sanction.apply(h); err != nil {
+				t.Fatalf("%s: %v", sanction.name, err)
+			}
+			if got := h.voiceKick.DisconnectedIDs; len(got) != 1 || got[0] != target {
+				t.Fatalf("voice disconnects = %v, want [%q]", got, target)
+			}
+			if got := h.voiceKick.SanctionServerIDs; len(got) != 1 || got[0] != srv {
+				t.Fatalf("voice disconnect scoped to servers %v, want [%q]", got, srv)
+			}
+		})
+	}
+}
+
 func TestModifyRoles_InvalidatesTargetPermissions(t *testing.T) {
 	// ModifyRoles is the highest-volume permission-affecting op (used
 	// every time an admin edits someone's roles from the member list).

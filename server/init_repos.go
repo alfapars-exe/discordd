@@ -164,3 +164,14 @@ func initRepositories(conn *sql.DB, dataExportOptions ...repository.DataExportSt
 		StreamStartNotification: repository.NewSQLiteStreamStartNotificationRepo(db),
 	}
 }
+
+// installAuthSessionTouchWriter rebinds the session store so validating a
+// session no longer waits for its last-active write. Call it before any
+// service captures repos.AuthSession. The returned stop drains queued touches
+// and must run before the database closes.
+func installAuthSessionTouchWriter(conn *sql.DB, repos *Repositories) (stop func()) {
+	db := database.NewRetryingQuerier(conn)
+	touches := newAuthSessionTouchWriter(authSessionTouchWrite(db))
+	repos.AuthSession = repository.NewSQLiteAuthSessionRepo(db, repository.WithAuthSessionTouchScheduler(touches.enqueue))
+	return touches.stop
+}

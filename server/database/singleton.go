@@ -151,17 +151,47 @@ func describeBackendOwnerHolder(h *BackendOwnerHolder) string {
 		h.BackendStart.UTC().Format(time.RFC3339), h.StateChange.UTC().Format(time.RFC3339))
 }
 
+// The owner watcher probes every backendOwnerProbeInterval and gives one probe
+// backendOwnerProbeTimeout to answer. The deadline is the only slack: a probe
+// that misses it fails closed like any other error, because the driver closes
+// a connection whose deadline fired and the session lock dies with it.
+//
+// The deadline is safe to be longer than a brief WAN or database stall because
+// of when another instance can take the lock. A probe that answered proved
+// ownership at some instant after it was sent. From then the session is idle
+// until the next probe arrives, and an idle owner is ended by the server after
+// backendOwnerIdleTimeout or by a booting instance after staleBackendOwnerAfter,
+// never sooner; a probe that reached a slow server keeps the session active,
+// which neither path touches. The next probe starts within one interval of the
+// previous answer, so this instance stops at most
+// backendOwnerProbeTimeout + backendOwnerProbeInterval + backendOwnerProbeTimeout
+// after the last instant it was proven owner. That is 11s against 30s, and
+// TestBackendOwnerProbeBudget keeps it at no more than half the idle limit.
+//
+// A session ended any other way (server restart, pg_terminate_backend) is
+// noticed by the first probe that sees the broken connection, normally within
+// one interval; only if that signal is lost in transit too does it take the
+// full bound above.
+const (
+	backendOwnerProbeInterval = time.Second
+	backendOwnerProbeTimeout  = 5 * time.Second
+)
+
 // WatchBackendOwner fails closed on connection or lock loss. The caller must
 // terminate serving in onLost; a reconnect is not proof of continuing ownership.
 func WatchBackendOwner(ctx context.Context, conn *sql.Conn, onLost func()) {
-	ticker := time.NewTicker(time.Second)
+	watchBackendOwner(ctx, conn, backendOwnerProbeInterval, backendOwnerProbeTimeout, onLost)
+}
+
+func watchBackendOwner(ctx context.Context, conn *sql.Conn, interval, timeout time.Duration, onLost func()) {
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			probe, cancel := context.WithTimeout(ctx, 2*time.Second)
+			probe, cancel := context.WithTimeout(ctx, timeout)
 			var owned bool
 			err := conn.QueryRowContext(probe, `SELECT EXISTS(SELECT 1 FROM pg_locks WHERE locktype='advisory' AND pid=pg_backend_pid() AND classid=7341982 AND objid=30 AND objsubid=2 AND granted)`).Scan(&owned)
 			cancel()

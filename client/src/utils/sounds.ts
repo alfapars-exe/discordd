@@ -13,7 +13,7 @@ import streamStartUrl from "../assets/voice-sounds/streamStart.m4a?url&no-inline
 import streamStopUrl from "../assets/voice-sounds/streamStop.m4a?url&no-inline";
 import watchStartUrl from "../assets/voice-sounds/watchStart.m4a?url&no-inline";
 
-/** Lazily initialized — created on first sound play, resumed if suspended. */
+/** Lazily initialized — created on first sound play or voice join start, resumed if suspended. */
 let audioCtx: AudioContext | null = null;
 type SinkAudioContext = AudioContext & { setSinkId?: (sinkId: string) => Promise<void> };
 type ActiveTone = { osc: OscillatorNode | AudioBufferSourceNode; gain: GainNode; volume: number; followsMaster: boolean; start: number; end: number; recorded?: boolean; audibleWhenDeafened?: boolean; cancel: () => void };
@@ -39,6 +39,28 @@ let eventGeneration = 0;
 let lastVoiceSession = "";
 let lastUserId: string | null | undefined;
 let listenersInstalled = false;
+/** A context left behind by a voice session is closed after this long without one. */
+const IDLE_CLOSE_MS = 60_000;
+let idleCloseTimer: ReturnType<typeof setTimeout> | undefined;
+
+function cancelIdleClose(): void {
+  if (idleCloseTimer === undefined) return;
+  clearTimeout(idleCloseTimer);
+  idleCloseTimer = undefined;
+}
+
+function armIdleClose(): void {
+  cancelIdleClose();
+  if (!audioCtx) return;
+  idleCloseTimer = setTimeout(() => {
+    idleCloseTimer = undefined;
+    const voice = useVoiceStore.getState();
+    if (voice.currentVoiceChannelId || voice.pendingVoiceChannelId) return;
+    // Never close under a cue that is still loading or sounding.
+    if (requests.size > 0) { armIdleClose(); return; }
+    closeAudioContext();
+  }, IDLE_CLOSE_MS);
+}
 
 function cancelTones(): void {
   eventGeneration++;
@@ -116,8 +138,9 @@ function routeToDevice(ctx: AudioContext, deviceId: string): Promise<boolean> {
 function ensureStoreListeners(): void {
   if (listenersInstalled) return;
   listenersInstalled = true;
-  // voiceStore imports closeAudioContext from this module, so defer store access
-  // until the first play request, after the cyclic import has initialized.
+  // voiceStore imports the context lifecycle from this module, so defer store
+  // access until the first play request or join start, after the cyclic import
+  // has initialized.
   const voiceApi = useVoiceStore as unknown as {
     getState: typeof useVoiceStore.getState;
     subscribe?: (listener: (state: ReturnType<typeof useVoiceStore.getState>, previous: ReturnType<typeof useVoiceStore.getState>) => void) => () => void;
@@ -126,6 +149,11 @@ function ensureStoreListeners(): void {
     const session = `${state.currentVoiceChannelId ?? ""}:${state._joinGeneration}`;
     if ((lastVoiceSession && session !== lastVoiceSession) || (previous.currentVoiceChannelId && !state.currentVoiceChannelId)) cancelTones();
     lastVoiceSession = session;
+    // Voice went idle without leaveVoiceChannel (a join that did not commit,
+    // a forced disconnect, an AFK kick, a replaced session): nothing else
+    // would start the idle close for the context the join start kept.
+    if ((previous.currentVoiceChannelId || previous.pendingVoiceChannelId)
+      && !state.currentVoiceChannelId && !state.pendingVoiceChannelId) armIdleClose();
     cancelUnauthorized();
     refreshToneVolumes();
     const nextDevice = state.outputDevice === "default" ? "" : state.outputDevice || "";
@@ -167,11 +195,38 @@ function getAudioContext(): AudioContext {
       }
     };
   }
+  // A cue is using the context: restart a pending idle countdown.
+  if (idleCloseTimer !== undefined) armIdleClose();
   return audioCtx;
 }
 
-/** Close AudioContext when leaving voice channel to free memory. */
+/**
+ * Voice session ended: silence its cues now, but keep the context for the
+ * leave cue and for a join that follows (a channel switch or a moderator
+ * move leaves and rejoins at once). It is closed, to free memory, only after
+ * IDLE_CLOSE_MS with no voice session and no cue.
+ */
+export function releaseAudioContextWhenIdle(): void {
+  cancelTones();
+  armIdleClose();
+}
+
+/**
+ * Voice join started: keep the context and, when cues may play, construct it
+ * now. The constructor blocks the main thread for tens of milliseconds, so
+ * the caller runs this while the token request is in flight instead of
+ * paying it when the join cue is due. Resume and output routing stay with
+ * the play path.
+ */
+export function prepareAudioContext(): void {
+  cancelIdleClose();
+  if (!effectsAllowed()) return;
+  try { getAudioContext(); } catch { /* AudioContext not supported — cues stay silent */ }
+}
+
+/** Close the AudioContext now and free its memory. */
 export function closeAudioContext(): void {
+  cancelIdleClose();
   cancelTones();
   routeRevision++;
   if (audioCtx) {

@@ -83,6 +83,7 @@ type VoiceService interface {
 	GetUserVoiceState(userID string) *models.VoiceState
 	GetAllVoiceStates() []models.VoiceState
 	DisconnectUser(userID string)
+	DisconnectSanctionedMember(serverID, userID string)
 	DisconnectServerMember(serverID, userID string)
 	GetStreamCount(channelID string) int
 	AdminUpdateState(ctx context.Context, adminUserID, targetUserID string, isServerMuted, isServerDeafened *bool) error

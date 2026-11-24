@@ -15,6 +15,7 @@ import {resolveUserId}from "../../utils/constants";
  * own hook:
  *   - E2EE setup           — useE2EEKeyProvider
  *   - Auto-rejoin policy   — useVoiceAutoRejoin (provides onDisconnected)
+ *   - Join timing marks    — useVoiceJoinTiming (passive telemetry)
  *   - Publish defaults     — useScreenSharePublishDefaults
  *
  * Render rules:
@@ -59,6 +60,7 @@ import { useEncryptedRoomAdmission } from "../../hooks/useEncryptedRoomAdmission
 import { useVoiceTransportReady } from "../../hooks/useVoiceTransportReady";
 import { useE2EEKeyProvider } from "../../hooks/useE2EEKeyProvider";
 import { useVoiceAutoRejoin } from "../../hooks/useVoiceAutoRejoin";
+import { useVoiceJoinTiming } from "../../hooks/useVoiceJoinTiming";
 import VoiceStateManager from "./VoiceStateManager";
 
 type VoiceProviderProps = {
@@ -214,6 +216,7 @@ function VoiceProvider({ children }: VoiceProviderProps) {
     keyScope: encryption.keyScope, keyReady: encryption.keyReady, keyError: encryption.keyError,
     keyProvider, worker: e2eeWorker, roomOptions: roomOptions ?? {}, onError: handleE2eeKeyError, allowRestore });
   useEffect(() => { markReady(admission.publishReady); }, [admission.publishReady, markReady]);
+  useVoiceJoinTiming(videoJoinGeneration, admission.room, admission.publishReady);
   const videoAuth=getAuthSessionSnapshot();
   const videoIdentity=useMemo(()=>({room:admission.room,nonce:crypto.randomUUID()}),[admission.room]);
   const videoLabel=useChannelStore(state=>state.categories.flatMap(category=>category.channels).find(channel=>channel.id===currentVoiceChannelId)?.name)??`${t("voiceConnected")} · ${currentVoiceChannelId??""}`;

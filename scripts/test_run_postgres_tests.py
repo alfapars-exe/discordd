@@ -36,6 +36,10 @@ class PostgreSQLRunnerTests(unittest.TestCase):
         "--- PASS: TestPostgresRolePatchConcurrentChanges (0.01s)\n"
         "--- PASS: TestPostgresMemberRoleReplacement (0.01s)\n"
         "--- PASS: TestPostgresMetricsCollectorCancellation (0.01s)\n"
+        "--- PASS: TestPostgresVoiceJoin_SnapshotPathNeedsNoSeparateInstanceLookup (0.01s)\n"
+        "--- PASS: TestPostgresVoiceMove_ModeratorMoveEmbedsCredentials (0.01s)\n"
+        "--- PASS: TestPostgresVoiceMove_ServerWithoutInstanceAppliesWithoutCredentials (0.01s)\n"
+        "--- PASS: TestPostgresVoiceMove_RepeatedReadSeesASanctionCommittedMeanwhile (0.01s)\n"
     )
 
     def test_member_sql_contract_is_required_and_cannot_be_missing(self):
@@ -102,6 +106,15 @@ class PostgreSQLRunnerTests(unittest.TestCase):
         for name in ("TestVoiceUsagePostgresShutdownJoinsAcceptedCredit", "TestVoiceUsagePostgresShutdownFinalizesActiveSession", "TestVoiceUsagePostgresShutdownCreditsBeforeMediaWait", "TestVoiceUsagePostgresShutdownHandsOffAllBeforeMedia", "TestVoiceUsagePostgresChannelDeletionHandsOffAllBeforeMedia", "TestVoiceUsagePostgresShutdownRecoversFailedApplication", "TestVoiceUsagePostgresShutdownJoinsPermissionRecheck", "TestVoiceUsagePostgresLateMemberRevocationPreservesCredit", "TestVoiceUsagePostgresServiceHandoffSurvivesApplyFailure", "TestVoiceUsagePostgresPendingRecovery", "TestVoiceUsagePostgresReplayTransaction", "TestVoiceUsageCreditPostgresDeadline", "TestVoiceUsageCreditPostgresAdditiveWrites"):
             output = "\n".join(line for line in self.service_passes.splitlines() if name not in line)
             self.assertEqual(self.execute(self.completed(), service_output=output), 1)
+
+    def test_voice_snapshot_contracts_must_run(self):
+        for name in ("TestPostgresVoiceJoin_SnapshotPathNeedsNoSeparateInstanceLookup", "TestPostgresVoiceMove_ModeratorMoveEmbedsCredentials", "TestPostgresVoiceMove_ServerWithoutInstanceAppliesWithoutCredentials", "TestPostgresVoiceMove_RepeatedReadSeesASanctionCommittedMeanwhile"):
+            with self.subTest(name=name):
+                self.assertIn(name, runner.REQUIRED_SERVICE_POSTGRES_TESTS)
+                output = "\n".join(line for line in self.service_passes.splitlines() if name not in line)
+                self.assertEqual(self.execute(self.completed(), service_output=output), 1)
+                self.assertEqual(self.execute(self.completed(), service_output=output + f"\n--- SKIP: {name} (0.00s)\n"), 1)
+        self.assertEqual(self.execute(self.completed()), 0)
 
     def test_usage_migration_pass_is_mandatory(self):
         events = [event for event in self.completed() if event.get("Test") != "TestPostgresVoiceUsageMigrationPreservesTotals"]

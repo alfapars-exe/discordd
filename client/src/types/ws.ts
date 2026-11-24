@@ -32,7 +32,7 @@ import type { Message, PinnedMessage } from "./message";
 import type { ReactionGroup } from "./common";
 import type { DMChannelWithUser, DMMessage } from "./dm";
 import type { GroupDM, GroupDMMessage } from "./groupDM";
-import type { VoiceState, VoiceStateUpdateData } from "./voice";
+import type { VoiceState, VoiceStateUpdateData, VoiceTokenResponse } from "./voice";
 import type { MusicBotChannelState } from "./music";
 import type { AppNotification } from "./notification";
 import type { EntranceSoundPlayEvent } from "./entrance";
@@ -225,7 +225,10 @@ export interface WSPayloadMap {
     action: string;
   };
   voice_states_sync: { states: VoiceState[]; voice_epoch?: string; voice_revision?: number };
-  voice_force_move: { channel_id: string; channel_name?: string };
+  // `server_id` (the server owning the voice session) and `voice` (ready-to-use
+  // credentials for the target room, same shape as the voice token response)
+  // are absent from older servers; `voice` may also be omitted by a new one.
+  voice_force_move: { channel_id: string; channel_name?: string; server_id?: string; voice?: VoiceTokenResponse };
   voice_force_disconnect: unknown;
   voice_afk_kick: { channel_name: string; server_name: string };
   voice_replaced: unknown;

@@ -49,9 +49,18 @@ type MemberService interface {
 	SetNickname(ctx context.Context, serverID, actorID, targetID string, nickname *string) (*models.MemberWithRoles, error)
 }
 
-// VoiceDisconnecter disconnects a user from voice on kick/ban (ISP).
+// VoiceDisconnecter disconnects a user from voice when their access is
+// revoked for the whole account (ISP).
 type VoiceDisconnecter interface {
 	DisconnectUser(userID string)
+}
+
+// MemberVoiceDisconnecter disconnects a member from voice on a sanction that
+// belongs to one server — kick, ban, timeout (ISP). The server is part of the
+// call so that a voice join the user has in flight into another server is not
+// refused along with it.
+type MemberVoiceDisconnecter interface {
+	DisconnectSanctionedMember(serverID, userID string)
 }
 
 // The same member view is read on the normal connection and after a role
@@ -68,7 +77,7 @@ type memberService struct {
 	roleTransactions           repository.ServerRoleTxRunner
 	banRepo                    repository.BanRepository
 	hub                        ws.BroadcastAndManage
-	voiceKick                  VoiceDisconnecter
+	voiceKick                  MemberVoiceDisconnecter
 	auditLogger                AuditWriter
 	permInvalidator            PermissionInvalidator
 	profileUpdates             ProfileUpdateNotifier
@@ -112,7 +121,7 @@ func NewMemberService(
 	serverRepo repository.ServerRepository,
 	roleTransactions repository.ServerRoleTxRunner,
 	hub ws.BroadcastAndManage,
-	voiceKick VoiceDisconnecter,
+	voiceKick MemberVoiceDisconnecter,
 	auditLogger AuditWriter,
 	userInvalidator UserCacheInvalidator,
 	permInvalidator PermissionInvalidator,

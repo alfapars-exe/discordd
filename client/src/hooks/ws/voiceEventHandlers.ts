@@ -175,7 +175,7 @@ export async function handleVoiceEvent(
               srvStore.setActiveServer(selfEntry.server_id);
             }
           }
-          const tokenResp = await vs.joinVoiceChannel(selfEntry.channel_id);
+          const tokenResp = await vs.joinVoiceChannel(selfEntry.channel_id, { kind: "rejoin" });
           if (tokenResp) {
             ctx.sendVoiceJoin(selfEntry.channel_id);
           }
@@ -187,8 +187,21 @@ export async function handleVoiceEvent(
     case "voice_force_move": {
       const forceMoveData = msg.d;
       const voiceStore = useVoiceStore.getState();
-      if ((voiceStore.pendingVoiceChannelId ?? voiceStore.currentVoiceChannelId) === forceMoveData.channel_id) return true;
+      const ownedChannelId = voiceStore.pendingVoiceChannelId ?? voiceStore.currentVoiceChannelId;
+      // The server delivers this event to every session of the user. Only
+      // the one that owns voice may act on it: an idle tab or device running
+      // leave + join would fight the real session over the same LiveKit
+      // identity, and its failed join would send voice_leave and remove the
+      // real session from voice.
+      if (!ownedChannelId) return true;
+      if (ownedChannelId === forceMoveData.channel_id) return true;
       const auth = getAuthSessionSnapshot();
+      // The join must be scoped to the server that owns the voice session,
+      // not the one being viewed — a moved user browsing another server
+      // would otherwise be refused and dropped from voice. Read it here:
+      // leaveVoiceChannel() below clears currentVoiceServerId. No
+      // setActiveServer: the move must not change what the user is looking at.
+      const voiceServerId = forceMoveData.server_id || voiceStore.currentVoiceServerId;
 
       // Preserve user's mute/deafen state across the move
       const prevMuted = voiceStore.isMuted;
@@ -209,7 +222,14 @@ export async function handleVoiceEvent(
         isServerMuted: prevServerMuted,
         isServerDeafened: prevServerDeafened,
       });
-      const request = voiceStore.joinVoiceChannel(forceMoveData.channel_id);
+      // Credentials embedded in the event save the token round trip. The
+      // store verifies they are for this channel and this account and falls
+      // back to the HTTP request otherwise.
+      const request = voiceStore.joinVoiceChannel(forceMoveData.channel_id, {
+        serverId: voiceServerId,
+        credentials: forceMoveData.voice,
+        kind: "move",
+      });
       const generation = useVoiceStore.getState()._joinGeneration;
       void request.then((tokenResp) => {
         const current = useVoiceStore.getState();
@@ -224,12 +244,19 @@ export async function handleVoiceEvent(
         ctx.sendVoiceJoin(forceMoveData.channel_id);
         playJoinSound();
 
+        const srvState = useServerStore.getState();
+        // Opening the tab navigates to it. When the voice session belongs to
+        // a server other than the one in view that would pull the user out
+        // of what they are browsing (and label the tab with the wrong
+        // server), so the move then completes in the background.
+        if (current.currentVoiceServerId && srvState.activeServerId
+          && current.currentVoiceServerId !== srvState.activeServerId) return;
+
         const channelName = forceMoveData.channel_name
           ?? useChannelStore.getState().categories
             .flatMap((cg) => cg.channels)
             .find((ch) => ch.id === forceMoveData.channel_id)?.name
           ?? "";
-        const srvState = useServerStore.getState();
         const activeSrv = srvState.activeServer
           ?? srvState.servers.find((s) => s.id === srvState.activeServerId);
         const serverInfo = activeSrv

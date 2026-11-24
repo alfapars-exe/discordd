@@ -81,14 +81,19 @@ func (s *authService) ValidateSession(ctx context.Context, userID, sessionID str
 	if s.authSessions == nil {
 		return nil
 	} // isolated legacy unit-service construction
-	if sessionID == "" {
-		return fmt.Errorf("%w: session upgrade required", pkg.ErrUnauthorized)
-	}
-	_, err := s.authSessions.GetActive(ctx, userID, sessionID, time.Now().Unix())
-	if errors.Is(err, pkg.ErrNotFound) {
-		return fmt.Errorf("%w: session revoked or expired", pkg.ErrUnauthorized)
-	}
+	_, err := s.activeSession(ctx, userID, sessionID)
 	return err
+}
+
+func (s *authService) activeSession(ctx context.Context, userID, sessionID string) (*models.AuthSession, error) {
+	if sessionID == "" {
+		return nil, fmt.Errorf("%w: session upgrade required", pkg.ErrUnauthorized)
+	}
+	active, err := s.authSessions.GetActive(ctx, userID, sessionID, time.Now().Unix())
+	if errors.Is(err, pkg.ErrNotFound) {
+		return nil, fmt.Errorf("%w: session revoked or expired", pkg.ErrUnauthorized)
+	}
+	return active, err
 }
 
 func (s *authService) generateBoundTokens(ctx context.Context, user *models.User, restore ...*models.AccountLifecycle) (*AuthTokens, error) {
@@ -220,7 +225,8 @@ func (s *authService) ListSessions(ctx context.Context, userID, current string) 
 	if s.authSessions == nil {
 		return nil, fmt.Errorf("session management unavailable")
 	}
-	if err := s.ValidateSession(ctx, userID, current); err != nil {
+	active, err := s.activeSession(ctx, userID, current)
+	if err != nil {
 		return nil, err
 	}
 	list, err := s.authSessions.ListActive(ctx, userID, time.Now().Unix())
@@ -230,7 +236,28 @@ func (s *authService) ListSessions(ctx context.Context, userID, current string) 
 	for i := range list {
 		list[i].Current = list[i].ID == current
 	}
+	reportCurrentSessionActivity(list, active)
 	return list, nil
+}
+
+// The current session's last-active write may still be queued behind this
+// request. Report the activity its validation observed and keep the listing
+// in the store's order (most recently active first, then by id).
+func reportCurrentSessionActivity(list []models.AuthSession, active *models.AuthSession) {
+	for i := range list {
+		if list[i].ID != active.ID || list[i].LastActiveAt >= active.LastActiveAt {
+			continue
+		}
+		list[i].LastActiveAt = active.LastActiveAt
+		for j := i; j > 0; j-- {
+			prev, cur := &list[j-1], &list[j]
+			if prev.LastActiveAt > cur.LastActiveAt || (prev.LastActiveAt == cur.LastActiveAt && prev.ID < cur.ID) {
+				break
+			}
+			*prev, *cur = *cur, *prev
+		}
+		return
+	}
 }
 
 func (s *authService) verifySessionAction(ctx context.Context, userID, current, password, code string) error {

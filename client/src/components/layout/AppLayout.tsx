@@ -93,6 +93,7 @@ import { UI_SHELL_V2 } from "../../utils/uiShell";
 import { useNavigationHistory } from "../../hooks/useNavigationHistory";
 import ShellV2 from "./ShellV2";
 import MessageDeepLinkHandler from "./MessageDeepLinkHandler";
+import { useVoiceChannelTransition } from "./useVoiceChannelTransition";
 import "../../styles/voice-overlay.css";
 
 function AppLayout() {
@@ -361,25 +362,7 @@ function AppLayout() {
   // Voice channel change -> close stale voice tabs + refetch channel list
   // (hidden channels may become visible via voice-connected override, or vice versa)
   const currentVoiceChannelId = useVoiceStore((s) => s.currentVoiceChannelId);
-  const prevVoiceChannelRef = useRef<string | null | undefined>(undefined);
-
-  useEffect(() => {
-    const prev = prevVoiceChannelRef.current;
-    prevVoiceChannelRef.current = currentVoiceChannelId;
-
-    // Skip initial mount — cascadeRefetch handles it
-    if (prev === undefined) return;
-
-    // Left voice channel — close related tabs
-    if (prev && !currentVoiceChannelId) {
-      useUIStore.getState().closeVoiceTabs(prev);
-    }
-
-    // Refetch channels on voice channel change
-    if (prev !== currentVoiceChannelId) {
-      fetchChannels();
-    }
-  }, [currentVoiceChannelId, fetchChannels]);
+  useVoiceChannelTransition(fetchChannels);
 
   // ─── Responsive layout ───
   const isMobile = useIsMobile();

@@ -18,7 +18,7 @@ import { VoiceFailure } from "../audio/voiceFailure";
 import { create } from "zustand";
 import { normalizeVoiceMuteIntent, toggleVoiceMuteIntent, toggleVoiceDeafenIntent, type VoiceMuteIntent } from "../utils/voiceMuteIntent";
 import { subscribeAuthGenerationChanges, subscribeAuthOwnerChanges } from "../api/authSessionEvents";
-import type { VoiceState, VoiceStateUpdateData, VoiceTokenResponse } from "../types";
+import type { APIResponse, VoiceState, VoiceStateUpdateData, VoiceTokenResponse } from "../types";
 import * as voiceApi from "../api/voice";
 import {
   startVoiceCallService, stopVoiceCallService,
@@ -32,8 +32,10 @@ import { useAuthStore } from "./authStore";
 import { useToastStore } from "./toastStore";
 import { showApiError } from "../utils/apiError";
 import i18n from "../i18n";
-import { closeAudioContext } from "../utils/sounds";
+import { prepareAudioContext, releaseAudioContextWhenIdle } from "../utils/sounds";
 import { markVoiceActive, clearVoiceRecoveryMark } from "./shared/voiceRecovery";
+import { mediaTokenSubject } from "../audio/voiceEncryptionKeys";
+import { beginVoiceJoinTiming, markVoiceJoinToken, settleVoiceJoinRequest, type VoiceJoinKind } from "../audio/voiceJoinTiming";
 import {
   createVoiceSettingsSlice,
   type VoiceSettingsSlice,
@@ -133,6 +135,19 @@ type VoiceCoreState = {
   e2eeKeyContext: string | null;
   /** Monotonically increasing — discards stale API responses */
   _joinGeneration: number;
+  /**
+   * Generation and wall-clock time at which the current join committed its
+   * credentials. Recovery uses it to tell a server-side eviction that races
+   * a fresh (re)join from a later removal; any generation bump retires it.
+   */
+  _joinCommit: { generation: number; at: number } | null;
+  /**
+   * channelId -> wall-clock time this client last left that channel itself
+   * (leave, switch, move). Only such a departure makes the server evict the
+   * user from the channel's room, so recovery retries a removal right after
+   * a join only for a channel listed here; a session the server ended is not.
+   */
+  _departures: Record<string, number>;
 
   /** Currently speaking users — transient, not persisted */
   activeSpeakers: Record<string, boolean>;
@@ -161,8 +176,24 @@ type VoiceCoreState = {
   _wsSend: ((op: string, data?: unknown) => void) | null;
 };
 
+export type JoinVoiceChannelOptions = {
+  /**
+   * Server that owns the channel. Defaults to the server the user is viewing,
+   * which is not necessarily the one their voice session belongs to.
+   */
+  serverId?: string | null;
+  /**
+   * Credentials already issued for this channel (a moderator move embeds
+   * them). Used instead of the HTTP token request only when they name this
+   * channel and this account; otherwise the request is made as usual.
+   */
+  credentials?: VoiceTokenResponse | null;
+  /** Label for the join timing report only; it never changes how the join runs. */
+  kind?: VoiceJoinKind;
+};
+
 type VoiceCoreActions = {
-  joinVoiceChannel: (channelId: string) => Promise<VoiceTokenResponse | null>;
+  joinVoiceChannel: (channelId: string, options?: JoinVoiceChannelOptions) => Promise<VoiceTokenResponse | null>;
   /** Retire pending admission when the server ends this voice session. */
   _cancelVoiceRequests: () => void;
   /** Hot-swap LiveKit token without disconnect cycle — used for auto-rejoin. */
@@ -204,6 +235,20 @@ function cancelVoiceTokenRequests(): void {
   voiceRefreshRequest = null;
 }
 
+// Pushed credentials are untrusted wire input: accept them only for the
+// channel being joined and the signed-in account, like an HTTP response for
+// this request would be. LiveKit still validates the JWT signature/grants.
+function usableJoinCredentials(
+  credentials: VoiceTokenResponse | null | undefined,
+  channelId: string,
+): VoiceTokenResponse | null {
+  if (!credentials || credentials.channel_id !== channelId) return null;
+  if (typeof credentials.token !== "string" || !credentials.token) return null;
+  if (typeof credentials.url !== "string" || !credentials.url) return null;
+  const owner = getOwnUserId();
+  return owner && mediaTokenSubject(credentials.token) === owner ? credentials : null;
+}
+
 export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
   // ─── Slices ───
   ...createVoiceSettingsSlice(set, get, store),
@@ -230,6 +275,8 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
       e2eeKeyEpoch: null,
       e2eeKeyContext: null,
   _joinGeneration: 0,
+  _joinCommit: null,
+  _departures: {},
   activeSpeakers: {},
   rtt: 0,
   connectionQuality: {},
@@ -251,8 +298,8 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
     set({ pendingVoiceChannelId: null, _joinGeneration: state._joinGeneration + 1 });
   },
 
-  joinVoiceChannel: async (channelId: string) => {
-    const serverId = useServerStore.getState().activeServerId;
+  joinVoiceChannel: async (channelId: string, options?: JoinVoiceChannelOptions) => {
+    const serverId = options?.serverId || useServerStore.getState().activeServerId;
     if (!serverId) return null;
     cancelVoiceTokenRequests();
     const controller = new AbortController();
@@ -264,6 +311,8 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
       && get()._joinGeneration === gen && getAuthGeneration() === authGeneration && getOwnUserId() === owner;
     const startedAt = performance.now();
     set({ _joinGeneration: gen, pendingVoiceChannelId: channelId });
+    // iOS connects natively, so no JS room would report the later stages.
+    if (!isNativeVoice()) beginVoiceJoinTiming(gen, options?.kind ?? "join");
     try {
       const permission = ensureMicPermission().then(granted => {
         console.debug("[voice] microphone permission resolved", { channelId, gen, elapsedMs: performance.now() - startedAt });
@@ -272,11 +321,19 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
       const micGranted = await permission;
       if (!micGranted || !current()) return null;
 
+      // Usable embedded credentials replace the round trip; everything after
+      // this point treats them exactly like a token response.
+      const provided = usableJoinCredentials(options?.credentials, channelId);
       // The API client owns the shared auth refresh; cancelling this request
       // stops its wait without cancelling refreshes needed by other requests.
-      const response = await voiceApi.getVoiceToken(serverId, channelId, {
+      const tokenRequest = provided ? null : voiceApi.getVoiceToken(serverId, channelId, {
         timeoutMs: 15_000, signal: controller.signal, isCurrent: current,
       });
+      // The cue context's constructor blocks the main thread for tens of
+      // milliseconds: pay that while the request is in flight, not once the
+      // credentials are waiting to be committed.
+      prepareAudioContext();
+      const response: APIResponse<VoiceTokenResponse> = provided ? { success: true, data: provided } : await tokenRequest!;
 
       // Discard stale response if generation changed (leave/join interleaved)
       if (!current()) {
@@ -300,7 +357,7 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
         return null;
       }
 
-      console.debug("[voice] join token ready", { channelId, gen, elapsedMs: performance.now() - startedAt });
+      console.debug("[voice] join token ready", { channelId, gen, embedded: !!provided, elapsedMs: performance.now() - startedAt });
 
       // PTT mode forces muted (unmuted on key press), otherwise keep current state
       const isPTT = get().inputMode === "push_to_talk";
@@ -318,7 +375,9 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
         e2eeKeyContext: response.data.e2ee_key_context ?? null,
         isMuted: initialMuted,
         isStreaming: false,
+        _joinCommit: { generation: gen, at: Date.now() },
       });
+      markVoiceJoinToken(gen, provided ? "embedded" : "fetched");
 
       // Remember this tab owns the voice session — enables F5 recovery
       // for THIS tab only, prevents unrelated tabs/windows from auto-joining.
@@ -346,6 +405,7 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
     } finally {
       if (voiceJoinRequest === controller) voiceJoinRequest = null;
       if (get()._joinGeneration === gen) set({ pendingVoiceChannelId: null });
+      settleVoiceJoinRequest(gen);
     }
   },
 
@@ -487,10 +547,13 @@ export const useVoiceStore = create<VoiceStore>((set, get, store) => ({
       connectionQuality: {},
       pendingVoiceChannelId: null,
       _joinGeneration: get()._joinGeneration + 1,
+      ...(currentVoiceChannelId ? { _departures: { ...get()._departures, [currentVoiceChannelId]: Date.now() } } : {}),
     });
 
-    // Release AudioContext memory (2-5MB + accumulated node refs)
-    closeAudioContext();
+    // Stop this session's cues. The AudioContext (2-5MB + accumulated node
+    // refs) is released only once voice stays idle: a switch or a moderator
+    // move rejoins at once and would otherwise rebuild it for the join cue.
+    releaseAudioContextWhenIdle();
   },
 
   handleChannelDeleted: (channelId) => {

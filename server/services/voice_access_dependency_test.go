@@ -32,6 +32,14 @@ func (r *voiceAccessChoice) VoiceVisibleUsers(context.Context, string, string, [
 	r.visible++
 	return []string{"member"}, r.err
 }
+func (r *voiceAccessChoice) VoiceVisibleUsersByChannel(_ context.Context, _ string, channelIDs, _ []string) (map[string][]string, error) {
+	r.visible++
+	visible := make(map[string][]string, len(channelIDs))
+	for _, id := range channelIDs {
+		visible[id] = []string{"member"}
+	}
+	return visible, r.err
+}
 func TestVoiceAccessDependencyExplicitAdmissionAndPortableMode(t *testing.T) {
 	for _, enabled := range []bool{true, false} {
 		name := "portable"
@@ -83,12 +91,12 @@ func TestVoiceAccessErrorsNeverFallBackAndVisibilityIsScoped(t *testing.T) {
 		t.Fatal("token snapshot error lost")
 	}
 	batch := []voiceStateFanoutEvent{{queuedAt: time.Now(), serverID: "server", channelID: "channel", event: ws.Event{}}}
-	service.voiceFanout.deliver(batch, map[string][]string{})
+	service.voiceFanout.deliverServer(batch, map[string][]string{})
 	if pushes != 0 || service.voiceFanout.dropped() != 1 || base.gets != 0 || access.tokens != 1 || access.visible != 1 {
 		t.Fatal("snapshot failure fell back or published")
 	}
 	access.err = nil
-	service.voiceFanout.deliver(batch, map[string][]string{})
+	service.voiceFanout.deliverServer(batch, map[string][]string{})
 	if pushes != 1 || base.gets != 0 || access.visible != 2 {
 		t.Fatal("declared visibility reader not used")
 	}

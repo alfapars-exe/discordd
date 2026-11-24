@@ -19,8 +19,9 @@ type membershipFixtureProviders struct {
 }
 type membershipFixtureVoice struct{}
 
-func (*membershipFixtureVoice) DisconnectUser(string)                 {}
-func (*membershipFixtureVoice) DisconnectServerMember(string, string) {}
+func (*membershipFixtureVoice) DisconnectUser(string)                     {}
+func (*membershipFixtureVoice) DisconnectSanctionedMember(string, string) {}
+func (*membershipFixtureVoice) DisconnectServerMember(string, string)     {}
 func membershipFixtureDependencies(t *testing.T) membershipDependencies {
 	db, repos := startupServiceDependencies(t)
 	providers := &membershipFixtureProviders{}

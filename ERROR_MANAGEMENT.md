@@ -64,6 +64,14 @@ bağlantısı açılır. Açık bağlantı 2–256,
 boş bağlantı 0–açık bağlantı sınırı arasında olmalıdır. Ayarlamadan önce DB
 bekleme süresi ve gerçek istek gecikmesi birlikte karşılaştırılmalıdır.
 
+Kullanılmayan bir havuz bağlantısı `POSTGRES_CONN_MAX_IDLE_SECONDS` saniye
+(varsayılan 300, 1–1800) sonra kapatılır; her bağlantı kullanılsa da 30 dakikada
+yenilenir. Kapanan bağlantının yerine açılan her yeni bağlantı uzak TCP, mTLS ve
+SCRAM el sıkışması gerektirir. Dakikalık `runtime stats` satırındaki
+`db_max_idle_time_closed_delta`, `db_max_idle_closed_delta` ve
+`db_max_lifetime_closed_delta` değerleri bu kapanışları, `db_wait_count_delta`
+ile `db_wait_duration_ms_delta` ise havuz beklemelerini gösterir.
+
 ## Hata kaydı arama
 
 `GET /api/admin/logs` mevcut `level`, `category`, `search`, `limit`, `offset`

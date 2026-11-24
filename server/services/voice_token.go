@@ -4,6 +4,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -95,19 +96,9 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 		lkInstance = s.selectVoiceInstance(ctx, channel.ServerID, lkInstance, now, used)
 	}
 
-	apiKey, err := crypto.Decrypt(lkInstance.APIKey, s.encryptionKey)
+	apiKey, apiSecret, err := s.liveKitCredentials(userID, lkInstance)
 	if err != nil {
-		s.logError(models.LogCategoryVoice, &userID, "LiveKit API key decryption failed", map[string]string{
-			"instance_id": lkInstance.ID, "error": pkg.ErrText(err),
-		})
-		return nil, fmt.Errorf("failed to decrypt livekit api key: %w", err)
-	}
-	apiSecret, err := crypto.Decrypt(lkInstance.APISecret, s.encryptionKey)
-	if err != nil {
-		s.logError(models.LogCategoryVoice, &userID, "LiveKit API secret decryption failed", map[string]string{
-			"instance_id": lkInstance.ID, "error": pkg.ErrText(err),
-		})
-		return nil, fmt.Errorf("failed to decrypt livekit api secret: %w", err)
+		return nil, err
 	}
 
 	// Resolve effective permissions (role base + channel overrides)
@@ -153,6 +144,58 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 		}
 	}
 
+	response, err := s.issueVoiceToken(voiceTokenIssue{
+		userID: userID, username: username, displayName: displayName,
+		serverID: channel.ServerID, channelID: channelID,
+		url: lkInstance.URL, apiKey: apiKey, apiSecret: apiSecret,
+		permissions: effectivePerms,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	pkg.MarkVoiceTime(ctx, "issue")
+	return response, nil
+}
+
+// liveKitCredentials decrypts the instance's API key pair for local JWT
+// signing. Shared by GenerateToken and MoveUser's embedded credentials
+// (moveCredentials, voice_admin.go).
+func (s *voiceService) liveKitCredentials(userID string, lkInstance *models.LiveKitInstance) (apiKey, apiSecret string, err error) {
+	apiKey, err = crypto.Decrypt(lkInstance.APIKey, s.encryptionKey)
+	if err != nil {
+		s.logError(models.LogCategoryVoice, &userID, "LiveKit API key decryption failed", map[string]string{
+			"instance_id": lkInstance.ID, "error": pkg.ErrText(err),
+		})
+		return "", "", fmt.Errorf("failed to decrypt livekit api key: %w", err)
+	}
+	apiSecret, err = crypto.Decrypt(lkInstance.APISecret, s.encryptionKey)
+	if err != nil {
+		s.logError(models.LogCategoryVoice, &userID, "LiveKit API secret decryption failed", map[string]string{
+			"instance_id": lkInstance.ID, "error": pkg.ErrText(err),
+		})
+		return "", "", fmt.Errorf("failed to decrypt livekit api secret: %w", err)
+	}
+	return apiKey, apiSecret, nil
+}
+
+// voiceTokenIssue is what issueVoiceToken needs once admission has been
+// decided by its caller.
+type voiceTokenIssue struct {
+	userID, username, displayName string
+	serverID, channelID           string
+	url, apiKey, apiSecret        string
+	permissions                   models.Permission
+}
+
+// issueVoiceToken is the "issue" half of token generation: publish grant,
+// JWT signing and the room's media key. It performs NO admission check and
+// no database access — membership, timeout, ConnectVoice (or the force-move
+// placement) and the user limit are the caller's responsibility. Callers:
+// GenerateToken (HTTP token request) and moveCredentials (voice_admin.go).
+// It takes s.mu itself (currentServerMute, roomMediaKey), so it must never
+// be called with the lock held.
+func (s *voiceService) issueVoiceToken(issue voiceTokenIssue) (*models.VoiceTokenResponse, error) {
 	// Server-mute (AdminUpdateState, voice_admin.go) is folded into the
 	// LiveKit publish grant itself, not just PermSpeak — previously a
 	// server-muted user still got canPublish=true here as long as they had
@@ -166,15 +209,15 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 	// preference the user themselves controls, not something a moderator
 	// enforces — blocking subscription would silently break the user's own
 	// ability to un-deafen and hear again.
-	sources := voicePublishSources(effectivePerms, s.currentServerMute(userID, channel.ServerID))
+	sources := voicePublishSources(issue.permissions, s.currentServerMute(issue.userID, issue.serverID))
 	canPublish := len(sources) > 0
 	canSubscribe := true
 	canPublishData := true
 
-	at := auth.NewAccessToken(apiKey, apiSecret)
+	at := auth.NewAccessToken(issue.apiKey, issue.apiSecret)
 
 	// Room name = "{serverID}:{channelID}" to avoid collisions across servers
-	roomName := channel.ServerID + ":" + channelID
+	roomName := issue.serverID + ":" + issue.channelID
 
 	grant := &auth.VideoGrant{
 		RoomJoin:       true,
@@ -185,22 +228,22 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 	}
 
 	grant.SetCanPublishSources(sources)
-	participantName := username
-	if displayName != "" {
-		participantName = displayName
+	participantName := issue.username
+	if issue.displayName != "" {
+		participantName = issue.displayName
 	}
 
 	// TTL controlled by voiceTokenTTL (15min as of 2026-05-27 audit).
 	// See voiceTokenTTL declaration for rationale.
 	at.SetVideoGrant(grant).
-		SetIdentity(userID).
+		SetIdentity(issue.userID).
 		SetName(participantName).
 		SetValidFor(voiceTokenTTL)
 
 	token, err := at.ToJWT()
 	if err != nil {
-		s.logError(models.LogCategoryVoice, &userID, "LiveKit JWT generation failed", map[string]string{
-			"channel_id": channelID, "error": pkg.ErrText(err),
+		s.logError(models.LogCategoryVoice, &issue.userID, "LiveKit JWT generation failed", map[string]string{
+			"channel_id": issue.channelID, "error": pkg.ErrText(err),
 		})
 		return nil, fmt.Errorf("failed to generate livekit token: %w", err)
 	}
@@ -211,11 +254,10 @@ func (s *voiceService) GenerateToken(ctx context.Context, userID, username, disp
 		return nil, fmt.Errorf("failed to create E2EE passphrase: %w", err)
 	}
 
-	pkg.MarkVoiceTime(ctx, "issue")
 	return &models.VoiceTokenResponse{
 		Token:          token,
-		URL:            lkInstance.URL,
-		ChannelID:      channelID,
+		URL:            issue.url,
+		ChannelID:      issue.channelID,
 		E2EEPassphrase: passphrase,
 		E2EEKeyIndex:   epoch % 256,
 		E2EEKeyEpoch:   uint64(epoch),
@@ -265,7 +307,7 @@ func (s *voiceService) selectVoiceInstance(ctx context.Context, serverID string,
 	year, month := now.Year(), now.Month()
 	thresholdSec := int64(lkInstance.SwitchThresholdMinutes) * 60
 	quotaSec := int64(lkInstance.MonthlyQuotaMinutes) * 60
-	if used+thresholdSec >= quotaSec {
+	if liveKitInstanceNearQuota(lkInstance, used) {
 		next, nextErr := s.livekitGetter.GetNextAutoSwitchInstance(ctx, lkInstance.ID, year, int(month))
 		if nextErr == nil && next != nil {
 			if migErr := s.livekitGetter.MigrateOneServer(ctx, serverID, next.ID); migErr == nil {
@@ -280,6 +322,13 @@ func (s *voiceService) selectVoiceInstance(ctx context.Context, serverID string,
 		// nextErr or next==nil: no eligible target — stay put.
 	}
 	return lkInstance
+}
+
+// liveKitInstanceNearQuota is the auto-switch rule documented on
+// ensureLiveKitInstance: used seconds are inside the instance's switch
+// threshold of its monthly quota.
+func liveKitInstanceNearQuota(lkInstance *models.LiveKitInstance, used int64) bool {
+	return used+int64(lkInstance.SwitchThresholdMinutes)*60 >= int64(lkInstance.MonthlyQuotaMinutes)*60
 }
 
 // GenerateScreenShareToken generates a LiveKit token for the iOS native screen share connection.
@@ -403,6 +452,49 @@ func (s *voiceService) loadVoiceChannel(ctx context.Context, userID, channelID s
 	}
 	ch, err := s.channelGetter.GetByID(ctx, channelID)
 	return ch, nil, err
+}
+
+// voiceJoinAccess is what JoinChannel reads from the database before it
+// touches the voice state.
+type voiceJoinAccess struct {
+	channel   *models.Channel
+	admission *models.VoiceAdmission // nil on the portable path: authorizeJoin decides
+	// instanceResolved: the access read already settled the server's LiveKit
+	// instance (snapshot path), so JoinChannel must not look it up again.
+	// instance is nil, with instanceErr set, when the server has none linked.
+	instanceResolved bool
+	instance         *models.LiveKitInstance
+	instanceErr      error
+}
+
+// loadVoiceJoin is JoinChannel's database read. With a snapshot reader the
+// channel, the admission facts and the server's LiveKit instance come from
+// one statement — the token read — instead of an admission read followed by
+// a separate instance lookup. The instance is only reported, for quota
+// attribution on the voice state: unlike GenerateToken, a join never selects
+// or migrates one.
+//
+// The token read joins the server's LiveKit instance, so pkg.ErrNotFound is
+// also what a channel on a server with no instance linked looks like. A join
+// has never required one (the session just goes unattributed), so that case
+// repeats the plain admission read; only that read's own pkg.ErrNotFound
+// means the channel is gone. Any other error is returned as it is — a failed
+// snapshot never falls back.
+func (s *voiceService) loadVoiceJoin(ctx context.Context, userID, channelID string) (voiceJoinAccess, error) {
+	reader := s.voiceAccess
+	if reader == nil {
+		channel, admission, err := s.loadVoiceChannel(ctx, userID, channelID)
+		return voiceJoinAccess{channel: channel, admission: admission}, err
+	}
+	admission, instance, _, err := reader.VoiceTokenAccess(ctx, userID, channelID, time.Now())
+	if errors.Is(err, pkg.ErrNotFound) {
+		channel, admission, admissionErr := s.loadVoiceChannel(ctx, userID, channelID)
+		return voiceJoinAccess{channel: channel, admission: admission, instanceResolved: true, instanceErr: err}, admissionErr
+	}
+	if err != nil {
+		return voiceJoinAccess{}, err
+	}
+	return voiceJoinAccess{channel: &admission.Channel, admission: admission, instanceResolved: true, instance: instance}, nil
 }
 
 func validateVoiceAdmission(a *models.VoiceAdmission) error {

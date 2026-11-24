@@ -20,7 +20,8 @@ vi.mock("../../../api/client", () => ({ ensureFreshToken: vi.fn(), getAuthGenera
 vi.mock("../../../utils/sounds", () => ({
   playJoinSound: vi.fn(),
   playLeaveSound: vi.fn(),
-  closeAudioContext: vi.fn(),
+  prepareAudioContext: vi.fn(),
+  releaseAudioContextWhenIdle: vi.fn(),
 }));
 // Identity translator — assertions check the raw i18n key, same pattern
 // voiceStore.test.ts uses for i18n.

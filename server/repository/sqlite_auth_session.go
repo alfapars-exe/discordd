@@ -11,10 +11,25 @@ import (
 	"github.com/argeinfina/hichat/pkg"
 )
 
-type sqliteAuthSessionRepo struct{ db database.TxQuerier }
+type sqliteAuthSessionRepo struct {
+	db            database.TxQuerier
+	scheduleTouch AuthSessionTouchScheduler
+}
 
-func NewSQLiteAuthSessionRepo(db database.TxQuerier) AuthSessionRepository {
-	return &sqliteAuthSessionRepo{db: db}
+type AuthSessionRepoOption func(*sqliteAuthSessionRepo)
+
+// WithAuthSessionTouchScheduler defers the last-active write of GetActive to
+// schedule. Without it the write stays synchronous on the caller's context.
+func WithAuthSessionTouchScheduler(schedule AuthSessionTouchScheduler) AuthSessionRepoOption {
+	return func(r *sqliteAuthSessionRepo) { r.scheduleTouch = schedule }
+}
+
+func NewSQLiteAuthSessionRepo(db database.TxQuerier, options ...AuthSessionRepoOption) AuthSessionRepository {
+	r := &sqliteAuthSessionRepo{db: db}
+	for _, option := range options {
+		option(r)
+	}
+	return r
 }
 
 func (r *sqliteAuthSessionRepo) Create(ctx context.Context, s *models.AuthSession) error {
@@ -115,13 +130,32 @@ func scanAuthSession(row interface{ Scan(...any) error }) (*models.AuthSession, 
 func (r *sqliteAuthSessionRepo) GetActive(ctx context.Context, userID, id string, now int64) (*models.AuthSession, error) {
 	s, err := scanAuthSession(r.db.QueryRowContext(ctx, `SELECT `+authSessionColumns+` FROM auth_sessions a JOIN users u ON u.id=a.user_id AND u.token_version=a.token_version WHERE a.id=? AND a.user_id=? AND a.revoked_at IS NULL AND a.expires_at>? AND u.is_platform_banned=0 AND NOT EXISTS(SELECT 1 FROM account_lifecycle WHERE user_id=u.id AND disabled_at IS NOT NULL)`, id, userID, now))
 	if err == nil && s.LastActiveAt < now-60 {
-		if result, writeErr := r.db.ExecContext(ctx, `UPDATE auth_sessions SET last_active_at=? WHERE id=? AND user_id=? AND revoked_at IS NULL AND last_active_at<?`, now, id, userID, now-60); writeErr == nil {
-			if n, _ := result.RowsAffected(); n == 1 {
-				s.LastActiveAt = now
-			}
+		touch := AuthSessionTouch{UserID: userID, SessionID: id, At: now}
+		if r.scheduleTouch != nil {
+			// The stored value lags until the deferred write lands; the returned
+			// row already carries the activity this read observed. That holds
+			// when the scheduler refuses the touch too (queue full, or
+			// stopping): the write is lost, the activity was still seen, and
+			// the caller's own session must not be listed as idle.
+			r.scheduleTouch(touch)
+			s.LastActiveAt = now
+		} else if touched, writeErr := TouchAuthSession(ctx, r.db, touch); writeErr == nil && touched {
+			s.LastActiveAt = now
 		}
 	}
 	return s, err
+}
+
+// TouchAuthSession records activity for a session that is still live. The
+// staleness guard makes a repeated touch a no-op and keeps a late deferred one
+// from moving last_active_at backwards.
+func TouchAuthSession(ctx context.Context, db database.TxQuerier, touch AuthSessionTouch) (bool, error) {
+	result, err := db.ExecContext(ctx, `UPDATE auth_sessions SET last_active_at=? WHERE id=? AND user_id=? AND revoked_at IS NULL AND last_active_at<?`, touch.At, touch.SessionID, touch.UserID, touch.At-60)
+	if err != nil {
+		return false, err
+	}
+	n, err := result.RowsAffected()
+	return n == 1, err
 }
 func (r *sqliteAuthSessionRepo) ListActive(ctx context.Context, userID string, now int64) ([]models.AuthSession, error) {
 	rows, err := r.db.QueryContext(ctx, `SELECT `+authSessionColumns+` FROM auth_sessions a JOIN users u ON u.id=a.user_id AND u.token_version=a.token_version WHERE a.user_id=? AND a.revoked_at IS NULL AND a.expires_at>? ORDER BY a.last_active_at DESC,a.id`, userID, now)

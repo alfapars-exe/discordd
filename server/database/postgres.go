@@ -76,10 +76,15 @@ func openPostgres(ctx context.Context, dsn string) (*sql.DB, *pgx.ConnConfig, er
 		_ = conn.Close()
 		return nil, nil, limitsErr
 	}
+	maxIdleTime, idleTimeErr := postgresConnMaxIdleTime()
+	if idleTimeErr != nil {
+		_ = conn.Close()
+		return nil, nil, idleTimeErr
+	}
 	conn.SetMaxOpenConns(maxOpen)
 	conn.SetMaxIdleConns(maxIdle)
-	conn.SetConnMaxLifetime(30 * time.Minute)
-	conn.SetConnMaxIdleTime(5 * time.Minute)
+	conn.SetConnMaxLifetime(postgresConnMaxLifetime)
+	conn.SetConnMaxIdleTime(maxIdleTime)
 	if err := pingPostgresWithRetry(ctx, conn, waitPostgresRetry); err != nil {
 		_ = conn.Close()
 		return nil, nil, fmt.Errorf("PostgreSQL connection failed (%s); check TLS, credentials and reachability", postgresConnectFailureCode(err))
@@ -117,4 +122,25 @@ func postgresPoolLimits() (int, int, error) {
 		return 0, 0, errors.New("PostgreSQL pool requires max-open >= 2 (one dedicated backend owner) and max-idle <= max-open")
 	}
 	return open, idle, nil
+}
+
+// postgresConnMaxLifetime recycles every pooled connection, used or not.
+const postgresConnMaxLifetime = 30 * time.Minute
+
+// postgresConnMaxIdleTime is how long an unused pooled connection is kept.
+// Replacing a closed one costs the next request a remote TCP, mTLS and SCRAM
+// handshake, so a deployment with bursty traffic can raise
+// POSTGRES_CONN_MAX_IDLE_SECONDS up to the connection lifetime. Zero is
+// rejected: database/sql reads it as "no idle limit", the opposite of what
+// POSTGRES_MAX_IDLE_CONNS=0 means.
+func postgresConnMaxIdleTime() (time.Duration, error) {
+	seconds, limit := 300, int(postgresConnMaxLifetime/time.Second)
+	if raw := os.Getenv("POSTGRES_CONN_MAX_IDLE_SECONDS"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 || n > limit {
+			return 0, fmt.Errorf("invalid POSTGRES_CONN_MAX_IDLE_SECONDS; expected integer 1..%d", limit)
+		}
+		seconds = n
+	}
+	return time.Duration(seconds) * time.Second, nil
 }

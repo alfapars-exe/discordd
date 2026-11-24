@@ -81,16 +81,28 @@ export function useVoice({
         // it, useInitialRoomSync could read a transient `false` (from
         // leaveVoiceChannel()'s reset below) and briefly enable a mic that
         // should stay locked.
-        const { isServerMuted: prevServerMuted, isServerDeafened: prevServerDeafened } =
+        //
+        // The participant map is kept as well. leaveVoiceChannel() removes
+        // our own entry from it, which is right for a real leave, but here
+        // the server has been told nothing: it still lists us in the old
+        // channel, and its broadcasts are what take us out of it — the join
+        // broadcast of the new channel, or the leave broadcast after the
+        // ghost-state guard below. If this switch is abandoned and the user
+        // returns to the old channel, the server answers that voice_join
+        // with its silent same-channel rejoin (no broadcast), so an entry
+        // removed here would never come back and our own row would stay
+        // unconfirmed in the sidebar until an unrelated update.
+        const { isServerMuted: prevServerMuted, isServerDeafened: prevServerDeafened, voiceStates: prevVoiceStates } =
           useVoiceStore.getState();
         leaveVoiceChannel();
         useVoiceStore.setState({
           isServerMuted: prevServerMuted,
           isServerDeafened: prevServerDeafened,
+          voiceStates: prevVoiceStates,
         });
       }
 
-      const request = joinVoiceChannel(channelId);
+      const request = joinVoiceChannel(channelId, { kind: wasSwitching ? "switch" : "join" });
       const generation = useVoiceStore.getState()._joinGeneration;
       const tokenData = await request;
       const currentAuth = getAuthSessionSnapshot();

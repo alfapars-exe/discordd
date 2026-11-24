@@ -8,6 +8,12 @@ import type { VoiceState, User } from "../../types";
 
 type VoiceParticipantListProps = {
   participants: VoiceState[];
+  /**
+   * Rows the server has not confirmed yet (a move or the user's own join in
+   * flight). Drawn dimmed, and a drag started on them is cancelled, until
+   * the broadcast arrives.
+   */
+  pendingUserIds?: ReadonlySet<string>;
   channelId: string;
   channelName: string;
   canMoveMembers: boolean;
@@ -28,6 +34,7 @@ type VoiceParticipantListProps = {
 
 function VoiceParticipantList({
   participants,
+  pendingUserIds,
   channelId,
   channelName,
   canMoveMembers,
@@ -58,6 +65,8 @@ function VoiceParticipantList({
     <div className="ch-tree-voice-users">
       {participants.map((p) => {
         const isMe = p.user_id === currentUser?.id;
+        const isPending = pendingUserIds?.has(p.user_id) ?? false;
+        const canDrag = !isPending && (isMe || canMoveMembers);
         const isLocalMuted = ownVoicePeerValue(localMutedUsers, p.user_id) ?? false;
         const isSpeaking = activeSpeakers[p.user_id] ?? false;
         // Resolve viewer ids → participant rows for the indented sub-list.
@@ -70,11 +79,19 @@ function VoiceParticipantList({
         return (
           <div key={p.user_id} className="ch-tree-vu-stack">
           <div
-            className={`ch-tree-voice-user${isSpeaking ? " speaking" : ""}${draggingVoiceUserId === p.user_id ? " vu-dragging" : ""}`}
-            draggable={isMe || canMoveMembers}
-            onDragStart={(e) => onDragStart(e, p.user_id, channelId)}
+            className={`ch-tree-voice-user${isSpeaking ? " speaking" : ""}${draggingVoiceUserId === p.user_id ? " vu-dragging" : ""}${isPending ? " vu-pending" : ""}`}
+            // A pending row stays a drag source and cancels the drag itself:
+            // with draggable=false the browser would walk up to the channel
+            // wrapper and start a channel reorder instead.
+            draggable={canDrag || isPending}
+            onDragStart={(e) => {
+              // Also reached by drags that bubble up from the avatar image.
+              if (!canDrag) { e.preventDefault(); e.stopPropagation(); return; }
+              onDragStart(e, p.user_id, channelId);
+            }}
             onDragEnd={onDragEnd}
-            title={(isMe || canMoveMembers) ? tVoice("dragToMove") : undefined}
+            aria-busy={isPending || undefined}
+            title={isPending ? tVoice("connectingToVoice") : canDrag ? tVoice("dragToMove") : undefined}
             onContextMenu={(e) => {
               if (isMe) return;
               e.preventDefault();

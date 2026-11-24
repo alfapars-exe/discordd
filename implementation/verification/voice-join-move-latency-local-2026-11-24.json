@@ -1,0 +1,3809 @@
+{
+  "label": "latency-default",
+  "rounds": 10,
+  "coldOnly": false,
+  "soundOnly": false,
+  "executable": "C:\\Users\\PARS\\AppData\\Local\\Temp\\claude\\de17facdf626fb99\\63d331b5-3191-49ec-ac5e-dd3f7940c002\\scratchpad\\measure\\release\\win-unpacked\\HiChat.exe",
+  "fixture": "loopback Go9090 / LiveKit17880 / TLS9443",
+  "measurement": "real UI actions; token fetch wall time; remote participant list (server-confirmed row, an optimistic pending row is ignored); decoded remote-track WebAudio PCM RMS plus RTP counters; rendered event cue PCM downstream of actual gain before OS output",
+  "pcmProbe": {
+    "pollIntervalMs": 40,
+    "analyserFFTSize": 2048,
+    "positiveRmsThreshold": 0.0001
+  },
+  "limitations": [
+    "Chromium fake microphone with bundled licensed FLEURS speech fixture; --mute-audio suppresses physical speaker output",
+    "Hidden test windows; local network only; no claim about WAN or physical audio-device latency",
+    "Non-loopback STUN/TURN endpoints filtered in the fixture; restricted-network/TURN paths are untested"
+  ],
+  "joins": [
+    {
+      "preparedAt": 1795508375398,
+      "actionAt": 1795508377261,
+      "preActionActivity": {
+        "captureRequests": 0,
+        "peerConnectionsCreated": 0,
+        "roomExposed": false
+      },
+      "capabilityQueries": [],
+      "listAt": 1795508377450,
+      "decodedAt": 1795508377750,
+      "decodedSamplesAt": 1795508377750,
+      "connectionAt": 1795508377590,
+      "token": [
+        {
+          "durationMs": 64,
+          "sincePreparationMs": 2011,
+          "status": 200,
+          "serverTiming": "auth;dur=1.6, token_lookup;dur=3.7, issue;dur=0.0",
+          "sinceActionMs": 148
+        }
+      ],
+      "ws": [
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 78,
+          "self": false,
+          "channel": "bench-alpha",
+          "sinceActionMs": -1785
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 2049,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": 186
+        }
+      ],
+      "cues": [
+        {
+          "sincePreparationMs": 2062,
+          "duration": 0.8629375,
+          "asset": "join-B_xQuNtw.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.23349978378769695,
+          "gainAfterAudioQuantum": 1,
+          "samples": 18,
+          "sinceActionMs": 199
+        }
+      ],
+      "phases": [],
+      "longTasks": [],
+      "lastStats": [
+        {
+          "pc": 0,
+          "type": "inbound-rtp",
+          "kind": "audio",
+          "packetsReceived": 27,
+          "concealedSamples": 0,
+          "bytesReceived": 18322,
+          "totalAudioEnergy": 0,
+          "totalSamplesReceived": 24000,
+          "audioLevel": 0
+        },
+        {
+          "pc": 0,
+          "type": "outbound-rtp",
+          "kind": "audio",
+          "bytesSent": 23784
+        },
+        {
+          "pc": 0,
+          "type": "media-source",
+          "kind": "audio",
+          "totalAudioEnergy": 0.26847522164103593,
+          "audioLevel": 0.9731437116611225
+        }
+      ],
+      "filteredIce": [
+        "global.stun.twilio.com",
+        "stun.l.google.com",
+        "stun1.l.google.com"
+      ],
+      "pcm": [
+        {
+          "pc": 0,
+          "maxRms": 0.10791016033784727,
+          "state": "running"
+        },
+        {
+          "pc": 0,
+          "maxRms": 0,
+          "state": "running"
+        },
+        {
+          "pc": 0,
+          "maxRms": 0,
+          "state": "running"
+        }
+      ],
+      "room": {
+        "state": "connected",
+        "canPlaybackAudio": true,
+        "microphone": {
+          "muted": false,
+          "enabled": true,
+          "pipeline": {
+            "requestedEngine": "none",
+            "activeEngine": "none",
+            "phase": "ready",
+            "sampleRate": 48000,
+            "gateAvailable": true,
+            "gateEnabled": true,
+            "gainAvailable": true,
+            "inputDb": -10.855272914448657,
+            "outputDb": -9.430389309646296,
+            "gateOpen": true
+          }
+        },
+        "remotes": [
+          {
+            "microphone": [
+              {
+                "subscribed": true,
+                "muted": false,
+                "trackPresent": true
+              }
+            ]
+          }
+        ]
+      },
+      "peerConnections": [
+        {
+          "state": "connected",
+          "senders": [
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {
+              "kind": "audio",
+              "enabled": true,
+              "ready": "live"
+            }
+          ]
+        }
+      ],
+      "assetRequests": [],
+      "timingOrigin": "actual DOM input event",
+      "resolvedActionAt": 1795508377261,
+      "actionObserver": "member DOM click",
+      "listObservedAt": 1795508377448,
+      "listObserver": "owner sidebar",
+      "listMs": 187,
+      "decodedAudioMs": 489,
+      "decodedSamplesMs": 489,
+      "connectionMs": 329,
+      "kind": "cold application voice join"
+    },
+    {
+      "preparedAt": 1795508380302,
+      "actionAt": 1795508382268,
+      "preActionActivity": {
+        "captureRequests": 0,
+        "peerConnectionsCreated": 1,
+        "roomExposed": false
+      },
+      "capabilityQueries": [],
+      "listAt": 1795508382371,
+      "decodedAt": 1795508382619,
+      "decodedSamplesAt": 1795508382619,
+      "connectionAt": 1795508382425,
+      "token": [
+        {
+          "durationMs": 58,
+          "sincePreparationMs": 2027,
+          "status": 200,
+          "serverTiming": "auth;dur=1.0, token_lookup;dur=1.3, issue;dur=0.5",
+          "sinceActionMs": 61
+        }
+      ],
+      "ws": [
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 48,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": -1918
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 2038,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": 72
+        }
+      ],
+      "cues": [
+        {
+          "sincePreparationMs": 66,
+          "duration": 1.6065208333333334,
+          "asset": "leave-DCg-ybOa.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.21137436906001272,
+          "gainAfterAudioQuantum": 1,
+          "samples": 43,
+          "sinceActionMs": -1900
+        },
+        {
+          "sincePreparationMs": 2032,
+          "duration": 0.8629375,
+          "asset": "join-B_xQuNtw.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.23349978378769695,
+          "gainAfterAudioQuantum": 1,
+          "samples": 23,
+          "sinceActionMs": 66
+        }
+      ],
+      "phases": [],
+      "longTasks": [],
+      "lastStats": [
+        {
+          "pc": 1,
+          "type": "inbound-rtp",
+          "kind": "audio",
+          "packetsReceived": 38,
+          "concealedSamples": 0,
+          "bytesReceived": 26012,
+          "totalAudioEnergy": 0,
+          "totalSamplesReceived": 33600,
+          "audioLevel": 0
+        },
+        {
+          "pc": 1,
+          "type": "outbound-rtp",
+          "kind": "audio",
+          "bytesSent": 25348
+        },
+        {
+          "pc": 1,
+          "type": "media-source",
+          "kind": "audio",
+          "totalAudioEnergy": 0.45800289521900794,
+          "audioLevel": 1
+        }
+      ],
+      "filteredIce": [
+        "global.stun.twilio.com",
+        "stun.l.google.com",
+        "stun1.l.google.com"
+      ],
+      "pcm": [
+        {
+          "pc": 1,
+          "maxRms": 0.11954210120528666,
+          "state": "running"
+        },
+        {
+          "pc": 1,
+          "maxRms": 0,
+          "state": "running"
+        },
+        {
+          "pc": 1,
+          "maxRms": 0,
+          "state": "running"
+        }
+      ],
+      "room": {
+        "state": "connected",
+        "canPlaybackAudio": true,
+        "microphone": {
+          "muted": false,
+          "enabled": true,
+          "pipeline": {
+            "requestedEngine": "none",
+            "activeEngine": "none",
+            "phase": "ready",
+            "sampleRate": 48000,
+            "gateAvailable": true,
+            "gateEnabled": true,
+            "gainAvailable": true,
+            "inputDb": -16.547039836910635,
+            "outputDb": -19.821399771469807,
+            "gateOpen": true
+          }
+        },
+        "remotes": [
+          {
+            "microphone": [
+              {
+                "subscribed": true,
+                "muted": false,
+                "trackPresent": true
+              }
+            ]
+          }
+        ]
+      },
+      "peerConnections": [
+        {
+          "state": "connected",
+          "senders": [
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {
+              "kind": "audio",
+              "enabled": true,
+              "ready": "live"
+            }
+          ]
+        }
+      ],
+      "assetRequests": [],
+      "timingOrigin": "actual DOM input event",
+      "resolvedActionAt": 1795508382268,
+      "actionObserver": "member DOM click",
+      "listObservedAt": 1795508382360,
+      "listObserver": "owner sidebar",
+      "listMs": 92,
+      "decodedAudioMs": 351,
+      "decodedSamplesMs": 351,
+      "connectionMs": 157,
+      "kind": "warm voice rejoin"
+    },
+    {
+      "preparedAt": 1795508385285,
+      "actionAt": 1795508387268,
+      "preActionActivity": {
+        "captureRequests": 0,
+        "peerConnectionsCreated": 2,
+        "roomExposed": false
+      },
+      "capabilityQueries": [],
+      "listAt": 1795508387372,
+      "decodedAt": 1795508387576,
+      "decodedSamplesAt": 1795508387611,
+      "connectionAt": 1795508387430,
+      "token": [
+        {
+          "durationMs": 67,
+          "sincePreparationMs": 2053,
+          "status": 200,
+          "serverTiming": "auth;dur=1.0, token_lookup;dur=2.6, issue;dur=0.0",
+          "sinceActionMs": 70
+        }
+      ],
+      "ws": [
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 56,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": -1927
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 2063,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": 80
+        }
+      ],
+      "cues": [
+        {
+          "sincePreparationMs": 2058,
+          "duration": 0.8629375,
+          "asset": "join-B_xQuNtw.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.18816173288878574,
+          "gainAfterAudioQuantum": 1,
+          "samples": 22,
+          "sinceActionMs": 75
+        }
+      ],
+      "phases": [],
+      "longTasks": [],
+      "lastStats": [
+        {
+          "pc": 2,
+          "type": "inbound-rtp",
+          "kind": "audio",
+          "packetsReceived": 38,
+          "concealedSamples": 0,
+          "bytesReceived": 26057,
+          "totalAudioEnergy": 0,
+          "totalSamplesReceived": 33120,
+          "audioLevel": 0
+        },
+        {
+          "pc": 2,
+          "type": "outbound-rtp",
+          "kind": "audio",
+          "bytesSent": 24863
+        },
+        {
+          "pc": 2,
+          "type": "media-source",
+          "kind": "audio",
+          "totalAudioEnergy": 0.4633034574259842,
+          "audioLevel": 1
+        }
+      ],
+      "filteredIce": [
+        "global.stun.twilio.com",
+        "stun.l.google.com",
+        "stun1.l.google.com"
+      ],
+      "pcm": [
+        {
+          "pc": 2,
+          "maxRms": 0.12875914127139176,
+          "state": "running"
+        },
+        {
+          "pc": 2,
+          "maxRms": 0,
+          "state": "running"
+        },
+        {
+          "pc": 2,
+          "maxRms": 0,
+          "state": "running"
+        }
+      ],
+      "room": {
+        "state": "connected",
+        "canPlaybackAudio": true,
+        "microphone": {
+          "muted": false,
+          "enabled": true,
+          "pipeline": {
+            "requestedEngine": "none",
+            "activeEngine": "none",
+            "phase": "ready",
+            "sampleRate": 48000,
+            "gateAvailable": true,
+            "gateEnabled": true,
+            "gainAvailable": true,
+            "inputDb": -18.57896354695868,
+            "outputDb": -17.880414626236167,
+            "gateOpen": true
+          }
+        },
+        "remotes": [
+          {
+            "microphone": [
+              {
+                "subscribed": true,
+                "muted": false,
+                "trackPresent": true
+              }
+            ]
+          }
+        ]
+      },
+      "peerConnections": [
+        {
+          "state": "connected",
+          "senders": [
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {
+              "kind": "audio",
+              "enabled": true,
+              "ready": "live"
+            }
+          ]
+        }
+      ],
+      "assetRequests": [],
+      "timingOrigin": "actual DOM input event",
+      "resolvedActionAt": 1795508387268,
+      "actionObserver": "member DOM click",
+      "listObservedAt": 1795508387366,
+      "listObserver": "owner sidebar",
+      "listMs": 98,
+      "decodedAudioMs": 308,
+      "decodedSamplesMs": 343,
+      "connectionMs": 162,
+      "kind": "warm voice rejoin"
+    },
+    {
+      "preparedAt": 1795508390286,
+      "actionAt": 1795508392268,
+      "preActionActivity": {
+        "captureRequests": 0,
+        "peerConnectionsCreated": 3,
+        "roomExposed": false
+      },
+      "capabilityQueries": [],
+      "listAt": 1795508392412,
+      "decodedAt": 1795508392580,
+      "decodedSamplesAt": 1795508392535,
+      "connectionAt": 1795508392412,
+      "token": [
+        {
+          "durationMs": 52,
+          "sincePreparationMs": 2037,
+          "status": 200,
+          "serverTiming": "auth;dur=1.2, token_lookup;dur=1.5, issue;dur=0.0",
+          "sinceActionMs": 55
+        }
+      ],
+      "ws": [
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 52,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": -1930
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 2046,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": 64
+        }
+      ],
+      "cues": [
+        {
+          "sincePreparationMs": 2042,
+          "duration": 0.8629375,
+          "asset": "join-B_xQuNtw.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.23349978378769695,
+          "gainAfterAudioQuantum": 1,
+          "samples": 22,
+          "sinceActionMs": 60
+        }
+      ],
+      "phases": [],
+      "longTasks": [],
+      "lastStats": [
+        {
+          "pc": 3,
+          "type": "inbound-rtp",
+          "kind": "audio",
+          "packetsReceived": 36,
+          "concealedSamples": 679,
+          "bytesReceived": 24475,
+          "totalAudioEnergy": 0,
+          "totalSamplesReceived": 33600,
+          "audioLevel": 0
+        },
+        {
+          "pc": 3,
+          "type": "outbound-rtp",
+          "kind": "audio",
+          "bytesSent": 24092
+        },
+        {
+          "pc": 3,
+          "type": "media-source",
+          "kind": "audio",
+          "totalAudioEnergy": 0.4180028952190079,
+          "audioLevel": 1
+        }
+      ],
+      "filteredIce": [
+        "global.stun.twilio.com",
+        "stun.l.google.com",
+        "stun1.l.google.com"
+      ],
+      "pcm": [
+        {
+          "pc": 3,
+          "maxRms": 0.1309289092740116,
+          "state": "running"
+        },
+        {
+          "pc": 3,
+          "maxRms": 0,
+          "state": "running"
+        },
+        {
+          "pc": 3,
+          "maxRms": 0,
+          "state": "running"
+        }
+      ],
+      "room": {
+        "state": "connected",
+        "canPlaybackAudio": true,
+        "microphone": {
+          "muted": false,
+          "enabled": true,
+          "pipeline": {
+            "requestedEngine": "none",
+            "activeEngine": "none",
+            "phase": "ready",
+            "sampleRate": 48000,
+            "gateAvailable": true,
+            "gateEnabled": true,
+            "gainAvailable": true,
+            "inputDb": -16.547039836910635,
+            "outputDb": -16.594545549124305,
+            "gateOpen": true
+          }
+        },
+        "remotes": [
+          {
+            "microphone": [
+              {
+                "subscribed": true,
+                "muted": false,
+                "trackPresent": true
+              }
+            ]
+          }
+        ]
+      },
+      "peerConnections": [
+        {
+          "state": "connected",
+          "senders": [
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {
+              "kind": "audio",
+              "enabled": true,
+              "ready": "live"
+            }
+          ]
+        }
+      ],
+      "assetRequests": [],
+      "timingOrigin": "actual DOM input event",
+      "resolvedActionAt": 1795508392268,
+      "actionObserver": "member DOM click",
+      "listObservedAt": 1795508392360,
+      "listObserver": "owner sidebar",
+      "listMs": 92,
+      "decodedAudioMs": 312,
+      "decodedSamplesMs": 267,
+      "connectionMs": 144,
+      "kind": "warm voice rejoin"
+    },
+    {
+      "preparedAt": 1795508395293,
+      "actionAt": 1795508397274,
+      "preActionActivity": {
+        "captureRequests": 0,
+        "peerConnectionsCreated": 4,
+        "roomExposed": false
+      },
+      "capabilityQueries": [],
+      "listAt": 1795508397371,
+      "decodedAt": 1795508397586,
+      "decodedSamplesAt": 1795508397627,
+      "connectionAt": 1795508397438,
+      "token": [
+        {
+          "durationMs": 59,
+          "sincePreparationMs": 2043,
+          "status": 200,
+          "serverTiming": "auth;dur=1.6, token_lookup;dur=1.1, issue;dur=0.0",
+          "sinceActionMs": 62
+        }
+      ],
+      "ws": [
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 46,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": -1935
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 2052,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": 71
+        }
+      ],
+      "cues": [
+        {
+          "sincePreparationMs": 2047,
+          "duration": 0.8629375,
+          "asset": "join-B_xQuNtw.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.21763273815320677,
+          "gainAfterAudioQuantum": 1,
+          "samples": 22,
+          "sinceActionMs": 66
+        }
+      ],
+      "phases": [],
+      "longTasks": [],
+      "lastStats": [
+        {
+          "pc": 4,
+          "type": "inbound-rtp",
+          "kind": "audio",
+          "packetsReceived": 36,
+          "concealedSamples": 803,
+          "bytesReceived": 24525,
+          "totalAudioEnergy": 0,
+          "totalSamplesReceived": 33600,
+          "audioLevel": 0
+        },
+        {
+          "pc": 4,
+          "type": "outbound-rtp",
+          "kind": "audio",
+          "bytesSent": 24803
+        },
+        {
+          "pc": 4,
+          "type": "media-source",
+          "kind": "audio",
+          "totalAudioEnergy": 0.4505922118300596,
+          "audioLevel": 1
+        }
+      ],
+      "filteredIce": [
+        "global.stun.twilio.com",
+        "stun.l.google.com",
+        "stun1.l.google.com"
+      ],
+      "pcm": [
+        {
+          "pc": 4,
+          "maxRms": 0.12873711365335783,
+          "state": "running"
+        },
+        {
+          "pc": 4,
+          "maxRms": 0,
+          "state": "running"
+        },
+        {
+          "pc": 4,
+          "maxRms": 0,
+          "state": "running"
+        }
+      ],
+      "room": {
+        "state": "connected",
+        "canPlaybackAudio": true,
+        "microphone": {
+          "muted": false,
+          "enabled": true,
+          "pipeline": {
+            "requestedEngine": "none",
+            "activeEngine": "none",
+            "phase": "ready",
+            "sampleRate": 48000,
+            "gateAvailable": true,
+            "gateEnabled": true,
+            "gainAvailable": true,
+            "inputDb": -18.57896354695868,
+            "outputDb": -18.816263985074592,
+            "gateOpen": true
+          }
+        },
+        "remotes": [
+          {
+            "microphone": [
+              {
+                "subscribed": true,
+                "muted": false,
+                "trackPresent": true
+              }
+            ]
+          }
+        ]
+      },
+      "peerConnections": [
+        {
+          "state": "connected",
+          "senders": [
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {
+              "kind": "audio",
+              "enabled": true,
+              "ready": "live"
+            }
+          ]
+        }
+      ],
+      "assetRequests": [],
+      "timingOrigin": "actual DOM input event",
+      "resolvedActionAt": 1795508397274,
+      "actionObserver": "member DOM click",
+      "listObservedAt": 1795508397365,
+      "listObserver": "owner sidebar",
+      "listMs": 91,
+      "decodedAudioMs": 312,
+      "decodedSamplesMs": 353,
+      "connectionMs": 164,
+      "kind": "warm voice rejoin"
+    },
+    {
+      "preparedAt": 1795508400297,
+      "actionAt": 1795508402277,
+      "preActionActivity": {
+        "captureRequests": 0,
+        "peerConnectionsCreated": 5,
+        "roomExposed": false
+      },
+      "capabilityQueries": [],
+      "listAt": 1795508402378,
+      "decodedAt": 1795508402574,
+      "decodedSamplesAt": 1795508402538,
+      "connectionAt": 1795508402451,
+      "token": [
+        {
+          "durationMs": 67,
+          "sincePreparationMs": 2050,
+          "status": 200,
+          "serverTiming": "auth;dur=2.2, token_lookup;dur=1.0, issue;dur=0.0",
+          "sinceActionMs": 70
+        }
+      ],
+      "ws": [
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 54,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": -1926
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 2062,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": 82
+        }
+      ],
+      "cues": [
+        {
+          "sincePreparationMs": 2056,
+          "duration": 0.8629375,
+          "asset": "join-B_xQuNtw.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.22735296816881612,
+          "gainAfterAudioQuantum": 1,
+          "samples": 21,
+          "sinceActionMs": 76
+        }
+      ],
+      "phases": [],
+      "longTasks": [],
+      "lastStats": [
+        {
+          "pc": 5,
+          "type": "inbound-rtp",
+          "kind": "audio",
+          "packetsReceived": 35,
+          "concealedSamples": 2591,
+          "bytesReceived": 23717,
+          "totalAudioEnergy": 0,
+          "totalSamplesReceived": 33600,
+          "audioLevel": 0
+        },
+        {
+          "pc": 5,
+          "type": "outbound-rtp",
+          "kind": "audio",
+          "bytesSent": 22892
+        },
+        {
+          "pc": 5,
+          "type": "media-source",
+          "kind": "audio",
+          "totalAudioEnergy": 0.37520118549437403,
+          "audioLevel": 1
+        }
+      ],
+      "filteredIce": [
+        "global.stun.twilio.com",
+        "stun.l.google.com",
+        "stun1.l.google.com"
+      ],
+      "pcm": [
+        {
+          "pc": 5,
+          "maxRms": 0.13418762667987028,
+          "state": "running"
+        },
+        {
+          "pc": 5,
+          "maxRms": 0,
+          "state": "running"
+        },
+        {
+          "pc": 5,
+          "maxRms": 0,
+          "state": "running"
+        }
+      ],
+      "room": {
+        "state": "connected",
+        "canPlaybackAudio": true,
+        "microphone": {
+          "muted": false,
+          "enabled": true,
+          "pipeline": {
+            "requestedEngine": "none",
+            "activeEngine": "none",
+            "phase": "ready",
+            "sampleRate": 48000,
+            "gateAvailable": true,
+            "gateEnabled": true,
+            "gainAvailable": true,
+            "inputDb": -18.642010869483677,
+            "outputDb": -19.579417784611024,
+            "gateOpen": true
+          }
+        },
+        "remotes": [
+          {
+            "microphone": [
+              {
+                "subscribed": true,
+                "muted": false,
+                "trackPresent": true
+              }
+            ]
+          }
+        ]
+      },
+      "peerConnections": [
+        {
+          "state": "connected",
+          "senders": [
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {
+              "kind": "audio",
+              "enabled": true,
+              "ready": "live"
+            }
+          ]
+        }
+      ],
+      "assetRequests": [],
+      "timingOrigin": "actual DOM input event",
+      "resolvedActionAt": 1795508402277,
+      "actionObserver": "member DOM click",
+      "listObservedAt": 1795508402361,
+      "listObserver": "owner sidebar",
+      "listMs": 84,
+      "decodedAudioMs": 297,
+      "decodedSamplesMs": 261,
+      "connectionMs": 174,
+      "kind": "warm voice rejoin"
+    },
+    {
+      "preparedAt": 1795508405302,
+      "actionAt": 1795508407277,
+      "preActionActivity": {
+        "captureRequests": 0,
+        "peerConnectionsCreated": 6,
+        "roomExposed": false
+      },
+      "capabilityQueries": [],
+      "listAt": 1795508407382,
+      "decodedAt": 1795508407615,
+      "decodedSamplesAt": 1795508407572,
+      "connectionAt": 1795508407460,
+      "token": [
+        {
+          "durationMs": 61,
+          "sincePreparationMs": 2041,
+          "status": 200,
+          "serverTiming": "auth;dur=1.6, token_lookup;dur=0.5, issue;dur=0.6",
+          "sinceActionMs": 66
+        }
+      ],
+      "ws": [
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 59,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": -1916
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 2057,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": 82
+        }
+      ],
+      "cues": [
+        {
+          "sincePreparationMs": 2049,
+          "duration": 0.8629375,
+          "asset": "join-B_xQuNtw.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.23349978378769695,
+          "gainAfterAudioQuantum": 1,
+          "samples": 23,
+          "sinceActionMs": 74
+        }
+      ],
+      "phases": [],
+      "longTasks": [],
+      "lastStats": [
+        {
+          "pc": 6,
+          "type": "inbound-rtp",
+          "kind": "audio",
+          "packetsReceived": 34,
+          "concealedSamples": 0,
+          "bytesReceived": 23148,
+          "totalAudioEnergy": 0,
+          "totalSamplesReceived": 31200,
+          "audioLevel": 0
+        },
+        {
+          "pc": 6,
+          "type": "outbound-rtp",
+          "kind": "audio",
+          "bytesSent": 22273
+        },
+        {
+          "pc": 6,
+          "type": "media-source",
+          "kind": "audio",
+          "totalAudioEnergy": 0.40635556898285946,
+          "audioLevel": 1
+        }
+      ],
+      "filteredIce": [
+        "global.stun.twilio.com",
+        "stun.l.google.com",
+        "stun1.l.google.com"
+      ],
+      "pcm": [
+        {
+          "pc": 6,
+          "maxRms": 0.117124526286318,
+          "state": "running"
+        },
+        {
+          "pc": 6,
+          "maxRms": 0,
+          "state": "running"
+        },
+        {
+          "pc": 6,
+          "maxRms": 0,
+          "state": "running"
+        }
+      ],
+      "room": {
+        "state": "connected",
+        "canPlaybackAudio": true,
+        "microphone": {
+          "muted": false,
+          "enabled": true,
+          "pipeline": {
+            "requestedEngine": "none",
+            "activeEngine": "none",
+            "phase": "ready",
+            "sampleRate": 48000,
+            "gateAvailable": true,
+            "gateEnabled": true,
+            "gainAvailable": true,
+            "inputDb": -24.840887423121035,
+            "outputDb": -18.79282612060253,
+            "gateOpen": true
+          }
+        },
+        "remotes": [
+          {
+            "microphone": [
+              {
+                "subscribed": true,
+                "muted": false,
+                "trackPresent": true
+              }
+            ]
+          }
+        ]
+      },
+      "peerConnections": [
+        {
+          "state": "connected",
+          "senders": [
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {
+              "kind": "audio",
+              "enabled": true,
+              "ready": "live"
+            }
+          ]
+        }
+      ],
+      "assetRequests": [],
+      "timingOrigin": "actual DOM input event",
+      "resolvedActionAt": 1795508407277,
+      "actionObserver": "member DOM click",
+      "listObservedAt": 1795508407360,
+      "listObserver": "owner sidebar",
+      "listMs": 83,
+      "decodedAudioMs": 338,
+      "decodedSamplesMs": 295,
+      "connectionMs": 183,
+      "kind": "warm voice rejoin"
+    },
+    {
+      "preparedAt": 1795508410294,
+      "actionAt": 1795508412277,
+      "preActionActivity": {
+        "captureRequests": 0,
+        "peerConnectionsCreated": 7,
+        "roomExposed": false
+      },
+      "capabilityQueries": [],
+      "listAt": 1795508412370,
+      "decodedAt": 1795508412596,
+      "decodedSamplesAt": 1795508412627,
+      "connectionAt": 1795508412427,
+      "token": [
+        {
+          "durationMs": 57,
+          "sincePreparationMs": 2043,
+          "status": 200,
+          "serverTiming": "auth;dur=1.2, token_lookup;dur=1.5, issue;dur=0.0",
+          "sinceActionMs": 60
+        }
+      ],
+      "ws": [
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 49,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": -1934
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 2051,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": 68
+        }
+      ],
+      "cues": [
+        {
+          "sincePreparationMs": 2047,
+          "duration": 0.8629375,
+          "asset": "join-B_xQuNtw.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.21763273815320677,
+          "gainAfterAudioQuantum": 1,
+          "samples": 22,
+          "sinceActionMs": 64
+        }
+      ],
+      "phases": [],
+      "longTasks": [],
+      "lastStats": [
+        {
+          "pc": 7,
+          "type": "inbound-rtp",
+          "kind": "audio",
+          "packetsReceived": 33,
+          "concealedSamples": 0,
+          "bytesReceived": 22397,
+          "totalAudioEnergy": 0,
+          "totalSamplesReceived": 30240,
+          "audioLevel": 0
+        },
+        {
+          "pc": 7,
+          "type": "outbound-rtp",
+          "kind": "audio",
+          "bytesSent": 22781
+        },
+        {
+          "pc": 7,
+          "type": "media-source",
+          "kind": "audio",
+          "totalAudioEnergy": 0.3780028952190079,
+          "audioLevel": 1
+        }
+      ],
+      "filteredIce": [
+        "global.stun.twilio.com",
+        "stun.l.google.com",
+        "stun1.l.google.com"
+      ],
+      "pcm": [
+        {
+          "pc": 7,
+          "maxRms": 0.0892419932852343,
+          "state": "running"
+        },
+        {
+          "pc": 7,
+          "maxRms": 0,
+          "state": "running"
+        },
+        {
+          "pc": 7,
+          "maxRms": 0,
+          "state": "running"
+        }
+      ],
+      "room": {
+        "state": "connected",
+        "canPlaybackAudio": true,
+        "microphone": {
+          "muted": false,
+          "enabled": true,
+          "pipeline": {
+            "requestedEngine": "none",
+            "activeEngine": "none",
+            "phase": "ready",
+            "sampleRate": 48000,
+            "gateAvailable": true,
+            "gateEnabled": true,
+            "gainAvailable": true,
+            "inputDb": -24.661457832071353,
+            "outputDb": -20.068582516844483,
+            "gateOpen": true
+          }
+        },
+        "remotes": [
+          {
+            "microphone": [
+              {
+                "subscribed": true,
+                "muted": false,
+                "trackPresent": true
+              }
+            ]
+          }
+        ]
+      },
+      "peerConnections": [
+        {
+          "state": "connected",
+          "senders": [
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {
+              "kind": "audio",
+              "enabled": true,
+              "ready": "live"
+            }
+          ]
+        }
+      ],
+      "assetRequests": [],
+      "timingOrigin": "actual DOM input event",
+      "resolvedActionAt": 1795508412277,
+      "actionObserver": "member DOM click",
+      "listObservedAt": 1795508412367,
+      "listObserver": "owner sidebar",
+      "listMs": 90,
+      "decodedAudioMs": 319,
+      "decodedSamplesMs": 350,
+      "connectionMs": 150,
+      "kind": "warm voice rejoin"
+    },
+    {
+      "preparedAt": 1795508415296,
+      "actionAt": 1795508417277,
+      "preActionActivity": {
+        "captureRequests": 0,
+        "peerConnectionsCreated": 8,
+        "roomExposed": false
+      },
+      "capabilityQueries": [],
+      "listAt": 1795508417373,
+      "decodedAt": 1795508417657,
+      "decodedSamplesAt": 1795508417657,
+      "connectionAt": 1795508417439,
+      "token": [
+        {
+          "durationMs": 56,
+          "sincePreparationMs": 2040,
+          "status": 200,
+          "serverTiming": "auth;dur=1.5, token_lookup;dur=1.0, issue;dur=0.0",
+          "sinceActionMs": 59
+        }
+      ],
+      "ws": [
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 62,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": -1919
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 2053,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": 72
+        }
+      ],
+      "cues": [
+        {
+          "sincePreparationMs": 2046,
+          "duration": 0.8629375,
+          "asset": "join-B_xQuNtw.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.22735296816881612,
+          "gainAfterAudioQuantum": 1,
+          "samples": 23,
+          "sinceActionMs": 65
+        }
+      ],
+      "phases": [],
+      "longTasks": [],
+      "lastStats": [
+        {
+          "pc": 8,
+          "type": "inbound-rtp",
+          "kind": "audio",
+          "packetsReceived": 36,
+          "concealedSamples": 0,
+          "bytesReceived": 24365,
+          "totalAudioEnergy": 0,
+          "totalSamplesReceived": 31200,
+          "audioLevel": 0
+        },
+        {
+          "pc": 8,
+          "type": "outbound-rtp",
+          "kind": "audio",
+          "bytesSent": 24107
+        },
+        {
+          "pc": 8,
+          "type": "media-source",
+          "kind": "audio",
+          "totalAudioEnergy": 0.4763079695522641,
+          "audioLevel": 0.999603259376812
+        }
+      ],
+      "filteredIce": [
+        "global.stun.twilio.com",
+        "stun.l.google.com",
+        "stun1.l.google.com"
+      ],
+      "pcm": [
+        {
+          "pc": 8,
+          "maxRms": 0.06334157443896987,
+          "state": "running"
+        },
+        {
+          "pc": 8,
+          "maxRms": 0,
+          "state": "running"
+        },
+        {
+          "pc": 8,
+          "maxRms": 0,
+          "state": "running"
+        }
+      ],
+      "room": {
+        "state": "connected",
+        "canPlaybackAudio": true,
+        "microphone": {
+          "muted": false,
+          "enabled": true,
+          "pipeline": {
+            "requestedEngine": "none",
+            "activeEngine": "none",
+            "phase": "ready",
+            "sampleRate": 48000,
+            "gateAvailable": true,
+            "gateEnabled": true,
+            "gainAvailable": true,
+            "inputDb": -22.524673701761948,
+            "outputDb": -21.143681818561745,
+            "gateOpen": true
+          }
+        },
+        "remotes": [
+          {
+            "microphone": [
+              {
+                "subscribed": true,
+                "muted": false,
+                "trackPresent": true
+              }
+            ]
+          }
+        ]
+      },
+      "peerConnections": [
+        {
+          "state": "connected",
+          "senders": [
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {
+              "kind": "audio",
+              "enabled": true,
+              "ready": "live"
+            }
+          ]
+        }
+      ],
+      "assetRequests": [],
+      "timingOrigin": "actual DOM input event",
+      "resolvedActionAt": 1795508417277,
+      "actionObserver": "member DOM click",
+      "listObservedAt": 1795508417364,
+      "listObserver": "owner sidebar",
+      "listMs": 87,
+      "decodedAudioMs": 380,
+      "decodedSamplesMs": 380,
+      "connectionMs": 162,
+      "kind": "warm voice rejoin"
+    },
+    {
+      "preparedAt": 1795508420297,
+      "actionAt": 1795508422277,
+      "preActionActivity": {
+        "captureRequests": 0,
+        "peerConnectionsCreated": 9,
+        "roomExposed": false
+      },
+      "capabilityQueries": [],
+      "listAt": 1795508422371,
+      "decodedAt": 1795508422593,
+      "decodedSamplesAt": 1795508422623,
+      "connectionAt": 1795508422425,
+      "token": [
+        {
+          "durationMs": 55,
+          "sincePreparationMs": 2038,
+          "status": 200,
+          "serverTiming": "auth;dur=1.0, token_lookup;dur=0.5, issue;dur=0.0",
+          "sinceActionMs": 58
+        }
+      ],
+      "ws": [
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 55,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": -1925
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 2047,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": 67
+        }
+      ],
+      "cues": [
+        {
+          "sincePreparationMs": 2043,
+          "duration": 0.8629375,
+          "asset": "join-B_xQuNtw.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.22735296816881612,
+          "gainAfterAudioQuantum": 1,
+          "samples": 22,
+          "sinceActionMs": 63
+        }
+      ],
+      "phases": [],
+      "longTasks": [],
+      "lastStats": [
+        {
+          "pc": 9,
+          "type": "inbound-rtp",
+          "kind": "audio",
+          "packetsReceived": 37,
+          "concealedSamples": 0,
+          "bytesReceived": 24920,
+          "totalAudioEnergy": 0,
+          "totalSamplesReceived": 33120,
+          "audioLevel": 0
+        },
+        {
+          "pc": 9,
+          "type": "outbound-rtp",
+          "kind": "audio",
+          "bytesSent": 24803
+        },
+        {
+          "pc": 9,
+          "type": "media-source",
+          "kind": "audio",
+          "totalAudioEnergy": 0.4605922118300596,
+          "audioLevel": 1
+        }
+      ],
+      "filteredIce": [
+        "global.stun.twilio.com",
+        "stun.l.google.com",
+        "stun1.l.google.com"
+      ],
+      "pcm": [
+        {
+          "pc": 9,
+          "maxRms": 0.075351249416407,
+          "state": "running"
+        },
+        {
+          "pc": 9,
+          "maxRms": 0,
+          "state": "running"
+        },
+        {
+          "pc": 9,
+          "maxRms": 0,
+          "state": "running"
+        }
+      ],
+      "room": {
+        "state": "connected",
+        "canPlaybackAudio": true,
+        "microphone": {
+          "muted": false,
+          "enabled": true,
+          "pipeline": {
+            "requestedEngine": "none",
+            "activeEngine": "none",
+            "phase": "ready",
+            "sampleRate": 48000,
+            "gateAvailable": true,
+            "gateEnabled": true,
+            "gainAvailable": true,
+            "inputDb": -16.547039836910635,
+            "outputDb": -16.594545549124305,
+            "gateOpen": true
+          }
+        },
+        "remotes": [
+          {
+            "microphone": [
+              {
+                "subscribed": true,
+                "muted": false,
+                "trackPresent": true
+              }
+            ]
+          }
+        ]
+      },
+      "peerConnections": [
+        {
+          "state": "connected",
+          "senders": [
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {
+              "kind": "audio",
+              "enabled": true,
+              "ready": "live"
+            }
+          ]
+        }
+      ],
+      "assetRequests": [],
+      "timingOrigin": "actual DOM input event",
+      "resolvedActionAt": 1795508422277,
+      "actionObserver": "member DOM click",
+      "listObservedAt": 1795508422364,
+      "listObserver": "owner sidebar",
+      "listMs": 87,
+      "decodedAudioMs": 316,
+      "decodedSamplesMs": 346,
+      "connectionMs": 148,
+      "kind": "warm voice rejoin"
+    }
+  ],
+  "moves": [
+    {
+      "preparedAt": 1795508424345,
+      "actionAt": null,
+      "preActionActivity": null,
+      "capabilityQueries": [],
+      "listAt": 1795508432359,
+      "decodedAt": 1795508432578,
+      "decodedSamplesAt": 1795508432639,
+      "connectionAt": 1795508432436,
+      "token": [],
+      "ws": [
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 73,
+          "self": false,
+          "channel": "bench-alpha",
+          "sinceActionMs": -7908
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 75,
+          "self": false,
+          "channel": "bench-beta",
+          "sinceActionMs": -7906
+        },
+        {
+          "op": "voice_force_move",
+          "action": null,
+          "sincePreparationMs": 7983,
+          "self": false,
+          "channel": "bench-beta",
+          "embeddedCredentials": true,
+          "sinceActionMs": 2
+        },
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 8008,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": 27
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 8011,
+          "self": true,
+          "channel": "bench-beta",
+          "sinceActionMs": 30
+        }
+      ],
+      "cues": [
+        {
+          "sincePreparationMs": 75,
+          "duration": 1.6065208333333334,
+          "asset": "leave-DCg-ybOa.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.19011613617833625,
+          "gainAfterAudioQuantum": 1,
+          "samples": 42,
+          "sinceActionMs": -7906
+        },
+        {
+          "sincePreparationMs": 7999,
+          "duration": 0.8629375,
+          "asset": "join-B_xQuNtw.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.22735296816881612,
+          "gainAfterAudioQuantum": 1,
+          "samples": 24,
+          "sinceActionMs": 18
+        }
+      ],
+      "phases": [],
+      "longTasks": [],
+      "lastStats": [
+        {
+          "pc": 10,
+          "type": "inbound-rtp",
+          "kind": "audio",
+          "packetsReceived": 39,
+          "concealedSamples": 0,
+          "bytesReceived": 26517,
+          "totalAudioEnergy": 0,
+          "totalSamplesReceived": 36000,
+          "audioLevel": 0
+        },
+        {
+          "pc": 10,
+          "type": "outbound-rtp",
+          "kind": "audio",
+          "bytesSent": 26920
+        },
+        {
+          "pc": 10,
+          "type": "media-source",
+          "kind": "audio",
+          "totalAudioEnergy": 0.4636126844093883,
+          "audioLevel": 0.37449262977996156
+        }
+      ],
+      "filteredIce": [
+        "global.stun.twilio.com",
+        "stun.l.google.com",
+        "stun1.l.google.com"
+      ],
+      "pcm": [
+        {
+          "pc": 10,
+          "maxRms": 0.08444397882162799,
+          "state": "running"
+        },
+        {
+          "pc": 10,
+          "maxRms": 0,
+          "state": "running"
+        },
+        {
+          "pc": 10,
+          "maxRms": 0,
+          "state": "running"
+        }
+      ],
+      "room": {
+        "state": "connected",
+        "canPlaybackAudio": true,
+        "microphone": {
+          "muted": false,
+          "enabled": true,
+          "pipeline": {
+            "requestedEngine": "none",
+            "activeEngine": "none",
+            "phase": "ready",
+            "sampleRate": 48000,
+            "gateAvailable": true,
+            "gateEnabled": true,
+            "gainAvailable": true,
+            "inputDb": -16.547039836910635,
+            "outputDb": -14.298714422601954,
+            "gateOpen": true
+          }
+        },
+        "remotes": [
+          {
+            "microphone": [
+              {
+                "subscribed": true,
+                "muted": false,
+                "trackPresent": true
+              }
+            ]
+          }
+        ]
+      },
+      "peerConnections": [
+        {
+          "state": "connected",
+          "senders": [
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {
+              "kind": "audio",
+              "enabled": true,
+              "ready": "live"
+            }
+          ]
+        }
+      ],
+      "assetRequests": [],
+      "timingOrigin": "actual DOM input event",
+      "resolvedActionAt": 1795508432326,
+      "actionObserver": "owner DOM drop",
+      "listObservedAt": 1795508432363,
+      "listObserver": "owner sidebar",
+      "listMs": 37,
+      "decodedAudioMs": 252,
+      "decodedSamplesMs": 313,
+      "connectionMs": 110
+    },
+    {
+      "preparedAt": 1795508435347,
+      "actionAt": null,
+      "preActionActivity": null,
+      "capabilityQueries": [],
+      "listAt": 1795508443360,
+      "decodedAt": 1795508443583,
+      "decodedSamplesAt": 1795508443613,
+      "connectionAt": 1795508443437,
+      "token": [],
+      "ws": [
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 71,
+          "self": false,
+          "channel": "bench-beta",
+          "sinceActionMs": -7907
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 75,
+          "self": false,
+          "channel": "bench-alpha",
+          "sinceActionMs": -7903
+        },
+        {
+          "op": "voice_force_move",
+          "action": null,
+          "sincePreparationMs": 7982,
+          "self": false,
+          "channel": "bench-alpha",
+          "embeddedCredentials": true,
+          "sinceActionMs": 4
+        },
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 8009,
+          "self": true,
+          "channel": "bench-beta",
+          "sinceActionMs": 31
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 8011,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": 33
+        }
+      ],
+      "cues": [
+        {
+          "sincePreparationMs": 74,
+          "duration": 1.6065208333333334,
+          "asset": "leave-DCg-ybOa.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.19011613617833625,
+          "gainAfterAudioQuantum": 1,
+          "samples": 42,
+          "sinceActionMs": -7904
+        },
+        {
+          "sincePreparationMs": 7999,
+          "duration": 0.8629375,
+          "asset": "join-B_xQuNtw.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.21763273815320677,
+          "gainAfterAudioQuantum": 1,
+          "samples": 24,
+          "sinceActionMs": 21
+        }
+      ],
+      "phases": [],
+      "longTasks": [],
+      "lastStats": [
+        {
+          "pc": 11,
+          "type": "inbound-rtp",
+          "kind": "audio",
+          "packetsReceived": 37,
+          "concealedSamples": 876,
+          "bytesReceived": 25043,
+          "totalAudioEnergy": 0,
+          "totalSamplesReceived": 34080,
+          "audioLevel": 0
+        },
+        {
+          "pc": 11,
+          "type": "outbound-rtp",
+          "kind": "audio",
+          "bytesSent": 24795
+        },
+        {
+          "pc": 11,
+          "type": "media-source",
+          "kind": "audio",
+          "totalAudioEnergy": 0.4380028952190079,
+          "audioLevel": 1
+        }
+      ],
+      "filteredIce": [
+        "global.stun.twilio.com",
+        "stun.l.google.com",
+        "stun1.l.google.com"
+      ],
+      "pcm": [
+        {
+          "pc": 11,
+          "maxRms": 0.06174821961708986,
+          "state": "running"
+        },
+        {
+          "pc": 11,
+          "maxRms": 0,
+          "state": "running"
+        },
+        {
+          "pc": 11,
+          "maxRms": 0,
+          "state": "running"
+        }
+      ],
+      "room": {
+        "state": "connected",
+        "canPlaybackAudio": true,
+        "microphone": {
+          "muted": false,
+          "enabled": true,
+          "pipeline": {
+            "requestedEngine": "none",
+            "activeEngine": "none",
+            "phase": "ready",
+            "sampleRate": 48000,
+            "gateAvailable": true,
+            "gateEnabled": true,
+            "gainAvailable": true,
+            "inputDb": -16.547039836910635,
+            "outputDb": -14.298714422601954,
+            "gateOpen": true
+          }
+        },
+        "remotes": [
+          {
+            "microphone": [
+              {
+                "subscribed": true,
+                "muted": false,
+                "trackPresent": true
+              }
+            ]
+          }
+        ]
+      },
+      "peerConnections": [
+        {
+          "state": "connected",
+          "senders": [
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {
+              "kind": "audio",
+              "enabled": true,
+              "ready": "live"
+            }
+          ]
+        }
+      ],
+      "assetRequests": [],
+      "timingOrigin": "actual DOM input event",
+      "resolvedActionAt": 1795508443325,
+      "actionObserver": "owner DOM drop",
+      "listObservedAt": 1795508443370,
+      "listObserver": "owner sidebar",
+      "listMs": 45,
+      "decodedAudioMs": 258,
+      "decodedSamplesMs": 288,
+      "connectionMs": 112
+    },
+    {
+      "preparedAt": 1795508446345,
+      "actionAt": null,
+      "preActionActivity": null,
+      "capabilityQueries": [],
+      "listAt": 1795508454356,
+      "decodedAt": 1795508454579,
+      "decodedSamplesAt": 1795508454627,
+      "connectionAt": 1795508454436,
+      "token": [],
+      "ws": [
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 73,
+          "self": false,
+          "channel": "bench-alpha",
+          "sinceActionMs": -7907
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 75,
+          "self": false,
+          "channel": "bench-beta",
+          "sinceActionMs": -7905
+        },
+        {
+          "op": "voice_force_move",
+          "action": null,
+          "sincePreparationMs": 7982,
+          "self": false,
+          "channel": "bench-beta",
+          "embeddedCredentials": true,
+          "sinceActionMs": 2
+        },
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 8007,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": 27
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 8010,
+          "self": true,
+          "channel": "bench-beta",
+          "sinceActionMs": 30
+        }
+      ],
+      "cues": [
+        {
+          "sincePreparationMs": 75,
+          "duration": 1.6065208333333334,
+          "asset": "leave-DCg-ybOa.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.19011613617833625,
+          "gainAfterAudioQuantum": 1,
+          "samples": 43,
+          "sinceActionMs": -7905
+        },
+        {
+          "sincePreparationMs": 7999,
+          "duration": 0.8629375,
+          "asset": "join-B_xQuNtw.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.22735296816881612,
+          "gainAfterAudioQuantum": 1,
+          "samples": 24,
+          "sinceActionMs": 19
+        }
+      ],
+      "phases": [],
+      "longTasks": [],
+      "lastStats": [
+        {
+          "pc": 12,
+          "type": "inbound-rtp",
+          "kind": "audio",
+          "packetsReceived": 37,
+          "concealedSamples": 0,
+          "bytesReceived": 25043,
+          "totalAudioEnergy": 0,
+          "totalSamplesReceived": 34560,
+          "audioLevel": 0
+        },
+        {
+          "pc": 12,
+          "type": "outbound-rtp",
+          "kind": "audio",
+          "bytesSent": 25433
+        },
+        {
+          "pc": 12,
+          "type": "media-source",
+          "kind": "audio",
+          "totalAudioEnergy": 0.45800289521900794,
+          "audioLevel": 1
+        }
+      ],
+      "filteredIce": [
+        "global.stun.twilio.com",
+        "stun.l.google.com",
+        "stun1.l.google.com"
+      ],
+      "pcm": [
+        {
+          "pc": 12,
+          "maxRms": 0.060559412739668715,
+          "state": "running"
+        },
+        {
+          "pc": 12,
+          "maxRms": 0,
+          "state": "running"
+        },
+        {
+          "pc": 12,
+          "maxRms": 0,
+          "state": "running"
+        }
+      ],
+      "room": {
+        "state": "connected",
+        "canPlaybackAudio": true,
+        "microphone": {
+          "muted": false,
+          "enabled": true,
+          "pipeline": {
+            "requestedEngine": "none",
+            "activeEngine": "none",
+            "phase": "ready",
+            "sampleRate": 48000,
+            "gateAvailable": true,
+            "gateEnabled": true,
+            "gainAvailable": true,
+            "inputDb": -15.718222318328195,
+            "outputDb": -16.803964242927524,
+            "gateOpen": true
+          }
+        },
+        "remotes": [
+          {
+            "microphone": [
+              {
+                "subscribed": true,
+                "muted": false,
+                "trackPresent": true
+              }
+            ]
+          }
+        ]
+      },
+      "peerConnections": [
+        {
+          "state": "connected",
+          "senders": [
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {
+              "kind": "audio",
+              "enabled": true,
+              "ready": "live"
+            }
+          ]
+        }
+      ],
+      "assetRequests": [],
+      "timingOrigin": "actual DOM input event",
+      "resolvedActionAt": 1795508454325,
+      "actionObserver": "owner DOM drop",
+      "listObservedAt": 1795508454365,
+      "listObserver": "owner sidebar",
+      "listMs": 40,
+      "decodedAudioMs": 254,
+      "decodedSamplesMs": 302,
+      "connectionMs": 111
+    },
+    {
+      "preparedAt": 1795508457352,
+      "actionAt": null,
+      "preActionActivity": null,
+      "capabilityQueries": [],
+      "listAt": 1795508465360,
+      "decodedAt": 1795508465597,
+      "decodedSamplesAt": 1795508465629,
+      "connectionAt": 1795508465442,
+      "token": [],
+      "ws": [
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 69,
+          "self": false,
+          "channel": "bench-beta",
+          "sinceActionMs": -7905
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 72,
+          "self": false,
+          "channel": "bench-alpha",
+          "sinceActionMs": -7902
+        },
+        {
+          "op": "voice_force_move",
+          "action": null,
+          "sincePreparationMs": 7978,
+          "self": false,
+          "channel": "bench-alpha",
+          "embeddedCredentials": true,
+          "sinceActionMs": 4
+        },
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 8003,
+          "self": true,
+          "channel": "bench-beta",
+          "sinceActionMs": 29
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 8006,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": 32
+        }
+      ],
+      "cues": [
+        {
+          "sincePreparationMs": 72,
+          "duration": 1.6065208333333334,
+          "asset": "leave-DCg-ybOa.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.19011613617833625,
+          "gainAfterAudioQuantum": 1,
+          "samples": 43,
+          "sinceActionMs": -7902
+        },
+        {
+          "sincePreparationMs": 7994,
+          "duration": 0.8629375,
+          "asset": "join-B_xQuNtw.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.21763273815320677,
+          "gainAfterAudioQuantum": 1,
+          "samples": 24,
+          "sinceActionMs": 20
+        }
+      ],
+      "phases": [],
+      "longTasks": [],
+      "lastStats": [
+        {
+          "pc": 13,
+          "type": "inbound-rtp",
+          "kind": "audio",
+          "packetsReceived": 39,
+          "concealedSamples": 0,
+          "bytesReceived": 26517,
+          "totalAudioEnergy": 0,
+          "totalSamplesReceived": 36000,
+          "audioLevel": 0
+        },
+        {
+          "pc": 13,
+          "type": "outbound-rtp",
+          "kind": "audio",
+          "bytesSent": 26930
+        },
+        {
+          "pc": 13,
+          "type": "media-source",
+          "kind": "audio",
+          "totalAudioEnergy": 0.49633074484333733,
+          "audioLevel": 0.43736075930051577
+        }
+      ],
+      "filteredIce": [
+        "global.stun.twilio.com",
+        "stun.l.google.com",
+        "stun1.l.google.com"
+      ],
+      "pcm": [
+        {
+          "pc": 13,
+          "maxRms": 0.06105723354282857,
+          "state": "running"
+        },
+        {
+          "pc": 13,
+          "maxRms": 0,
+          "state": "running"
+        },
+        {
+          "pc": 13,
+          "maxRms": 0,
+          "state": "running"
+        }
+      ],
+      "room": {
+        "state": "connected",
+        "canPlaybackAudio": true,
+        "microphone": {
+          "muted": false,
+          "enabled": true,
+          "pipeline": {
+            "requestedEngine": "none",
+            "activeEngine": "none",
+            "phase": "ready",
+            "sampleRate": 48000,
+            "gateAvailable": true,
+            "gateEnabled": true,
+            "gainAvailable": true,
+            "inputDb": -15.718222318328195,
+            "outputDb": -16.803964242927524,
+            "gateOpen": true
+          }
+        },
+        "remotes": [
+          {
+            "microphone": [
+              {
+                "subscribed": true,
+                "muted": false,
+                "trackPresent": true
+              }
+            ]
+          }
+        ]
+      },
+      "peerConnections": [
+        {
+          "state": "connected",
+          "senders": [
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {
+              "kind": "audio",
+              "enabled": true,
+              "ready": "live"
+            }
+          ]
+        }
+      ],
+      "assetRequests": [],
+      "timingOrigin": "actual DOM input event",
+      "resolvedActionAt": 1795508465326,
+      "actionObserver": "owner DOM drop",
+      "listObservedAt": 1795508465368,
+      "listObserver": "owner sidebar",
+      "listMs": 42,
+      "decodedAudioMs": 271,
+      "decodedSamplesMs": 303,
+      "connectionMs": 116
+    },
+    {
+      "preparedAt": 1795508468346,
+      "actionAt": null,
+      "preActionActivity": null,
+      "capabilityQueries": [],
+      "listAt": 1795508476391,
+      "decodedAt": 1795508476625,
+      "decodedSamplesAt": 1795508476577,
+      "connectionAt": 1795508476449,
+      "token": [],
+      "ws": [
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 61,
+          "self": false,
+          "channel": "bench-alpha",
+          "sinceActionMs": -7920
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 63,
+          "self": false,
+          "channel": "bench-beta",
+          "sinceActionMs": -7918
+        },
+        {
+          "op": "voice_force_move",
+          "action": null,
+          "sincePreparationMs": 7984,
+          "self": false,
+          "channel": "bench-beta",
+          "embeddedCredentials": true,
+          "sinceActionMs": 3
+        },
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 8010,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": 29
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 8014,
+          "self": true,
+          "channel": "bench-beta",
+          "sinceActionMs": 33
+        }
+      ],
+      "cues": [
+        {
+          "sincePreparationMs": 63,
+          "duration": 1.6065208333333334,
+          "asset": "leave-DCg-ybOa.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.1881750098863665,
+          "gainAfterAudioQuantum": 1,
+          "samples": 43,
+          "sinceActionMs": -7918
+        },
+        {
+          "sincePreparationMs": 8001,
+          "duration": 0.8629375,
+          "asset": "join-B_xQuNtw.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.23349978378769695,
+          "gainAfterAudioQuantum": 1,
+          "samples": 24,
+          "sinceActionMs": 20
+        }
+      ],
+      "phases": [],
+      "longTasks": [],
+      "lastStats": [
+        {
+          "pc": 14,
+          "type": "inbound-rtp",
+          "kind": "audio",
+          "packetsReceived": 38,
+          "concealedSamples": 0,
+          "bytesReceived": 25785,
+          "totalAudioEnergy": 0,
+          "totalSamplesReceived": 35040,
+          "audioLevel": 0
+        },
+        {
+          "pc": 14,
+          "type": "outbound-rtp",
+          "kind": "audio",
+          "bytesSent": 26142
+        },
+        {
+          "pc": 14,
+          "type": "media-source",
+          "kind": "audio",
+          "totalAudioEnergy": 0.49250505616781887,
+          "audioLevel": 0.43736075930051577
+        }
+      ],
+      "filteredIce": [
+        "global.stun.twilio.com",
+        "stun.l.google.com",
+        "stun1.l.google.com"
+      ],
+      "pcm": [
+        {
+          "pc": 14,
+          "maxRms": 0.06075566534866456,
+          "state": "running"
+        },
+        {
+          "pc": 14,
+          "maxRms": 0,
+          "state": "running"
+        },
+        {
+          "pc": 14,
+          "maxRms": 0,
+          "state": "running"
+        }
+      ],
+      "room": {
+        "state": "connected",
+        "canPlaybackAudio": true,
+        "microphone": {
+          "muted": false,
+          "enabled": true,
+          "pipeline": {
+            "requestedEngine": "none",
+            "activeEngine": "none",
+            "phase": "ready",
+            "sampleRate": 48000,
+            "gateAvailable": true,
+            "gateEnabled": true,
+            "gainAvailable": true,
+            "inputDb": -16.547039836910635,
+            "outputDb": -13.802385149006959,
+            "gateOpen": true
+          }
+        },
+        "remotes": [
+          {
+            "microphone": [
+              {
+                "subscribed": true,
+                "muted": false,
+                "trackPresent": true
+              }
+            ]
+          }
+        ]
+      },
+      "peerConnections": [
+        {
+          "state": "connected",
+          "senders": [
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {
+              "kind": "audio",
+              "enabled": true,
+              "ready": "live"
+            }
+          ]
+        }
+      ],
+      "assetRequests": [],
+      "timingOrigin": "actual DOM input event",
+      "resolvedActionAt": 1795508476327,
+      "actionObserver": "owner DOM drop",
+      "listObservedAt": 1795508476364,
+      "listObserver": "owner sidebar",
+      "listMs": 37,
+      "decodedAudioMs": 298,
+      "decodedSamplesMs": 250,
+      "connectionMs": 122
+    },
+    {
+      "preparedAt": 1795508479344,
+      "actionAt": null,
+      "preActionActivity": null,
+      "capabilityQueries": [],
+      "listAt": 1795508487357,
+      "decodedAt": 1795508487599,
+      "decodedSamplesAt": 1795508487630,
+      "connectionAt": 1795508487436,
+      "token": [],
+      "ws": [
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 71,
+          "self": false,
+          "channel": "bench-beta",
+          "sinceActionMs": -7911
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 73,
+          "self": false,
+          "channel": "bench-alpha",
+          "sinceActionMs": -7909
+        },
+        {
+          "op": "voice_force_move",
+          "action": null,
+          "sincePreparationMs": 7984,
+          "self": false,
+          "channel": "bench-alpha",
+          "embeddedCredentials": true,
+          "sinceActionMs": 2
+        },
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 8009,
+          "self": true,
+          "channel": "bench-beta",
+          "sinceActionMs": 27
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 8011,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": 29
+        }
+      ],
+      "cues": [
+        {
+          "sincePreparationMs": 73,
+          "duration": 1.6065208333333334,
+          "asset": "leave-DCg-ybOa.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.19011613617833625,
+          "gainAfterAudioQuantum": 1,
+          "samples": 43,
+          "sinceActionMs": -7909
+        },
+        {
+          "sincePreparationMs": 8001,
+          "duration": 0.8629375,
+          "asset": "join-B_xQuNtw.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.21250752259522318,
+          "gainAfterAudioQuantum": 1,
+          "samples": 24,
+          "sinceActionMs": 19
+        }
+      ],
+      "phases": [],
+      "longTasks": [],
+      "lastStats": [
+        {
+          "pc": 15,
+          "type": "inbound-rtp",
+          "kind": "audio",
+          "packetsReceived": 37,
+          "concealedSamples": 0,
+          "bytesReceived": 25234,
+          "totalAudioEnergy": 0,
+          "totalSamplesReceived": 34560,
+          "audioLevel": 0
+        },
+        {
+          "pc": 15,
+          "type": "outbound-rtp",
+          "kind": "audio",
+          "bytesSent": 36667
+        },
+        {
+          "pc": 15,
+          "type": "media-source",
+          "kind": "audio",
+          "totalAudioEnergy": 0.45940534251660303,
+          "audioLevel": 0.37449262977996156
+        }
+      ],
+      "filteredIce": [
+        "global.stun.twilio.com",
+        "stun.l.google.com",
+        "stun1.l.google.com"
+      ],
+      "pcm": [
+        {
+          "pc": 15,
+          "maxRms": 0.06105729633967011,
+          "state": "running"
+        },
+        {
+          "pc": 15,
+          "maxRms": 0,
+          "state": "running"
+        },
+        {
+          "pc": 15,
+          "maxRms": 0,
+          "state": "running"
+        }
+      ],
+      "room": {
+        "state": "connected",
+        "canPlaybackAudio": true,
+        "microphone": {
+          "muted": false,
+          "enabled": true,
+          "pipeline": {
+            "requestedEngine": "none",
+            "activeEngine": "none",
+            "phase": "ready",
+            "sampleRate": 48000,
+            "gateAvailable": true,
+            "gateEnabled": true,
+            "gainAvailable": true,
+            "inputDb": -16.547039836910635,
+            "outputDb": -13.454335010552924,
+            "gateOpen": true
+          }
+        },
+        "remotes": [
+          {
+            "microphone": [
+              {
+                "subscribed": true,
+                "muted": false,
+                "trackPresent": true
+              }
+            ]
+          }
+        ]
+      },
+      "peerConnections": [
+        {
+          "state": "connected",
+          "senders": [
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {
+              "kind": "audio",
+              "enabled": true,
+              "ready": "live"
+            }
+          ]
+        }
+      ],
+      "assetRequests": [],
+      "timingOrigin": "actual DOM input event",
+      "resolvedActionAt": 1795508487326,
+      "actionObserver": "owner DOM drop",
+      "listObservedAt": 1795508487368,
+      "listObserver": "owner sidebar",
+      "listMs": 42,
+      "decodedAudioMs": 273,
+      "decodedSamplesMs": 304,
+      "connectionMs": 110
+    },
+    {
+      "preparedAt": 1795508490344,
+      "actionAt": null,
+      "preActionActivity": null,
+      "capabilityQueries": [],
+      "listAt": 1795508498389,
+      "decodedAt": 1795508498576,
+      "decodedSamplesAt": 1795508498612,
+      "connectionAt": 1795508498440,
+      "token": [],
+      "ws": [
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 61,
+          "self": false,
+          "channel": "bench-alpha",
+          "sinceActionMs": -7929
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 63,
+          "self": false,
+          "channel": "bench-beta",
+          "sinceActionMs": -7927
+        },
+        {
+          "op": "voice_force_move",
+          "action": null,
+          "sincePreparationMs": 7993,
+          "self": false,
+          "channel": "bench-beta",
+          "embeddedCredentials": true,
+          "sinceActionMs": 3
+        },
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 8015,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": 25
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 8017,
+          "self": true,
+          "channel": "bench-beta",
+          "sinceActionMs": 27
+        }
+      ],
+      "cues": [
+        {
+          "sincePreparationMs": 63,
+          "duration": 1.6065208333333334,
+          "asset": "leave-DCg-ybOa.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.1881750098863665,
+          "gainAfterAudioQuantum": 1,
+          "samples": 43,
+          "sinceActionMs": -7927
+        },
+        {
+          "sincePreparationMs": 8007,
+          "duration": 0.8629375,
+          "asset": "join-B_xQuNtw.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.21763273815320677,
+          "gainAfterAudioQuantum": 1,
+          "samples": 24,
+          "sinceActionMs": 17
+        }
+      ],
+      "phases": [],
+      "longTasks": [],
+      "lastStats": [
+        {
+          "pc": 16,
+          "type": "inbound-rtp",
+          "kind": "audio",
+          "packetsReceived": 37,
+          "concealedSamples": 0,
+          "bytesReceived": 24969,
+          "totalAudioEnergy": 0,
+          "totalSamplesReceived": 33600,
+          "audioLevel": 0
+        },
+        {
+          "pc": 16,
+          "type": "outbound-rtp",
+          "kind": "audio",
+          "bytesSent": 24805
+        },
+        {
+          "pc": 16,
+          "type": "media-source",
+          "kind": "audio",
+          "totalAudioEnergy": 0.4480166308860345,
+          "audioLevel": 1
+        }
+      ],
+      "filteredIce": [
+        "global.stun.twilio.com",
+        "stun.l.google.com",
+        "stun1.l.google.com"
+      ],
+      "pcm": [
+        {
+          "pc": 16,
+          "maxRms": 0.0652632486165602,
+          "state": "running"
+        },
+        {
+          "pc": 16,
+          "maxRms": 0,
+          "state": "running"
+        },
+        {
+          "pc": 16,
+          "maxRms": 0,
+          "state": "running"
+        }
+      ],
+      "room": {
+        "state": "connected",
+        "canPlaybackAudio": true,
+        "microphone": {
+          "muted": false,
+          "enabled": true,
+          "pipeline": {
+            "requestedEngine": "none",
+            "activeEngine": "none",
+            "phase": "ready",
+            "sampleRate": 48000,
+            "gateAvailable": true,
+            "gateEnabled": true,
+            "gainAvailable": true,
+            "inputDb": -15.718222318328195,
+            "outputDb": -16.803964242927524,
+            "gateOpen": true
+          }
+        },
+        "remotes": [
+          {
+            "microphone": [
+              {
+                "subscribed": true,
+                "muted": false,
+                "trackPresent": true
+              }
+            ]
+          }
+        ]
+      },
+      "peerConnections": [
+        {
+          "state": "connected",
+          "senders": [
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {
+              "kind": "audio",
+              "enabled": true,
+              "ready": "live"
+            }
+          ]
+        }
+      ],
+      "assetRequests": [],
+      "timingOrigin": "actual DOM input event",
+      "resolvedActionAt": 1795508498334,
+      "actionObserver": "owner DOM drop",
+      "listObservedAt": 1795508498366,
+      "listObserver": "owner sidebar",
+      "listMs": 32,
+      "decodedAudioMs": 242,
+      "decodedSamplesMs": 278,
+      "connectionMs": 106
+    },
+    {
+      "preparedAt": 1795508501348,
+      "actionAt": null,
+      "preActionActivity": null,
+      "capabilityQueries": [],
+      "listAt": 1795508509392,
+      "decodedAt": 1795508509614,
+      "decodedSamplesAt": 1795508509660,
+      "connectionAt": 1795508509447,
+      "token": [],
+      "ws": [
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 68,
+          "self": false,
+          "channel": "bench-beta",
+          "sinceActionMs": -7917
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 70,
+          "self": false,
+          "channel": "bench-alpha",
+          "sinceActionMs": -7915
+        },
+        {
+          "op": "voice_force_move",
+          "action": null,
+          "sincePreparationMs": 7988,
+          "self": false,
+          "channel": "bench-alpha",
+          "embeddedCredentials": true,
+          "sinceActionMs": 3
+        },
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 8013,
+          "self": true,
+          "channel": "bench-beta",
+          "sinceActionMs": 28
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 8015,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": 30
+        }
+      ],
+      "cues": [
+        {
+          "sincePreparationMs": 70,
+          "duration": 1.6065208333333334,
+          "asset": "leave-DCg-ybOa.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.21137436906001272,
+          "gainAfterAudioQuantum": 1,
+          "samples": 43,
+          "sinceActionMs": -7915
+        },
+        {
+          "sincePreparationMs": 8004,
+          "duration": 0.8629375,
+          "asset": "join-B_xQuNtw.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.21763273815320677,
+          "gainAfterAudioQuantum": 1,
+          "samples": 24,
+          "sinceActionMs": 19
+        }
+      ],
+      "phases": [],
+      "longTasks": [],
+      "lastStats": [
+        {
+          "pc": 17,
+          "type": "inbound-rtp",
+          "kind": "audio",
+          "packetsReceived": 38,
+          "concealedSamples": 0,
+          "bytesReceived": 25763,
+          "totalAudioEnergy": 0,
+          "totalSamplesReceived": 34560,
+          "audioLevel": 0
+        },
+        {
+          "pc": 17,
+          "type": "outbound-rtp",
+          "kind": "audio",
+          "bytesSent": 26137
+        },
+        {
+          "pc": 17,
+          "type": "media-source",
+          "kind": "audio",
+          "totalAudioEnergy": 0.49250505616781887,
+          "audioLevel": 0.43736075930051577
+        }
+      ],
+      "filteredIce": [
+        "global.stun.twilio.com",
+        "stun.l.google.com",
+        "stun1.l.google.com"
+      ],
+      "pcm": [
+        {
+          "pc": 17,
+          "maxRms": 0.08938628625502851,
+          "state": "running"
+        },
+        {
+          "pc": 17,
+          "maxRms": 0,
+          "state": "running"
+        },
+        {
+          "pc": 17,
+          "maxRms": 0,
+          "state": "running"
+        }
+      ],
+      "room": {
+        "state": "connected",
+        "canPlaybackAudio": true,
+        "microphone": {
+          "muted": false,
+          "enabled": true,
+          "pipeline": {
+            "requestedEngine": "none",
+            "activeEngine": "none",
+            "phase": "ready",
+            "sampleRate": 48000,
+            "gateAvailable": true,
+            "gateEnabled": true,
+            "gainAvailable": true,
+            "inputDb": -16.547039836910635,
+            "outputDb": -14.298714422601954,
+            "gateOpen": true
+          }
+        },
+        "remotes": [
+          {
+            "microphone": [
+              {
+                "subscribed": true,
+                "muted": false,
+                "trackPresent": true
+              }
+            ]
+          }
+        ]
+      },
+      "peerConnections": [
+        {
+          "state": "connected",
+          "senders": [
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {
+              "kind": "audio",
+              "enabled": true,
+              "ready": "live"
+            }
+          ]
+        }
+      ],
+      "assetRequests": [],
+      "timingOrigin": "actual DOM input event",
+      "resolvedActionAt": 1795508509333,
+      "actionObserver": "owner DOM drop",
+      "listObservedAt": 1795508509370,
+      "listObserver": "owner sidebar",
+      "listMs": 37,
+      "decodedAudioMs": 281,
+      "decodedSamplesMs": 327,
+      "connectionMs": 114
+    },
+    {
+      "preparedAt": 1795508512349,
+      "actionAt": null,
+      "preActionActivity": null,
+      "capabilityQueries": [],
+      "listAt": 1795508520393,
+      "decodedAt": 1795508520613,
+      "decodedSamplesAt": 1795508520581,
+      "connectionAt": 1795508520448,
+      "token": [],
+      "ws": [
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 70,
+          "self": false,
+          "channel": "bench-alpha",
+          "sinceActionMs": -7913
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 72,
+          "self": false,
+          "channel": "bench-beta",
+          "sinceActionMs": -7911
+        },
+        {
+          "op": "voice_force_move",
+          "action": null,
+          "sincePreparationMs": 7985,
+          "self": false,
+          "channel": "bench-beta",
+          "embeddedCredentials": true,
+          "sinceActionMs": 2
+        },
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 8011,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": 28
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 8014,
+          "self": true,
+          "channel": "bench-beta",
+          "sinceActionMs": 31
+        }
+      ],
+      "cues": [
+        {
+          "sincePreparationMs": 72,
+          "duration": 1.6065208333333334,
+          "asset": "leave-DCg-ybOa.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.19011613617833625,
+          "gainAfterAudioQuantum": 1,
+          "samples": 43,
+          "sinceActionMs": -7911
+        },
+        {
+          "sincePreparationMs": 8002,
+          "duration": 0.8629375,
+          "asset": "join-B_xQuNtw.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.21763273815320677,
+          "gainAfterAudioQuantum": 1,
+          "samples": 24,
+          "sinceActionMs": 19
+        }
+      ],
+      "phases": [],
+      "longTasks": [],
+      "lastStats": [
+        {
+          "pc": 18,
+          "type": "inbound-rtp",
+          "kind": "audio",
+          "packetsReceived": 38,
+          "concealedSamples": 0,
+          "bytesReceived": 25633,
+          "totalAudioEnergy": 0,
+          "totalSamplesReceived": 35040,
+          "audioLevel": 0
+        },
+        {
+          "pc": 18,
+          "type": "outbound-rtp",
+          "kind": "audio",
+          "bytesSent": 36667
+        },
+        {
+          "pc": 18,
+          "type": "media-source",
+          "kind": "audio",
+          "totalAudioEnergy": 0.49250505616781887,
+          "audioLevel": 0.43736075930051577
+        }
+      ],
+      "filteredIce": [
+        "global.stun.twilio.com",
+        "stun.l.google.com",
+        "stun1.l.google.com"
+      ],
+      "pcm": [
+        {
+          "pc": 18,
+          "maxRms": 0.06345551984533311,
+          "state": "running"
+        },
+        {
+          "pc": 18,
+          "maxRms": 0,
+          "state": "running"
+        },
+        {
+          "pc": 18,
+          "maxRms": 0,
+          "state": "running"
+        }
+      ],
+      "room": {
+        "state": "connected",
+        "canPlaybackAudio": true,
+        "microphone": {
+          "muted": false,
+          "enabled": true,
+          "pipeline": {
+            "requestedEngine": "none",
+            "activeEngine": "none",
+            "phase": "ready",
+            "sampleRate": 48000,
+            "gateAvailable": true,
+            "gateEnabled": true,
+            "gainAvailable": true,
+            "inputDb": -13.721998922311284,
+            "outputDb": -13.408459983799482,
+            "gateOpen": true
+          }
+        },
+        "remotes": [
+          {
+            "microphone": [
+              {
+                "subscribed": true,
+                "muted": false,
+                "trackPresent": true
+              }
+            ]
+          }
+        ]
+      },
+      "peerConnections": [
+        {
+          "state": "connected",
+          "senders": [
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {
+              "kind": "audio",
+              "enabled": true,
+              "ready": "live"
+            }
+          ]
+        }
+      ],
+      "assetRequests": [],
+      "timingOrigin": "actual DOM input event",
+      "resolvedActionAt": 1795508520332,
+      "actionObserver": "owner DOM drop",
+      "listObservedAt": 1795508520367,
+      "listObserver": "owner sidebar",
+      "listMs": 35,
+      "decodedAudioMs": 281,
+      "decodedSamplesMs": 249,
+      "connectionMs": 116
+    },
+    {
+      "preparedAt": 1795508523348,
+      "actionAt": null,
+      "preActionActivity": null,
+      "capabilityQueries": [],
+      "listAt": 1795508531391,
+      "decodedAt": 1795508531618,
+      "decodedSamplesAt": 1795508531663,
+      "connectionAt": 1795508531446,
+      "token": [],
+      "ws": [
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 62,
+          "self": false,
+          "channel": "bench-beta",
+          "sinceActionMs": -7922
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 64,
+          "self": false,
+          "channel": "bench-alpha",
+          "sinceActionMs": -7920
+        },
+        {
+          "op": "voice_force_move",
+          "action": null,
+          "sincePreparationMs": 7988,
+          "self": false,
+          "channel": "bench-alpha",
+          "embeddedCredentials": true,
+          "sinceActionMs": 4
+        },
+        {
+          "op": "voice_state_update",
+          "action": "leave",
+          "sincePreparationMs": 8012,
+          "self": true,
+          "channel": "bench-beta",
+          "sinceActionMs": 28
+        },
+        {
+          "op": "voice_state_update",
+          "action": "join",
+          "sincePreparationMs": 8015,
+          "self": true,
+          "channel": "bench-alpha",
+          "sinceActionMs": 31
+        }
+      ],
+      "cues": [
+        {
+          "sincePreparationMs": 64,
+          "duration": 1.6065208333333334,
+          "asset": "leave-DCg-ybOa.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.17727535151387772,
+          "gainAfterAudioQuantum": 1,
+          "samples": 43,
+          "sinceActionMs": -7920
+        },
+        {
+          "sincePreparationMs": 8004,
+          "duration": 0.8629375,
+          "asset": "join-B_xQuNtw.m4a",
+          "contextState": "running",
+          "renderedPeakRms": 0.21763273815320677,
+          "gainAfterAudioQuantum": 1,
+          "samples": 24,
+          "sinceActionMs": 20
+        }
+      ],
+      "phases": [],
+      "longTasks": [],
+      "lastStats": [
+        {
+          "pc": 19,
+          "type": "inbound-rtp",
+          "kind": "audio",
+          "packetsReceived": 37,
+          "concealedSamples": 0,
+          "bytesReceived": 24963,
+          "totalAudioEnergy": 0,
+          "totalSamplesReceived": 34080,
+          "audioLevel": 0
+        },
+        {
+          "pc": 19,
+          "type": "outbound-rtp",
+          "kind": "audio",
+          "bytesSent": 25423
+        },
+        {
+          "pc": 19,
+          "type": "media-source",
+          "kind": "audio",
+          "totalAudioEnergy": 0.49059221183005963,
+          "audioLevel": 1
+        }
+      ],
+      "filteredIce": [
+        "global.stun.twilio.com",
+        "stun.l.google.com",
+        "stun1.l.google.com"
+      ],
+      "pcm": [
+        {
+          "pc": 19,
+          "maxRms": 0.12681770409534454,
+          "state": "running"
+        },
+        {
+          "pc": 19,
+          "maxRms": 0,
+          "state": "running"
+        },
+        {
+          "pc": 19,
+          "maxRms": 0,
+          "state": "running"
+        }
+      ],
+      "room": {
+        "state": "connected",
+        "canPlaybackAudio": true,
+        "microphone": {
+          "muted": false,
+          "enabled": true,
+          "pipeline": {
+            "requestedEngine": "none",
+            "activeEngine": "none",
+            "phase": "ready",
+            "sampleRate": 48000,
+            "gateAvailable": true,
+            "gateEnabled": true,
+            "gainAvailable": true,
+            "inputDb": -13.721998922311284,
+            "outputDb": -14.393416879834419,
+            "gateOpen": true
+          }
+        },
+        "remotes": [
+          {
+            "microphone": [
+              {
+                "subscribed": true,
+                "muted": false,
+                "trackPresent": true
+              }
+            ]
+          }
+        ]
+      },
+      "peerConnections": [
+        {
+          "state": "connected",
+          "senders": [
+            {},
+            {},
+            {},
+            {},
+            {},
+            {},
+            {
+              "kind": "audio",
+              "enabled": true,
+              "ready": "live"
+            }
+          ]
+        }
+      ],
+      "assetRequests": [],
+      "timingOrigin": "actual DOM input event",
+      "resolvedActionAt": 1795508531332,
+      "actionObserver": "owner DOM drop",
+      "listObservedAt": 1795508531373,
+      "listObserver": "owner sidebar",
+      "listMs": 41,
+      "decodedAudioMs": 286,
+      "decodedSamplesMs": 331,
+      "connectionMs": 114
+    }
+  ],
+  "deafenedMove": {
+    "preparedAt": 1795508548355,
+    "actionAt": null,
+    "preActionActivity": null,
+    "capabilityQueries": [],
+    "listAt": 1795508556401,
+    "decodedAt": null,
+    "decodedSamplesAt": null,
+    "connectionAt": 1795508556462,
+    "token": [],
+    "ws": [
+      {
+        "op": "voice_state_update",
+        "action": "leave",
+        "sincePreparationMs": 61,
+        "self": false,
+        "channel": "bench-alpha",
+        "sinceActionMs": -7925
+      },
+      {
+        "op": "voice_state_update",
+        "action": "join",
+        "sincePreparationMs": 64,
+        "self": false,
+        "channel": "bench-beta",
+        "sinceActionMs": -7922
+      },
+      {
+        "op": "voice_force_move",
+        "action": null,
+        "sincePreparationMs": 7989,
+        "self": false,
+        "channel": "bench-beta",
+        "embeddedCredentials": true,
+        "sinceActionMs": 3
+      },
+      {
+        "op": "voice_state_update",
+        "action": "leave",
+        "sincePreparationMs": 8015,
+        "self": true,
+        "channel": "bench-alpha",
+        "sinceActionMs": 29
+      },
+      {
+        "op": "voice_state_update",
+        "action": "join",
+        "sincePreparationMs": 8020,
+        "self": true,
+        "channel": "bench-beta",
+        "sinceActionMs": 34
+      }
+    ],
+    "cues": [
+      {
+        "sincePreparationMs": 64,
+        "duration": 1.6065208333333334,
+        "asset": "leave-DCg-ybOa.m4a",
+        "contextState": "running",
+        "renderedPeakRms": 0.21137436906001272,
+        "gainAfterAudioQuantum": 1,
+        "samples": 43,
+        "sinceActionMs": -7922
+      },
+      {
+        "sincePreparationMs": 8007,
+        "duration": 0.8629375,
+        "asset": "join-B_xQuNtw.m4a",
+        "contextState": "running",
+        "renderedPeakRms": 0.23349978378769695,
+        "gainAfterAudioQuantum": 1,
+        "samples": 24,
+        "sinceActionMs": 21
+      }
+    ],
+    "phases": [],
+    "longTasks": [],
+    "lastStats": [],
+    "filteredIce": [
+      "global.stun.twilio.com",
+      "stun.l.google.com",
+      "stun1.l.google.com"
+    ],
+    "pcm": [
+      {
+        "pc": 20,
+        "maxRms": 0,
+        "state": "running"
+      },
+      {
+        "pc": 20,
+        "maxRms": 0,
+        "state": "running"
+      },
+      {
+        "pc": 20,
+        "maxRms": 0,
+        "state": "running"
+      }
+    ],
+    "room": {
+      "state": "connected",
+      "canPlaybackAudio": true,
+      "microphone": null,
+      "remotes": [
+        {
+          "microphone": [
+            {
+              "subscribed": false,
+              "muted": false,
+              "trackPresent": false
+            }
+          ]
+        }
+      ]
+    },
+    "peerConnections": [
+      {
+        "state": "connected",
+        "senders": [
+          {},
+          {},
+          {},
+          {},
+          {},
+          {}
+        ]
+      }
+    ],
+    "assetRequests": [],
+    "timingOrigin": "actual DOM input event",
+    "resolvedActionAt": 1795508556341,
+    "actionObserver": "owner DOM drop",
+    "listObservedAt": 1795508556373,
+    "listObserver": "owner sidebar",
+    "listMs": 32,
+    "decodedAudioMs": null,
+    "decodedSamplesMs": null,
+    "connectionMs": 121,
+    "deafenStillOn": "true",
+    "audibleCueCount": 1
+  },
+  "failures": [],
+  "phaseInstrumentation": {
+    "enabled": false,
+    "clock": "Unix milliseconds, rebased to actual DOM action",
+    "payloads": "only event kinds, booleans, durations and ordinal IDs; no keys, SDP, JWTs or participant identities"
+  },
+  "preparationExperiment": {
+    "mode": "none",
+    "measurements": [],
+    "note": "Optional fixture-only preparation before first channel click, after authenticated UI ready; no capture or offer. Preparation work is reported separately, not hidden in click latency."
+  },
+  "applicationArchiveSha256": "b1dfd9b4d68e5a419c432e4b8f22c887777e5a49da3e1e94f165a197f76efa96",
+  "audioCondition": {
+    "noiseReduction": false,
+    "microphoneProfile": "speech",
+    "input": "looped active speech segment 10.3–11.3 seconds; no long source silence"
+  },
+  "microphoneFixture": {
+    "source": "client/public/audio-test-fixtures/turkish-fleurs-original.wav",
+    "license": "CC BY 4.0; attribution in adjacent README.md",
+    "conversion": "active segment 10.3–11.3s; float32 mono to PCM16 mono, original sample rate; Chromium loops this 1s segment",
+    "sha256": "f36cfa40c41769ce300c9f6ea1789a3de02c0e01003c0255e9299ae8fe4227ea"
+  },
+  "appVersion": "2.11.131",
+  "runtime": {
+    "electron": "45.3.0",
+    "chrome": "156.0.8078.96",
+    "node": "24.22.2"
+  },
+  "positiveCueControl": {
+    "kind": "actual product Join preview in stable non-deafened room",
+    "cues": [
+      {
+        "sincePreparationMs": 1997,
+        "duration": 0.8629375,
+        "asset": "join-B_xQuNtw.m4a",
+        "contextState": "running",
+        "renderedPeakRms": 0.21763273815320677,
+        "gainAfterAudioQuantum": 1,
+        "samples": 24
+      }
+    ],
+    "passed": true
+  },
+  "cancellation": {
+    "durationMs": 10202,
+    "upstream": {
+      "arrivedAt": 1795508562363,
+      "releasedAt": null,
+      "closedAt": 1795508564366,
+      "cancelledBeforeRelease": true
+    },
+    "token": [
+      {
+        "durationMs": 2001,
+        "sincePreparationMs": 3992,
+        "status": 0,
+        "aborted": true
+      },
+      {
+        "durationMs": 54,
+        "sincePreparationMs": 4049,
+        "status": 200,
+        "serverTiming": "auth;dur=1.6, token_lookup;dur=1.3, issue;dur=0.0"
+      }
+    ],
+    "selfJoinChannels": [
+      "bench-alpha"
+    ],
+    "latestTargetVisible": "Voice Connected\n1 ms\nWindows Voice Benchmark / bench-alpha\nReturn to call ↗\nNoise Reduction"
+  },
+  "summary": {
+    "joins": {
+      "listMs": {
+        "n": 10,
+        "median": 90.5,
+        "p95": 187
+      },
+      "decodedAudioMs": {
+        "n": 10,
+        "median": 317.5,
+        "p95": 489
+      },
+      "decodedSamplesMs": {
+        "n": 10,
+        "median": 348,
+        "p95": 489
+      },
+      "connectionMs": {
+        "n": 10,
+        "median": 162,
+        "p95": 329
+      },
+      "tokenMs": {
+        "n": 10,
+        "median": 58.5,
+        "p95": 67
+      }
+    },
+    "warmJoins": {
+      "listMs": {
+        "n": 9,
+        "median": 90,
+        "p95": 98
+      },
+      "decodedAudioMs": {
+        "n": 9,
+        "median": 316,
+        "p95": 380
+      },
+      "decodedSamplesMs": {
+        "n": 9,
+        "median": 346,
+        "p95": 380
+      },
+      "connectionMs": {
+        "n": 9,
+        "median": 162,
+        "p95": 183
+      },
+      "tokenMs": {
+        "n": 9,
+        "median": 58,
+        "p95": 67
+      }
+    },
+    "moves": {
+      "listMs": {
+        "n": 10,
+        "median": 38.5,
+        "p95": 45
+      },
+      "decodedAudioMs": {
+        "n": 10,
+        "median": 272,
+        "p95": 298
+      },
+      "decodedSamplesMs": {
+        "n": 10,
+        "median": 302.5,
+        "p95": 331
+      },
+      "connectionMs": {
+        "n": 10,
+        "median": 113,
+        "p95": 122
+      },
+      "tokenMs": {
+        "n": 0,
+        "median": null,
+        "p95": null
+      }
+    }
+  }
+}

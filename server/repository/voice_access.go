@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
@@ -64,41 +63,75 @@ func scanVoiceAdmission(row *sql.Row, extra ...any) (*models.VoiceAdmission, err
 	return &a, nil
 }
 
-// VoiceVisibleUsers resolves only connected candidates. Membership, channel
-// scope and effective permissions are read together, without a shared cache.
-func (r *postgresVoiceChannelRepo) VoiceVisibleUsers(ctx context.Context, serverID, channelID string, online []string) ([]string, error) {
-	if len(online) == 0 {
+// voiceVisibleUsersQuery reads membership, channel scope and the role and
+// override bits of every (channel, connected candidate) pair in one statement.
+// Both lists are array parameters, so the statement text does not depend on
+// how many channels or candidates there are: pgx prepares it once per
+// connection and every later call is a single round trip. A list of
+// placeholders would be a new statement, and a new prepare, per audience size.
+//
+// A plain []string reaches pgx unconverted through database.PostgreSQLPool
+// (its CheckNamedValue accepts it) and binds as text[]; duplicates and ids
+// that match no member simply select nothing.
+//
+// The candidates are resolved in a LATERAL subquery that runs once per
+// selected channel, so inside it the channel is a single value, as it was
+// when each channel had a statement of its own. Joining the channel list
+// directly instead costs database time in two ways: the override lookup can
+// lose its channel_id index condition while channel_permissions is small,
+// and a generic plan can rescan the server's channel rows (threads included)
+// once per candidate. The server id is bound twice on purpose: the member
+// scan needs it as a parameter of its own, not through the channel row, to
+// keep its (server_id, user_id) index condition.
+const voiceVisibleUsersQuery = `SELECT c.id,v.user_id,v.base,v.allow,v.deny
+	FROM channels c
+	CROSS JOIN LATERAL (SELECT m.user_id,bit_or(r.permissions) AS base,COALESCE(bit_or(o.allow),0) AS allow,COALESCE(bit_or(o.deny),0) AS deny
+		FROM server_members m
+		JOIN user_roles ur ON ur.user_id=m.user_id AND ur.server_id=m.server_id
+		JOIN roles r ON r.id=ur.role_id AND r.server_id=m.server_id
+		LEFT JOIN channel_permissions o ON o.channel_id=c.id AND o.role_id=r.id
+		WHERE m.server_id=? AND m.user_id=ANY(?) GROUP BY m.user_id) v
+	WHERE c.server_id=? AND c.id=ANY(?) AND c.type='voice'`
+
+// VoiceVisibleUsersByChannel resolves, at one snapshot, which connected
+// candidates may see each of the given voice channels of one server.
+// Membership, channel scope and effective permissions are read together,
+// without a shared cache. A channel that is not a voice channel of serverID,
+// or that no candidate may view, has no entry in the result.
+func (r *postgresVoiceChannelRepo) VoiceVisibleUsersByChannel(ctx context.Context, serverID string, channelIDs, online []string) (map[string][]string, error) {
+	if len(channelIDs) == 0 || len(online) == 0 {
 		return nil, nil
 	}
-	args := make([]any, 0, len(online)+2)
-	args = append(args, serverID, channelID)
-	for _, id := range online {
-		args = append(args, id)
-	}
-	query := `SELECT m.user_id,bit_or(r.permissions),COALESCE(bit_or(o.allow),0),COALESCE(bit_or(o.deny),0)
-	FROM channels c
-	JOIN server_members m ON m.server_id=c.server_id
-	JOIN user_roles ur ON ur.user_id=m.user_id AND ur.server_id=m.server_id
-	JOIN roles r ON r.id=ur.role_id AND r.server_id=c.server_id
-	LEFT JOIN channel_permissions o ON o.channel_id=c.id AND o.role_id=r.id
-	WHERE c.server_id=? AND c.id=? AND c.type='voice' AND m.user_id IN (` + strings.TrimSuffix(strings.Repeat("?,", len(online)), ",") + `) GROUP BY m.user_id`
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	rows, err := r.db.QueryContext(ctx, voiceVisibleUsersQuery, serverID, online, serverID, channelIDs)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var visible []string
+	visible := make(map[string][]string, len(channelIDs))
 	for rows.Next() {
-		var id string
+		var channelID, userID string
 		var base, allow, deny models.Permission
-		if err := rows.Scan(&id, &base, &allow, &deny); err != nil {
+		if err := rows.Scan(&channelID, &userID, &base, &allow, &deny); err != nil {
 			return nil, err
 		}
 		if models.EffectiveChannelPermission(base, allow, deny).Has(models.PermViewChannel) {
-			visible = append(visible, id)
+			visible[channelID] = append(visible[channelID], userID)
 		}
 	}
-	return visible, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return visible, nil
+}
+
+// VoiceVisibleUsers is VoiceVisibleUsersByChannel for a single channel. It
+// runs the same statement, so both share one prepared statement.
+func (r *postgresVoiceChannelRepo) VoiceVisibleUsers(ctx context.Context, serverID, channelID string, online []string) ([]string, error) {
+	visible, err := r.VoiceVisibleUsersByChannel(ctx, serverID, []string{channelID}, online)
+	if err != nil {
+		return nil, err
+	}
+	return visible[channelID], nil
 }
 
 func (r *postgresVoiceChannelRepo) VoiceAccess() VoiceAccessReader { return r }

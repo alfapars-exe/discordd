@@ -1342,7 +1342,7 @@
     "clipVoiceConsent": "Yerel kaydedilen kliplerde sesime izin ver",
     "clipVoiceConsentHint": "Varsayılan olarak kapalıdır. Kaydeden kişiye rıza listesi verilir; kapalıyken mikrofon kanalın kayda eklenmez ve süren kayıtlar rızayı düzenli olarak yeniler.",
     "telemetry": "İsteğe bağlı iyileştirme telemetrisini paylaş",
-    "telemetryHint": "Toplu ekran paylaşımı performans olaylarına izin verir. Varsayılan olarak kapalıdır; güvenlik ve hata tanılama kayıtları çalışmaya devam eder."
+    "telemetryHint": "Toplu ekran paylaşımı performans olaylarına izin verir. Varsayılan olarak kapalıdır; güvenlik, hata ve bağlantı süresi tanılama kayıtları çalışmaya devam eder."
   },
   "deletion": {
     "title": "Hesabı kalıcı olarak sil",

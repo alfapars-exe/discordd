@@ -5,11 +5,15 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg"
+	"github.com/argeinfina/hichat/pkg/logx"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
 
@@ -201,7 +205,29 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 	}
 	defer finishOperation()
 
-	channel, err := s.channelGetter.GetByID(ctx, targetChannelID)
+	// Everything from here to the write lock is the database phase: each
+	// statement is a round trip to the database host. With a snapshot reader
+	// the target channel and the moved user's fresh permissions come from one
+	// access read, issued together with the mover's own permission reads
+	// (startMoveReads); without one the statements run one after another.
+	dbStart := time.Now()
+	var reads *voiceMoveReads
+	var channel *models.Channel
+	var err error
+	if reader := s.voiceAccess; reader != nil {
+		reads = s.startMoveReads(ctx, reader, moverUserID, targetUserID, targetChannelID)
+		defer reads.pending.Wait()
+		if err = reads.err; err == nil {
+			channel = &reads.admission.Channel
+		} else if !errors.Is(err, pkg.ErrNotFound) {
+			// Only a missing channel is "target channel not found". A read
+			// that failed (connection reset, deadline, pool wait) keeps its
+			// cause for the caller's log line.
+			return fmt.Errorf("load voice move access: %w", err)
+		}
+	} else {
+		channel, err = s.channelGetter.GetByID(ctx, targetChannelID)
+	}
 	if err != nil {
 		return fmt.Errorf("%w: target channel not found", pkg.ErrNotFound)
 	}
@@ -261,8 +287,11 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 
 	if isSelfMove {
 		// Self-move: only need ConnectVoice in target channel (no MoveMembers required)
-		targetPerms, err := s.permResolver.ResolveChannelPermissions(ctx, moverUserID, targetChannelID)
-		if err != nil {
+		var targetPerms models.Permission
+		if reads != nil {
+			// The access snapshot was read for this same user and channel.
+			targetPerms = reads.admission.Permissions
+		} else if targetPerms, err = s.permResolver.ResolveChannelPermissions(ctx, moverUserID, targetChannelID); err != nil {
 			return fmt.Errorf("failed to resolve target channel permissions: %w", err)
 		}
 		if !targetPerms.Has(models.PermConnectVoice) {
@@ -270,7 +299,7 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 		}
 	} else {
 		// Moving another user: require PermMoveMembers in both channels
-		sourcePerms, err := s.permResolver.ResolveChannelPermissions(ctx, moverUserID, sourceChannelID)
+		sourcePerms, err := s.moverPermissions(ctx, reads, moverUserID, sourceChannelID)
 		if err != nil {
 			s.logError(models.LogCategoryVoice, &moverUserID, "MoveUser: source channel permission resolve failed", map[string]string{
 				"target_user": targetUserID, "source_channel": sourceChannelID, "error": pkg.ErrText(err),
@@ -281,7 +310,7 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 			return fmt.Errorf("%w: move members permission required in source channel", pkg.ErrForbidden)
 		}
 
-		targetPerms, err := s.permResolver.ResolveChannelPermissions(ctx, moverUserID, targetChannelID)
+		targetPerms, err := s.moverPermissions(ctx, reads, moverUserID, targetChannelID)
 		if err != nil {
 			s.logError(models.LogCategoryVoice, &moverUserID, "MoveUser: target channel permission resolve failed", map[string]string{
 				"target_user": targetUserID, "target_channel": targetChannelID, "error": pkg.ErrText(err),
@@ -294,8 +323,11 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 		if !targetPerms.Has(models.PermConnectVoice) {
 			return fmt.Errorf("%w: connect voice permission required in target channel", pkg.ErrForbidden)
 		}
-		memberPerms, err := s.currentVoicePermissions(ctx, targetUserID, targetChannelID)
-		if err != nil {
+		var memberPerms models.Permission
+		if reads != nil {
+			// Same fresh, uncached read currentVoicePermissions would make.
+			memberPerms = reads.admission.Permissions
+		} else if memberPerms, err = s.currentVoicePermissions(ctx, targetUserID, targetChannelID); err != nil {
 			return fmt.Errorf("resolve moved member permissions: %w", err)
 		}
 		needsPlacementGrant = !memberPerms.Has(models.PermConnectVoice)
@@ -303,6 +335,7 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 	}
 
 	writeWait := time.Now()
+	dbPhase := writeWait.Sub(dbStart)
 	s.mu.Lock()
 	writeStart := time.Now()
 	if current := s.states[targetUserID]; current != state || current.ChannelID != sourceChannelID || current.ChannelGeneration != generation {
@@ -330,6 +363,16 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 	state.ChannelID = targetChannelID
 	state.ForceMoved = needsPlacementGrant
 	state.ServerID = targetServerID
+
+	// Snapshotted for the embedded credentials minted after unlock
+	// (moveCredentials): this placement is what that token is issued for.
+	placement := voiceMovePlacement{
+		state:       state,
+		generation:  state.ChannelGeneration,
+		username:    state.Username,
+		displayName: state.DisplayName,
+		granted:     needsPlacementGrant,
+	}
 
 	// Involuntary move: the moved user knew the source channel's SFrame
 	// passphrase. Rotate so the source channel's continued voice traffic
@@ -397,18 +440,52 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 
 	s.mu.Unlock()
 
-	voiceLogger.Debug("voice move lock timing", "lock_wait", readStart.Sub(lockStart)+writeStart.Sub(writeWait), "lock_held", readHeld+time.Since(writeStart))
-
-	// Tell client to switch LiveKit rooms
-	s.hub.BroadcastToUser(targetUserID, ws.Event{
-		Op:   ws.OpVoiceForceMove,
-		Data: ws.VoiceForceMoveData{ChannelID: targetChannelID},
-	})
+	voiceLogger.Debug("voice move lock timing", "lock_wait", readStart.Sub(lockStart)+writeStart.Sub(writeWait), "lock_held", readHeld+time.Since(writeStart), "db_phase", dbPhase)
 
 	// Tell remaining members of the source channel to re-key (excludes the
 	// moved user — they get a fresh passphrase on join via voice/token).
+	// First thing after the unlock, ahead of the credential mint below: that
+	// takes s.mu again and may wait behind another holder, and until this
+	// goes out the source room keeps encrypting with the key the moved user
+	// holds.
 	for _, rotation := range rotations {
 		s.hub.BroadcastToUsers(sourceRemaining, ws.Event{Op: ws.OpVoicePassphraseRotated, Data: rotation})
+	}
+
+	// Tell client to switch LiveKit rooms. The target room's credentials ride
+	// along when they can be minted from the access snapshot — the one
+	// already read, or one re-read here when that has aged past its bound —
+	// saving the moved client its own token request; nil leaves the field off
+	// and the client asks over HTTP as before. Never under s.mu: the re-read
+	// is a database round trip and token issuance takes the lock itself.
+	mintStart := time.Now()
+	voice, credentials := s.moveCredentials(ctx, reads, placement, targetUserID)
+	mintTime := time.Since(mintStart)
+	// The mint can be a database round trip with s.mu free, long enough for
+	// another MoveUser to place this same session somewhere else and send its
+	// own voice_force_move. The client follows whichever instruction arrives
+	// last, so this one — for a channel the session has already been moved out
+	// of — must not go out after it. ChannelGeneration is advanced in place
+	// only by MoveUser (above): the same state with another generation is
+	// exactly "a later move owns this session". A leave, a kick or the user's
+	// own voice_join removes or replaces the state instead, and none of those
+	// sends an instruction, so this event still goes out then, as it always
+	// has.
+	s.mu.RLock()
+	superseded := s.states[targetUserID] == placement.state && placement.state.ChannelGeneration != placement.generation
+	s.mu.RUnlock()
+	if !superseded {
+		s.hub.BroadcastToUser(targetUserID, ws.Event{
+			Op:   ws.OpVoiceForceMove,
+			Data: ws.VoiceForceMoveData{ChannelID: targetChannelID, ServerID: targetServerID, Voice: voice},
+		})
+	}
+	// How the credentials were obtained (voiceMoveCredentials* below) and what
+	// the mint cost, a re-read included.
+	voiceLogger.Debug("voice move credentials", "credentials", credentials, "credentials_mint", mintTime)
+	if dbPhase > voiceMoveSlowDBPhase {
+		voiceLogger.Info("voice move database phase slow", "db_phase", dbPhase, "credentials_embedded", voice != nil,
+			"credentials", credentials, "credentials_mint", mintTime)
 	}
 
 	// F7 review LOW fix: sourceChannelID emptied by this move (sourceRemaining
@@ -427,8 +504,10 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 	// screen-share sub-participant. If the moved user was streaming, their
 	// "_ss" identity is left orphaned in sourceChannelID exactly like the
 	// main identity was before this fix existed, so it gets the same
-	// best-effort cleanup.
-	s.operations.child(func() { s.removeParticipantAndScreenShareFromLiveKit(sourceChannelID, targetUserID) })
+	// best-effort cleanup. Guarded like every departure: skipped if the user
+	// is back in sourceChannelID by the time it runs (see
+	// removeDepartedParticipantFromLiveKit, voice_lifecycle.go).
+	s.operations.child(func() { s.removeDepartedParticipantFromLiveKit(sourceServerID, sourceChannelID, targetUserID) })
 
 	// Audit: voice move (only when an admin moved someone else; self-moves
 	// are not moderation events and we don't log them).
@@ -448,6 +527,288 @@ func (s *voiceService) MoveUser(ctx context.Context, moverUserID, targetUserID, 
 	voiceLogger.Info("user moved another user between voice channels",
 		"mover_id", moverUserID, "target_id", targetUserID, "from_channel", sourceChannelID, "to_channel", targetChannelID)
 	return nil
+}
+
+// voiceMoveSlowDBPhase is the pre-lock database time above which MoveUser
+// reports the move at Info instead of only in its debug timing line. A
+// variable only so a test can take wall-clock time out of its fast half.
+var voiceMoveSlowDBPhase = 250 * time.Millisecond
+
+// voiceMoveReads is MoveUser's database phase on the snapshot path
+// (s.voiceAccess != nil).
+type voiceMoveReads struct {
+	// One access read for the moved user and the target channel, written by
+	// startMoveReads before it returns and never afterwards: a re-read made
+	// by moveCredentials lives in that call, not here.
+	voiceMoveSnapshot
+	err error
+
+	// The mover's own permission reads, started alongside the access read.
+	// pending must be waited on before MoveUser returns.
+	source, target voiceMovePermRead
+	pending        sync.WaitGroup
+}
+
+// voiceMoveSnapshot is one answer of the access read for the moved user and
+// the target channel: the channel row, membership, timeout, fresh effective
+// permissions, and the LiveKit instance with this month's usage. instance is
+// nil when the server has no LiveKit instance linked (the move still applies;
+// no credentials).
+type voiceMoveSnapshot struct {
+	admission *models.VoiceAdmission
+	instance  *models.LiveKitInstance
+	used      int64
+	// readAt is when the read answered; moveCredentials does not mint from a
+	// snapshot older than voiceMoveCredentialsMaxSnapshotAge.
+	readAt time.Time
+}
+
+// stale reports whether the snapshot is too old to mint from. One without a
+// read time is as old as a snapshot can be.
+func (v voiceMoveSnapshot) stale() bool {
+	return time.Since(v.readAt) > voiceMoveCredentialsMaxSnapshotAge
+}
+
+// voiceMovePermRead is one of the mover's permission reads. channelID is
+// empty when the read was never started.
+type voiceMovePermRead struct {
+	channelID string
+	perms     models.Permission
+	err       error
+}
+
+// startMoveReads issues MoveUser's database reads together and returns once
+// the access read has answered. A self-move needs nothing beyond it. For a
+// moderator move the source channel is only known from the target's voice
+// state, which MoveUser reads authoritatively AFTER its channel checks (and
+// re-checks under the write lock) — so the channel peeked here is just what
+// the source read is started for; moverPermissions resolves again if the
+// authoritative one turns out to differ.
+func (s *voiceService) startMoveReads(ctx context.Context, reader repository.VoiceAccessReader, moverUserID, targetUserID, targetChannelID string) *voiceMoveReads {
+	reads := &voiceMoveReads{}
+	if moverUserID != targetUserID {
+		s.mu.RLock()
+		if state, ok := s.states[targetUserID]; ok {
+			reads.source.channelID = state.ChannelID
+			reads.target.channelID = targetChannelID
+		}
+		s.mu.RUnlock()
+		for _, read := range []*voiceMovePermRead{&reads.source, &reads.target} {
+			if read.channelID == "" {
+				continue
+			}
+			reads.pending.Add(1)
+			logx.Go("voice-move-permissions", func() {
+				defer reads.pending.Done()
+				read.perms, read.err = s.permResolver.ResolveChannelPermissions(ctx, moverUserID, read.channelID)
+			})
+		}
+	}
+
+	reads.admission, reads.instance, reads.used, reads.err = reader.VoiceTokenAccess(ctx, targetUserID, targetChannelID, time.Now())
+	if errors.Is(reads.err, pkg.ErrNotFound) {
+		// The token read joins the server's LiveKit instance, so "not found"
+		// is also what a channel on a server with no instance linked looks
+		// like. MoveUser has never required one; only the channel itself
+		// being gone is "target channel not found".
+		reads.instance, reads.used = nil, 0
+		reads.admission, reads.err = reader.VoiceAdmission(ctx, targetUserID, targetChannelID)
+	}
+	reads.readAt = time.Now()
+	return reads
+}
+
+// voiceMoveCredentialsMaxSnapshotAge is how old an access snapshot may be, at
+// most, when MoveUser mints credentials from it. Without embedded credentials
+// the moved client requests its token only after the move, so GenerateToken's
+// read sees a timeout, kick, ban or permission change that was committed
+// while the move was still waiting on the mover's permission reads or on the
+// lock. A snapshot older than this (about one database round trip) no longer
+// stands in for that read, so it is never minted from.
+//
+// It is not the end of the embedded credentials either: moveCredentials
+// repeats the access read once — after the move has been applied and s.mu
+// released — and mints from that answer, which is as recent as the read the
+// client's own token request would have made. The bound holds for the
+// repeated read as well: if that one has aged past it by the time the
+// credentials would leave, or the read fails, the event goes out without
+// credentials and the client asks over HTTP.
+//
+// A move whose mover-permission reads were cached mints from the first
+// snapshot, well inside the bound and with no further statement. The repeat
+// is paid by a move whose reads missed the permission cache (permCacheTTL,
+// channel_permission_cache.go) — a moderator's first move in a while: one
+// more round trip before voice_force_move, in place of the token request the
+// moved client would otherwise make after it. A variable only for tests.
+var voiceMoveCredentialsMaxSnapshotAge = 150 * time.Millisecond
+
+// voiceMoveRefreshTimeout bounds the repeated access read on its own. When
+// that read is issued the move has already been applied and broadcast, and
+// voice_force_move is waiting for nothing else; on MoveUser's ctx alone a
+// stalled database would hold the event back for whatever is left of the
+// move's budget (seconds). The read only pays off while it is cheaper than
+// the token request the moved client makes otherwise — about 0.7 s in
+// production — so past this the event goes out without credentials, which
+// is then the faster outcome. A variable only for tests.
+var voiceMoveRefreshTimeout = 750 * time.Millisecond
+
+// How MoveUser obtained the credentials it embedded, for its log lines.
+const (
+	voiceMoveCredentialsSnapshot  = "snapshot"  // minted from the move's own access read
+	voiceMoveCredentialsRefreshed = "refreshed" // that read had aged; minted from a repeated one
+	voiceMoveCredentialsNone      = "none"      // not embedded; the client requests a token
+)
+
+// refreshMoveSnapshot repeats the access read behind an aged snapshot: the
+// same single statement, for the same user and channel, and nothing else —
+// unlike startMoveReads it has no fallback read, because a move that cannot
+// embed credentials needs none. false means "no credentials": the read
+// failed (ctx expired included), the server has no LiveKit instance or the
+// channel is gone (pkg.ErrNotFound), or the answer is not for the channel
+// and server the move was decided on. The read gets voiceMoveRefreshTimeout
+// within ctx; running out of it is a failed read like any other. Never
+// called under s.mu.
+func (s *voiceService) refreshMoveSnapshot(ctx context.Context, userID string, aged voiceMoveSnapshot) (voiceMoveSnapshot, bool) {
+	reader := s.voiceAccess
+	if reader == nil {
+		return voiceMoveSnapshot{}, false
+	}
+	ctx, cancel := context.WithTimeout(ctx, voiceMoveRefreshTimeout)
+	defer cancel()
+	channel := aged.admission.Channel
+	admission, instance, used, err := reader.VoiceTokenAccess(ctx, userID, channel.ID, time.Now())
+	if err != nil {
+		if !errors.Is(err, pkg.ErrNotFound) {
+			voiceLogger.Warn("voice move credentials not embedded", "channel_id", channel.ID, "err", pkg.ErrText(err))
+		}
+		return voiceMoveSnapshot{}, false
+	}
+	if admission == nil || instance == nil || admission.Channel.ID != channel.ID || admission.Channel.ServerID != channel.ServerID {
+		return voiceMoveSnapshot{}, false
+	}
+	return voiceMoveSnapshot{admission: admission, instance: instance, used: used, readAt: time.Now()}, true
+}
+
+// moverPermissions returns the mover's permissions in channelID: the read
+// startMoveReads already issued for that channel, or — without a snapshot
+// reader, or when the target's channel changed since the peek — a direct
+// resolve.
+func (s *voiceService) moverPermissions(ctx context.Context, reads *voiceMoveReads, moverUserID, channelID string) (models.Permission, error) {
+	if reads != nil {
+		reads.pending.Wait()
+		for _, read := range []*voiceMovePermRead{&reads.source, &reads.target} {
+			if read.channelID == channelID {
+				return read.perms, read.err
+			}
+		}
+	}
+	return s.permResolver.ResolveChannelPermissions(ctx, moverUserID, channelID)
+}
+
+// voiceMovePlacement is the moved user's session as MoveUser left it under
+// the write lock.
+type voiceMovePlacement struct {
+	state                 *models.VoiceState
+	generation            uint64
+	username, displayName string
+	granted               bool // placed without ConnectVoice (the force-move grant case)
+}
+
+// moveCredentials mints the moved user's LiveKit token and media key for the
+// target room from an access snapshot no older than
+// voiceMoveCredentialsMaxSnapshotAge, and reports how it got them (one of the
+// voiceMoveCredentials* values; "none" exactly when the credentials are nil).
+//
+// The snapshot is the one MoveUser already read while it is that fresh — no
+// further database statement. Once it has aged past the bound (the mover's
+// permission reads or the lock kept the move waiting) the access read is
+// repeated: one statement, at most once per move, with MoveUser's ctx cut
+// to voiceMoveRefreshTimeout, here after the unlock. The repeated answer
+// replaces the first one for every rule below; the first is not consulted
+// again, and reads is not written.
+// A first read that found no LiveKit instance is not repeated.
+//
+// Whichever snapshot it is, the admission rules are the ones GenerateToken
+// applies to that same read, with these differences, all following from the
+// user already being placed in the target channel by this move:
+//   - a missing ConnectVoice is authorised by the placement, exactly like
+//     the one-time force-move grant — but s.forceMoveGrants is NOT consumed
+//     here, so a client that ignores the embedded credentials (or falls back
+//     to an HTTP token request) can still use the grant;
+//   - the user limit is not checked: GenerateToken exempts a user who is
+//     already in the channel.
+//
+// nil means "send the event without credentials"; the client then requests a
+// token as it always has, and GenerateToken makes the full decision. That is
+// the answer whenever this path cannot stand in for GenerateToken: no
+// snapshot reader, no LiveKit instance, a timed-out or no-longer-member
+// user, a user without ConnectVoice whom this move did not place by grant,
+// an instance that is inside its auto-switch threshold (GenerateToken may
+// migrate the server to another instance there — never decide a room's
+// instance from here), any signing failure, a session that moved on while
+// the token was minted, a repeated read that failed (refreshMoveSnapshot),
+// or a snapshot — the repeated one included, there is no second repeat —
+// that has aged past the bound by the time the credentials would leave.
+// The move itself never fails because of this.
+//
+// What remains is the residual every issued token has (see voiceTokenTTL): a
+// sanction committed inside that bound, or after the token is out, meets a
+// token that is already valid. The in-memory placement check below and the
+// LiveKit participant_joined webhook (EnforceModerationOnJoin) are what
+// catch those.
+func (s *voiceService) moveCredentials(ctx context.Context, reads *voiceMoveReads, placement voiceMovePlacement, userID string) (*models.VoiceTokenResponse, string) {
+	if reads == nil || reads.instance == nil {
+		return nil, voiceMoveCredentialsNone
+	}
+	// A copy: whatever is read again below stays in this call.
+	snapshot, source := reads.voiceMoveSnapshot, voiceMoveCredentialsSnapshot
+	if snapshot.stale() {
+		refreshed, ok := s.refreshMoveSnapshot(ctx, userID, snapshot)
+		if !ok {
+			return nil, voiceMoveCredentialsNone
+		}
+		snapshot, source = refreshed, voiceMoveCredentialsRefreshed
+	}
+	admission, instance := snapshot.admission, snapshot.instance
+	if admission.Channel.ServerID == "" || validateVoiceAdmission(admission) != nil {
+		return nil, voiceMoveCredentialsNone
+	}
+	if !admission.Permissions.Has(models.PermConnectVoice) && !placement.granted {
+		return nil, voiceMoveCredentialsNone
+	}
+	if instance.IsPlatformManaged && instance.AutoSwitchEnabled && liveKitInstanceNearQuota(instance, snapshot.used) {
+		return nil, voiceMoveCredentialsNone
+	}
+
+	apiKey, apiSecret, err := s.liveKitCredentials(userID, instance)
+	if err != nil {
+		voiceLogger.Warn("voice move credentials not embedded", "channel_id", admission.Channel.ID, "err", pkg.ErrText(err))
+		return nil, voiceMoveCredentialsNone
+	}
+	voice, err := s.issueVoiceToken(voiceTokenIssue{
+		userID: userID, username: placement.username, displayName: placement.displayName,
+		serverID: admission.Channel.ServerID, channelID: admission.Channel.ID,
+		url: instance.URL, apiKey: apiKey, apiSecret: apiSecret,
+		permissions: admission.Permissions,
+	})
+	if err != nil {
+		voiceLogger.Warn("voice move credentials not embedded", "channel_id", admission.Channel.ID, "err", pkg.ErrText(err))
+		return nil, voiceMoveCredentialsNone
+	}
+
+	// The placement is what authorised this token. If the session was ended
+	// or moved again since the unlock (leave, kick, another move), whoever
+	// did that has already revoked what it stood for.
+	s.mu.RLock()
+	placed := s.states[userID] == placement.state && placement.state.ChannelGeneration == placement.generation
+	s.mu.RUnlock()
+	// Minting takes s.mu and may have waited; the age of the snapshot that
+	// was minted from is judged again at the moment the credentials would
+	// leave. A repeated read that has aged too is not repeated again.
+	if !placed || snapshot.stale() {
+		return nil, voiceMoveCredentialsNone
+	}
+	return voice, source
 }
 
 // AdminDisconnectUser force-disconnects a user from voice.

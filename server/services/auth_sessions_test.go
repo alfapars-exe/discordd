@@ -230,3 +230,79 @@ func TestAuthSessionDisconnectionConstructorOptionSelectsExactSession(t *testing
 		t.Fatal("session disconnect scope or explicit integration selection lost")
 	}
 }
+
+// The current session's last-active write may still be queued when its owner
+// lists sessions; the listing reports that activity and orders by it.
+func TestAuthSessionsListReportsCurrentActivityAheadOfQueuedTouch(t *testing.T) {
+	h, s, _ := boundAuthHarness(t)
+	ctx := context.Background()
+	var queued []repository.AuthSessionTouch
+	s.authSessions = repository.NewSQLiteAuthSessionRepo(h.db.Conn, repository.WithAuthSessionTouchScheduler(func(touch repository.AuthSessionTouch) bool {
+		queued = append(queued, touch)
+		return true
+	}))
+	current := sessionLogin(t, s, h.user.Username)
+	other := sessionLogin(t, s, h.user.Username)
+	start := time.Now().Unix()
+	for id, at := range map[string]int64{current.SessionID: start - 3600, other.SessionID: start - 600} {
+		if _, err := h.db.Conn.Exec(`UPDATE auth_sessions SET last_active_at=? WHERE id=?`, at, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	list, err := s.ListSessions(ctx, h.user.ID, current.SessionID)
+	if err != nil || len(list) != 2 {
+		t.Fatalf("list=%v %v", list, err)
+	}
+	if list[0].ID != current.SessionID || !list[0].Current || list[0].LastActiveAt < start {
+		t.Fatalf("current session listed with stale activity: %+v", list)
+	}
+	if list[1].ID != other.SessionID || list[1].Current || list[1].LastActiveAt != start-600 {
+		t.Fatalf("other session changed: %+v", list[1])
+	}
+	if len(queued) != 1 || queued[0].SessionID != current.SessionID || queued[0].At != list[0].LastActiveAt {
+		t.Fatalf("queued=%+v", queued)
+	}
+	var stored int64
+	if err := h.db.Conn.QueryRow(`SELECT last_active_at FROM auth_sessions WHERE id=?`, current.SessionID).Scan(&stored); err != nil || stored != start-3600 {
+		t.Fatalf("listing wrote last_active_at=%d inline: %v", stored, err)
+	}
+}
+
+// The touch writer drains one database round trip at a time and drops touches
+// once its queue is full. A dropped touch loses only the stored timestamp:
+// the session that is making this very request is still listed as active
+// now, and first.
+func TestAuthSessionsListReportsCurrentActivityWhenTouchIsDropped(t *testing.T) {
+	h, s, _ := boundAuthHarness(t)
+	ctx := context.Background()
+	refused := 0
+	s.authSessions = repository.NewSQLiteAuthSessionRepo(h.db.Conn, repository.WithAuthSessionTouchScheduler(func(repository.AuthSessionTouch) bool {
+		refused++
+		return false
+	}))
+	current := sessionLogin(t, s, h.user.Username)
+	other := sessionLogin(t, s, h.user.Username)
+	start := time.Now().Unix()
+	for id, at := range map[string]int64{current.SessionID: start - 3600, other.SessionID: start - 600} {
+		if _, err := h.db.Conn.Exec(`UPDATE auth_sessions SET last_active_at=? WHERE id=?`, at, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	list, err := s.ListSessions(ctx, h.user.ID, current.SessionID)
+	if err != nil || len(list) != 2 {
+		t.Fatalf("list=%v %v", list, err)
+	}
+	if refused != 1 {
+		t.Fatalf("scheduler asked %d times, want once", refused)
+	}
+	if list[0].ID != current.SessionID || !list[0].Current || list[0].LastActiveAt < start {
+		t.Fatalf("current session listed with stale activity after a dropped touch: %+v", list)
+	}
+	if list[1].ID != other.SessionID || list[1].Current || list[1].LastActiveAt != start-600 {
+		t.Fatalf("other session changed: %+v", list[1])
+	}
+	var stored int64
+	if err := h.db.Conn.QueryRow(`SELECT last_active_at FROM auth_sessions WHERE id=?`, current.SessionID).Scan(&stored); err != nil || stored != start-3600 {
+		t.Fatalf("dropped touch was written inline, last_active_at=%d: %v", stored, err)
+	}
+}

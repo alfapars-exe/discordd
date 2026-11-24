@@ -12,7 +12,8 @@ vi.mock("../api/client", () => ({ ensureFreshToken: vi.fn(), getAuthGeneration: 
 vi.mock("../utils/sounds", () => ({
   playJoinSound: vi.fn(),
   playLeaveSound: vi.fn(),
-  closeAudioContext: vi.fn(),
+  prepareAudioContext: vi.fn(),
+  releaseAudioContextWhenIdle: vi.fn(),
 }));
 vi.mock("../stores/preferencesStore", () => ({
   usePreferencesStore: { getState: () => ({ set: vi.fn() }) },

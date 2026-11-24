@@ -88,11 +88,20 @@ func (m *MockMemberTimeoutRepo) ListActive(ctx context.Context, serverID string)
 	return nil, nil
 }
 
-// MockVoiceDisconnecter satisfies services.VoiceDisconnecter for member tests
-// where Kick/Ban paths call voiceKick.DisconnectUser.
+// MockVoiceDisconnecter satisfies services.VoiceDisconnecter (account-wide
+// revocations) and services.MemberVoiceDisconnecter (Kick/Ban/Timeout, which
+// call voiceKick.DisconnectSanctionedMember). DisconnectedIDs records the
+// user of either call; SanctionServerIDs records the server of each
+// server-scoped one.
 type MockVoiceDisconnecter struct {
-	DisconnectUserFn func(userID string)
-	DisconnectedIDs  []string
+	DisconnectUserFn  func(userID string)
+	DisconnectedIDs   []string
+	SanctionServerIDs []string
+}
+
+func (m *MockVoiceDisconnecter) DisconnectSanctionedMember(serverID, userID string) {
+	m.DisconnectedIDs = append(m.DisconnectedIDs, userID)
+	m.SanctionServerIDs = append(m.SanctionServerIDs, serverID)
 }
 
 func (m *MockVoiceDisconnecter) DisconnectUser(userID string) {

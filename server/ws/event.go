@@ -1,5 +1,7 @@
 package ws
 
+import "github.com/argeinfina/hichat/models"
+
 // Event is the WebSocket message format.
 // Seq is a monotonic counter for gap detection on the client side.
 type Event struct {
@@ -314,8 +316,14 @@ type VoiceDisconnectUserData struct {
 }
 
 // VoiceForceMoveData — server tells client to switch to a different channel.
+// ServerID is the server that owns the voice session. Voice, when present, is
+// a ready-to-use token for the target room with exactly the JSON shape of the
+// POST /servers/{serverId}/voice/token response; when absent the client
+// requests a token over HTTP. Older clients ignore both fields.
 type VoiceForceMoveData struct {
-	ChannelID string `json:"channel_id"`
+	ChannelID string                     `json:"channel_id"`
+	ServerID  string                     `json:"server_id"`
+	Voice     *models.VoiceTokenResponse `json:"voice,omitempty"`
 }
 
 // VoiceStateUpdateBroadcast — broadcast payload when a user's voice state changes.
