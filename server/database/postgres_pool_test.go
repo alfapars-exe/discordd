@@ -1,6 +1,9 @@
 package database
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestPostgresPoolLimits(t *testing.T) {
 	for _, tc := range []struct {
@@ -17,6 +20,25 @@ func TestPostgresPoolLimits(t *testing.T) {
 			}
 			if !tc.invalid && (o != tc.wantOpen || i != tc.wantIdle) {
 				t.Fatalf("limits=%d/%d", o, i)
+			}
+		})
+	}
+}
+
+func TestPostgresConnMaxIdleTime(t *testing.T) {
+	for _, tc := range []struct {
+		raw     string
+		want    time.Duration
+		invalid bool
+	}{{"", 5 * time.Minute, false}, {"1", time.Second, false}, {"900", 15 * time.Minute, false}, {"1800", postgresConnMaxLifetime, false}, {"0", 0, true}, {"-1", 0, true}, {"1801", 0, true}, {"5m", 0, true}, {"oops", 0, true}} {
+		t.Run(tc.raw, func(t *testing.T) {
+			t.Setenv("POSTGRES_CONN_MAX_IDLE_SECONDS", tc.raw)
+			got, err := postgresConnMaxIdleTime()
+			if (err != nil) != tc.invalid {
+				t.Fatalf("err=%v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("idle time=%s, want %s", got, tc.want)
 			}
 		})
 	}

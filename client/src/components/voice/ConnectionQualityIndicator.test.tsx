@@ -19,7 +19,8 @@ vi.mock("../../api/client", () => ({ ensureFreshToken: vi.fn(), getAuthGeneratio
 vi.mock("../../utils/sounds", () => ({
   playJoinSound: vi.fn(),
   playLeaveSound: vi.fn(),
-  closeAudioContext: vi.fn(),
+  prepareAudioContext: vi.fn(),
+  releaseAudioContextWhenIdle: vi.fn(),
 }));
 // t() returns the TR defaultValue the component passes, so these assertions
 // pin the actual user-visible Turkish rather than a key name.

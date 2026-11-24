@@ -12,6 +12,8 @@ import { useChannelStore } from "../../stores/channelStore";
 import { useServerStore } from "../../stores/serverStore";
 import { useUIStore, type TabServerInfo } from "../../stores/uiStore";
 import { useVoiceStore } from "../../stores/voiceStore";
+import { deriveSidebarVoiceStates, useVoicePendingMoveStore } from "../../stores/voicePendingMoveStore";
+import { useVoiceRecoveryStore } from "../../stores/voiceRecoveryStore";
 import { useReadStateStore } from "../../stores/readStateStore";
 import { useActiveMembers } from "../../stores/memberStore";
 import { useAuthStore } from "../../stores/authStore";
@@ -123,9 +125,30 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
   const voiceStates = useVoiceStore((s) => s.voiceStates);
   const pendingVoiceChannelId = useVoiceStore((s) => s.pendingVoiceChannelId);
   const currentVoiceChannelId = useVoiceStore((s) => s.currentVoiceChannelId);
+  const voiceRecoveryPhase = useVoiceRecoveryStore((s) => s.phase);
+  const isMuted = useVoiceStore((s) => s.isMuted);
+  const isDeafened = useVoiceStore((s) => s.isDeafened);
+  const isServerMuted = useVoiceStore((s) => s.isServerMuted);
+  const isServerDeafened = useVoiceStore((s) => s.isServerDeafened);
+  const pendingVoiceMoves = useVoicePendingMoveStore((s) => s.moves);
   const unreadCounts = useReadStateStore((s) => s.unreadCounts);
 
   const currentUser = useAuthStore((s) => s.user);
+  // Rows drawn under each voice channel: the authoritative `voiceStates`
+  // plus rows still waiting for their server broadcast (a member this
+  // moderator just moved, the user's own join in flight). Sidebar rows only —
+  // everything else keeps reading `voiceStates`.
+  const sidebarVoice = useMemo(() => deriveSidebarVoiceStates(voiceStates, pendingVoiceMoves, {
+    user: currentUser,
+    pendingVoiceChannelId,
+    currentVoiceChannelId,
+    recoveryPhase: voiceRecoveryPhase,
+    isMuted,
+    isDeafened,
+    isServerMuted,
+    isServerDeafened,
+  }), [voiceStates, pendingVoiceMoves, currentUser, pendingVoiceChannelId, currentVoiceChannelId,
+    voiceRecoveryPhase, isMuted, isDeafened, isServerMuted, isServerDeafened]);
   const members = useActiveMembers();
   const addToast = useToastStore((s) => s.addToast);
   const mutedChannelIds = useChannelStore((s) => s.mutedChannelIds);
@@ -217,6 +240,18 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
     [currentMember, overridesByChannel]
   );
 
+  /** Check if current user may move members in a voice channel (considering overrides) */
+  const canMoveMembersIn = useCallback(
+    (channelId: string): boolean => {
+      if (!currentMember) return false;
+      const roleIds = currentMember.roles.map((r) => r.id);
+      const overrides = overridesByChannel[channelId] ?? [];
+      const effective = resolveChannelPermissions(currentMember.effective_permissions, roleIds, overrides);
+      return (effective & Permissions.MoveMembers) !== 0;
+    },
+    [currentMember, overridesByChannel]
+  );
+
   // ─── Voice User Context Menu State ───
   const [voiceCtxMenu, setVoiceCtxMenu] = useState<{
     userId: string;
@@ -254,7 +289,17 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
     handleChannelDrop,
     handleVoiceUserDragStart,
     handleVoiceUserDragEnd,
-  } = useChannelTreeDragDrop({ canConnectVoice });
+  } = useChannelTreeDragDrop({
+    canConnectVoice,
+    canMoveMembers: canMoveMembersIn,
+    currentUserId: currentUser?.id,
+    // Same outcome as clicking the channel — and as the forced move this
+    // drag used to trigger: joined, with the channel's voice tab open.
+    onJoinVoice: (channelId) => {
+      const channel = categories.flatMap((cg) => cg.channels).find((ch) => ch.id === channelId);
+      handleVoiceChannelClick(channelId, channel?.name ?? "");
+    },
+  });
 
   // ─── Handlers ───
 
@@ -389,7 +434,7 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
                       ? ch.id === currentVoiceChannelId
                       : ch.id === selectedChannelId;
                     const unread = unreadCounts[ch.id] ?? 0;
-                    const participants = voiceStates[ch.id] ?? [];
+                    const participants = sidebarVoice.byChannel[ch.id] ?? [];
                     const isServerMuted = mutedServerIds.has(srvId);
                     const isChannelMuted = mutedChannelIds.has(ch.id);
                     const isEffectivelyMuted = isServerMuted || isChannelMuted;
@@ -446,6 +491,7 @@ function ChannelTree({ onJoinVoice }: ChannelTreeProps) {
                         {isVoice && participants.length > 0 && (
                           <VoiceParticipantList
                             participants={participants}
+                            pendingUserIds={sidebarVoice.pendingUserIds}
                             channelId={ch.id}
                             channelName={ch.name}
                             canMoveMembers={canMoveMembers}

@@ -31,6 +31,7 @@ const orphanGracePeriod = 35 * time.Second
 type orphanEntry struct {
 	usageSessionID    string
 	userID            string
+	serverID          string
 	channelID         string
 	joinedAt          time.Time
 	livekitInstanceID string
@@ -176,6 +177,7 @@ func (s *voiceService) sweepOrphanStates() {
 		orphans = append(orphans, orphanEntry{
 			userID:            userID,
 			usageSessionID:    state.UsageSessionID,
+			serverID:          serverID,
 			channelID:         channelID,
 			joinedAt:          joinedAt,
 			livekitInstanceID: instanceID,
@@ -207,7 +209,7 @@ func (s *voiceService) sweepOrphanStates() {
 	// own loop, run immediately after unlock and BEFORE the synchronous
 	// LiveKit eviction loop below. o.channelEmpty was already decided under
 	// the lock, at the top of this sweep pass — but each
-	// removeParticipantAndScreenShareFromLiveKit call in that next loop is
+	// removeDepartedParticipantFromLiveKit call in that next loop is
 	// SYNCHRONOUS and can block up to ~20s (two identities × a 10s LiveKit
 	// timeout each), so keeping the stop dispatch inside that loop meant
 	// the LAST orphan's decision in an N-orphan pass (e.g. several users
@@ -239,9 +241,11 @@ func (s *voiceService) sweepOrphanStates() {
 	// until LiveKit's own ICE/DTLS timeout. This is exactly the "user's
 	// whole voice session is confirmed over" case the other three
 	// removeParticipantAndScreenShareFromLiveKit call sites cover, so it
-	// gets the same treatment here.
+	// gets the same treatment here. A departure, so the guarded variant:
+	// these calls are synchronous and an earlier orphan's can take seconds,
+	// time in which a later one may have reconnected and rejoined.
 	for _, o := range orphans {
-		s.removeParticipantAndScreenShareFromLiveKit(o.channelID, o.userID)
+		s.removeDepartedParticipantFromLiveKit(o.serverID, o.channelID, o.userID)
 		// Credit the abandoned session — duration counts up to the moment
 		// of cleanup, which is approximately when the user actually
 		// disconnected (within `orphanGracePeriod` of it).
@@ -271,7 +275,7 @@ func (s *voiceService) removeParticipantFromLiveKit(channelID, identity string) 
 		})
 		return
 	}
-	s.removeParticipantFromLiveKitInServer(ctx, channel.ServerID, channelID, identity)
+	s.removeParticipantFromLiveKitInServer(ctx, channel.ServerID, channelID, identity, nil)
 }
 
 // removeDeletedChannelParticipant is the post-delete counterpart to
@@ -281,10 +285,15 @@ func (s *voiceService) removeParticipantFromLiveKit(channelID, identity string) 
 func (s *voiceService) removeDeletedChannelParticipant(parent context.Context, serverID, channelID, identity string) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), 10*time.Second)
 	defer cancel()
-	s.removeParticipantFromLiveKitInServer(ctx, serverID, channelID, identity)
+	s.removeParticipantFromLiveKitInServer(ctx, serverID, channelID, identity, nil)
 }
 
-func (s *voiceService) removeParticipantFromLiveKitInServer(ctx context.Context, serverID, channelID, identity string) {
+// removeParticipantFromLiveKitInServer makes the LiveKit call for the two
+// helpers above and for removeDepartedParticipantFromLiveKit. returned is
+// nil for every moderation/teardown eviction, which is unconditional. A
+// departure cleanup passes its guard: it is asked once, after the database
+// lookup and immediately before RemoveParticipant, and true skips the call.
+func (s *voiceService) removeParticipantFromLiveKitInServer(ctx context.Context, serverID, channelID, identity string, returned func() bool) {
 	lkInstance, err := s.livekitGetter.GetByServerID(ctx, serverID)
 	if err != nil {
 		voiceLogger.Error("removeParticipant: livekit instance lookup failed", "server_id", serverID, "err", pkg.ErrText(err))
@@ -314,6 +323,11 @@ func (s *voiceService) removeParticipantFromLiveKitInServer(ctx context.Context,
 	roomName := serverID + ":" + channelID
 	roomClient := lksdk.NewRoomServiceClient(lkInstance.URL, apiKey, apiSecret)
 
+	if returned != nil && returned() {
+		voiceLogger.Info("removeParticipant: user is back in the channel, departure eviction skipped", "user_id", identity, "room", roomName)
+		return
+	}
+
 	_, err = roomClient.RemoveParticipant(ctx, &livekit.RoomParticipantIdentity{
 		Room:     roomName,
 		Identity: identity,
@@ -339,10 +353,13 @@ func (s *voiceService) removeParticipantFromLiveKitInServer(ctx context.Context,
 // removeParticipantAndScreenShareFromLiveKit evicts both a user's main
 // voice connection (identity == userID) and their screen-share
 // sub-participant, if any (identity == userID+"_ss"). Used by every path
-// where "this user's presence in channelID is over" — LeaveChannel/
-// DisconnectUser and the cross-channel branch of JoinChannel
-// (voice_state.go), EnforceModerationOnJoin and the orphan sweep (this
-// file), and MoveUser/AdminDisconnectUser (voice_admin.go) — should also
+// where "this user's presence in channelID is over" as enforcement —
+// DisconnectUser and a rejected join's cleanup (leaveChannel,
+// voice_state.go), EnforceModerationOnJoin (this file) and
+// AdminDisconnectUser (voice_admin.go) — and unconditional for that reason;
+// plain departures (leave, channel switch, move, orphan sweep) go through
+// removeDepartedParticipantFromLiveKit below. Either way the eviction
+// should also
 // end anything they were broadcasting there; a plain
 // removeParticipantFromLiveKit(channelID, userID) call only ever targeted
 // the main identity, which left a moderated, departed, moved, or
@@ -356,6 +373,59 @@ func (s *voiceService) removeParticipantFromLiveKitInServer(ctx context.Context,
 func (s *voiceService) removeParticipantAndScreenShareFromLiveKit(channelID, userID string) {
 	s.removeParticipantFromLiveKit(channelID, userID)
 	s.removeParticipantFromLiveKit(channelID, userID+"_ss")
+}
+
+// removeDepartedParticipantFromLiveKit is the DEPARTURE counterpart of
+// removeParticipantAndScreenShareFromLiveKit: the same two best-effort
+// evictions from channelID's room, for the paths where the user's presence
+// there simply ended — the client's voice_leave (LeaveChannel) and the
+// cross-channel branch of JoinChannel (voice_state.go), MoveUser
+// (voice_admin.go) and the orphan sweep (this file). Nothing else may use
+// it: moderation evictions must not be skippable.
+//
+// These calls run asynchronously, after a database lookup, and LiveKit
+// removes whoever holds the identity in that room at that moment. A user who
+// is back in channelID by then (A -> B -> A, or leave and rejoin) would have
+// their NEW connection kicked, which the client treats as a terminal removal
+// needing a manual rejoin. So each eviction re-checks the voice state right
+// before its LiveKit call (departedUserReturned) and is skipped when:
+//   - main identity: the user's current voice state is in channelID again;
+//   - "_ss" identity: the user is in channelID again AND streaming again. A
+//     stream never survives the departure (IsStreaming is reset and the
+//     viewers were closed out), so a "_ss" participant still in the room
+//     belongs to the old session and is evicted even for a returned user —
+//     unless they have started a new share, which that eviction would kill.
+//
+// The check narrows the window, it cannot close it: a rejoin landing between
+// the check and LiveKit acting on the call is still evicted. Taking serverID
+// from the caller's own state snapshot (instead of a channel lookup, as
+// removeParticipantFromLiveKit does) keeps that window to one database round
+// trip. MUST NOT be called under mu.Lock.
+func (s *voiceService) removeDepartedParticipantFromLiveKit(serverID, channelID, userID string) {
+	for _, screenShare := range []bool{false, true} {
+		identity := userID
+		if screenShare {
+			identity += "_ss"
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		s.removeParticipantFromLiveKitInServer(ctx, serverID, channelID, identity, func() bool {
+			return s.departedUserReturned(userID, channelID, screenShare)
+		})
+		cancel()
+	}
+}
+
+// departedUserReturned reports whether a departure eviction from channelID
+// has been overtaken by userID coming back to it — see
+// removeDepartedParticipantFromLiveKit for the two identities' rules.
+func (s *voiceService) departedUserReturned(userID, channelID string, screenShare bool) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	state, ok := s.states[userID]
+	if !ok || state.ChannelID != channelID {
+		return false
+	}
+	return !screenShare || state.IsStreaming
 }
 
 // buildServerMutePermission returns the ParticipantPermission to send to
@@ -836,8 +906,13 @@ func (s *voiceService) sweepAFKUsersContext(parent context.Context) {
 			},
 		})
 
-		// Use the existing disconnect flow
-		s.DisconnectUser(entry.userID)
+		// Use the existing disconnect flow: the unguarded eviction, exactly
+		// what DisconnectUser does after revoking the user's in-flight
+		// joins. Idleness is not a sanction, so those are left alone — a
+		// user switching channels at this moment still lands in the new one.
+		if err := s.leaveChannel(entry.userID, false); err != nil {
+			voiceLogger.Error("disconnect cleanup failed", "user_id", entry.userID, "err", pkg.ErrText(err))
+		}
 	}
 }
 

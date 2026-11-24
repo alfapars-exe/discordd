@@ -359,3 +359,97 @@ func TestSQLiteAuthSessionRevokeOthersAndActivity(t *testing.T) {
 		}
 	}
 }
+
+func storedLastActive(t *testing.T, db *database.DB, id string) (at int64) {
+	t.Helper()
+	if err := db.Conn.QueryRow(`SELECT last_active_at FROM auth_sessions WHERE id=?`, id).Scan(&at); err != nil {
+		t.Fatal(err)
+	}
+	return at
+}
+
+// With a scheduler installed the read answers alone: the last-active write is
+// handed over, never run on the caller's context.
+func TestSQLiteAuthSessionScheduledTouchLeavesTheRead(t *testing.T) {
+	db, _, _ := authSessionRepoFixture(t)
+	ctx := context.Background()
+	var queued []AuthSessionTouch
+	accept := true
+	r := NewSQLiteAuthSessionRepo(wrapForRepo(db), WithAuthSessionTouchScheduler(func(touch AuthSessionTouch) bool {
+		queued = append(queued, touch)
+		return accept
+	}))
+	s, _ := createLogicalSession(t, r, "session-user", "deferred", "deferred-refresh")
+	now := time.Now().Unix()
+	if active, err := r.GetActive(ctx, s.UserID, s.ID, now); err != nil || active.LastActiveAt != s.LastActiveAt || len(queued) != 0 {
+		t.Fatalf("recently active session scheduled a touch: %+v %v %v", active, queued, err)
+	}
+	if _, err := db.Conn.Exec(`UPDATE auth_sessions SET last_active_at=1 WHERE id=?`, s.ID); err != nil {
+		t.Fatal(err)
+	}
+	active, err := r.GetActive(ctx, s.UserID, s.ID, now)
+	if err != nil || active.LastActiveAt != now {
+		t.Fatalf("accepted touch not reported: %+v %v", active, err)
+	}
+	if len(queued) != 1 || queued[0] != (AuthSessionTouch{UserID: s.UserID, SessionID: s.ID, At: now}) {
+		t.Fatalf("queued=%+v", queued)
+	}
+	if at := storedLastActive(t, db, s.ID); at != 1 {
+		t.Fatalf("read wrote last_active_at=%d inline", at)
+	}
+	// A refused touch (queue full, or stopping) loses only the write. The
+	// read still observed the activity, so the returned row reports it.
+	accept = false
+	active, err = r.GetActive(ctx, s.UserID, s.ID, now)
+	if err != nil || active.LastActiveAt != now || len(queued) != 2 {
+		t.Fatalf("refused touch hid the activity this read observed: %+v %v", active, err)
+	}
+	if at := storedLastActive(t, db, s.ID); at != 1 {
+		t.Fatalf("refused touch fell back to an inline write: %d", at)
+	}
+	// Revocation is decided by the read and never waits for queued touches.
+	accept = true
+	if _, err := r.Revoke(ctx, s.UserID, s.ID, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.GetActive(ctx, s.UserID, s.ID, now); !errors.Is(err, pkg.ErrNotFound) || len(queued) != 2 {
+		t.Fatalf("revoked session stayed readable or was touched: %v %+v", err, queued)
+	}
+}
+
+func TestTouchAuthSessionAppliesOnlyStaleLiveSessions(t *testing.T) {
+	db, r, _ := authSessionRepoFixture(t)
+	ctx := context.Background()
+	q := wrapForRepo(db)
+	s, _ := createLogicalSession(t, r, "session-user", "touched", "touched-refresh")
+	now := time.Now().Unix()
+	age := func() {
+		t.Helper()
+		if _, err := db.Conn.Exec(`UPDATE auth_sessions SET last_active_at=1 WHERE id=?`, s.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	age()
+	touch := AuthSessionTouch{UserID: s.UserID, SessionID: s.ID, At: now}
+	if touched, err := TouchAuthSession(ctx, q, AuthSessionTouch{UserID: "session-other", SessionID: s.ID, At: now}); err != nil || touched {
+		t.Fatalf("cross-account touch: %v %v", touched, err)
+	}
+	if touched, err := TouchAuthSession(ctx, q, touch); err != nil || !touched || storedLastActive(t, db, s.ID) != now {
+		t.Fatalf("stale session not touched: %v %v", touched, err)
+	}
+	// A delayed or repeated touch must not rewrite a fresher timestamp.
+	for _, at := range []int64{now - 30, now, now + 30} {
+		touch.At = at
+		if touched, err := TouchAuthSession(ctx, q, touch); err != nil || touched || storedLastActive(t, db, s.ID) != now {
+			t.Fatalf("touch at %d rewrote fresh activity: %v %v", at, touched, err)
+		}
+	}
+	age()
+	if _, err := r.Revoke(ctx, s.UserID, s.ID, now); err != nil {
+		t.Fatal(err)
+	}
+	touch.At = now
+	if touched, err := TouchAuthSession(ctx, q, touch); err != nil || touched || storedLastActive(t, db, s.ID) != 1 {
+		t.Fatalf("revoked session touched: %v %v", touched, err)
+	}
+}

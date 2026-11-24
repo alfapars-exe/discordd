@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 import { useVoiceStore } from "../../stores/voiceStore";
+import * as voiceApi from "../../api/voice";
 import { handleVoiceEvent } from "./voiceEventHandlers";
 import type { WSHandlerContext } from "./types";
 import type { WSPayloadMap } from "../../types/ws";
@@ -10,8 +11,9 @@ import { publishAuthGenerationChange, publishAuthOwnerChange } from "../../api/a
 // vi.hoisted: the toastStore factory below runs before top-level consts are
 // initialised, so the spy must be created in the hoisted scope (§4 TDZ trap).
 const addToast = vi.hoisted(() => vi.fn());
+const openTab = vi.hoisted(() => vi.fn());
 
-vi.mock("../../api/voice", () => ({}));
+vi.mock("../../api/voice", () => ({ getVoiceToken: vi.fn() }));
 vi.mock("../../api/client", () => ({ ensureFreshToken: vi.fn(), getAuthGeneration: () => 1 }));
 vi.mock("../../utils/sounds", () => ({
   playJoinSound: vi.fn(),
@@ -19,7 +21,8 @@ vi.mock("../../utils/sounds", () => ({
   playWatchStartSound: vi.fn(),
   playWatchStopSound: vi.fn(),
   playLeaveSound: vi.fn(),
-  closeAudioContext: vi.fn(),
+  prepareAudioContext: vi.fn(),
+  releaseAudioContextWhenIdle: vi.fn(),
 }));
 vi.mock("../../stores/preferencesStore", () => ({
   usePreferencesStore: { getState: () => ({ set: vi.fn() }) },
@@ -31,7 +34,7 @@ vi.mock("../../stores/channelStore", () => ({
   useChannelStore: { getState: () => ({ categories: [] }) },
 }));
 vi.mock("../../stores/uiStore", () => ({
-  useUIStore: { getState: () => ({ panels: {}, openTab: vi.fn(), setActiveTab: vi.fn() }) },
+  useUIStore: { getState: () => ({ panels: {}, openTab, setActiveTab: vi.fn() }) },
 }));
 vi.mock("../../stores/toastStore", () => ({
   useToastStore: { getState: () => ({ addToast }) },
@@ -51,6 +54,8 @@ vi.mock("../../stores/shared/voiceRecovery", () => ({
   // Partial-mock trap (PROJECT_MEMORY §4): the force-move path also calls
   // clearVoiceRecoveryMark; a factory missing it fails at collect time.
   clearVoiceRecoveryMark: vi.fn(),
+  // Same trap for the tests that run the real joinVoiceChannel commit.
+  markVoiceActive: vi.fn(),
 }));
 
 const ctx: WSHandlerContext = { sendVoiceJoin: vi.fn() };
@@ -548,7 +553,7 @@ describe("handleVoiceEvent — voice_force_move preserves server-mute/deafen acr
     const state = useVoiceStore.getState();
     expect(state.isServerMuted).toBe(true);
     expect(state.isServerDeafened).toBe(true);
-    expect(joinSpy).toHaveBeenCalledWith("ch2");
+    expect(joinSpy).toHaveBeenCalledWith("ch2", expect.any(Object));
   });
 
   it("does not fabricate a server-mute that wasn't there before the move", async () => {
@@ -566,6 +571,162 @@ describe("handleVoiceEvent — voice_force_move preserves server-mute/deafen acr
     const state = useVoiceStore.getState();
     expect(state.isServerMuted).toBe(false);
     expect(state.isServerDeafened).toBe(false);
+  });
+});
+
+// The moved user's side of a moderator move, run against the REAL
+// joinVoiceChannel (only its token API is mocked): the event reaches every
+// session of the user, must be scoped to the voice session's server rather
+// than the viewed one ("srv1" in the serverStore mock), and may carry the
+// target room's credentials.
+describe("handleVoiceEvent — voice_force_move ownership, server and embedded credentials", () => {
+  const tokenFor = (sub: string) => `h.${btoa(JSON.stringify({ sub }))}.s`;
+  const embedded = {
+    token: tokenFor("me"), url: "wss://embedded.test", channel_id: "ch2",
+    e2ee_passphrase: "embedded-key", e2ee_key_index: 3, e2ee_key_epoch: 3, e2ee_key_context: "room-3",
+  };
+  const http = { token: "http-token", url: "wss://http.test", channel_id: "ch2" };
+  const tokens = vi.mocked(voiceApi.getVoiceToken);
+  const send = vi.fn();
+  const moved = () => vi.waitFor(() => expect(ctx.sendVoiceJoin).toHaveBeenCalled());
+
+  beforeEach(() => {
+    resetStore();
+    vi.clearAllMocks();
+    publishAuthOwnerChange("me");
+    publishAuthGenerationChange(1);
+    tokens.mockReset().mockResolvedValue({ success: true, data: http });
+    useVoiceStore.setState({
+      currentVoiceChannelId: "ch1", currentVoiceServerId: "srv1", livekitUrl: "wss://old.test", livekitToken: "old-token",
+      isMuted: false, isDeafened: false, isServerMuted: false, isServerDeafened: false,
+      inputMode: "voice_activity", wasReplaced: false, _wsSend: send,
+    });
+  });
+
+  afterEach(() => {
+    useVoiceStore.getState().leaveVoiceChannel();
+    useVoiceStore.setState({ _wsSend: null });
+  });
+
+  it("is ignored by a session that is not in voice — no leave, no join, nothing sent", async () => {
+    // A failing token request is what used to make an idle session send
+    // voice_leave and remove the real session from voice.
+    tokens.mockResolvedValue({ success: false, status: 403, error: "forbidden" });
+    useVoiceStore.setState({ currentVoiceChannelId: null, currentVoiceServerId: null, livekitUrl: null, livekitToken: null });
+    const before = useVoiceStore.getState();
+    const leave = vi.spyOn(before, "leaveVoiceChannel");
+    const join = vi.spyOn(before, "joinVoiceChannel");
+    try {
+      await expect(handleVoiceEvent({ op: "voice_force_move", d: { channel_id: "ch2", server_id: "srv1", voice: embedded } }, ctx)).resolves.toBe(true);
+      await handleVoiceEvent({ op: "voice_force_move", d: { channel_id: "ch2" } }, ctx);
+      await new Promise(done => setTimeout(done, 0));
+      expect(leave).not.toHaveBeenCalled();
+      expect(join).not.toHaveBeenCalled();
+    } finally {
+      leave.mockRestore();
+      join.mockRestore();
+    }
+    expect(tokens).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+    expect(ctx.sendVoiceJoin).not.toHaveBeenCalled();
+    expect(playJoinSound).not.toHaveBeenCalled();
+    expect(openTab).not.toHaveBeenCalled();
+    expect(addToast).not.toHaveBeenCalled();
+    expect(useVoiceStore.getState()).toMatchObject({
+      currentVoiceChannelId: null, pendingVoiceChannelId: null, livekitToken: null, _joinGeneration: before._joinGeneration,
+    });
+  });
+
+  it("joins through the voice session's server while the user views another one", async () => {
+    useVoiceStore.setState({ currentVoiceServerId: "srv-voice" });
+    await handleVoiceEvent({ op: "voice_force_move", d: { channel_id: "ch2" } }, ctx);
+    await moved();
+    expect(tokens).toHaveBeenCalledExactlyOnceWith("srv-voice", "ch2", expect.anything());
+    expect(useVoiceStore.getState()).toMatchObject({ currentVoiceChannelId: "ch2", currentVoiceServerId: "srv-voice", livekitToken: "http-token" });
+    expect(ctx.sendVoiceJoin).toHaveBeenCalledExactlyOnceWith("ch2");
+    expect(playJoinSound).toHaveBeenCalledOnce();
+    expect(send).not.toHaveBeenCalledWith("voice_leave", {});
+    // Opening the tab would navigate the user away from the server in view.
+    expect(openTab).not.toHaveBeenCalled();
+  });
+
+  it("prefers the event's server_id over the locally tracked voice server", async () => {
+    useVoiceStore.setState({ currentVoiceServerId: "srv-local" });
+    await handleVoiceEvent({ op: "voice_force_move", d: { channel_id: "ch2", server_id: "srv-event" } }, ctx);
+    await moved();
+    expect(tokens).toHaveBeenCalledExactlyOnceWith("srv-event", "ch2", expect.anything());
+    expect(useVoiceStore.getState().currentVoiceServerId).toBe("srv-event");
+  });
+
+  it("falls back to the viewed server when neither the event nor the session names one, and opens the tab", async () => {
+    useVoiceStore.setState({ currentVoiceServerId: null });
+    await handleVoiceEvent({ op: "voice_force_move", d: { channel_id: "ch2", channel_name: "General" } }, ctx);
+    await moved();
+    expect(tokens).toHaveBeenCalledExactlyOnceWith("srv1", "ch2", expect.anything());
+    expect(openTab).toHaveBeenCalledExactlyOnceWith("ch2", "voice", "General", undefined);
+  });
+
+  it("commits embedded credentials without a token request and then announces the move", async () => {
+    useVoiceStore.setState({ isMuted: true, isDeafened: true, isServerMuted: true, isServerDeafened: true });
+    let committedAtJoinFrame: string | null = null;
+    vi.mocked(ctx.sendVoiceJoin).mockImplementationOnce(() => { committedAtJoinFrame = useVoiceStore.getState().livekitToken; });
+    await handleVoiceEvent({ op: "voice_force_move", d: { channel_id: "ch2", channel_name: "General", server_id: "srv1", voice: embedded } }, ctx);
+    await moved();
+    expect(tokens).not.toHaveBeenCalled();
+    const state = useVoiceStore.getState();
+    expect(state).toMatchObject({
+      currentVoiceChannelId: "ch2", currentVoiceServerId: "srv1", pendingVoiceChannelId: null,
+      livekitUrl: "wss://embedded.test", livekitToken: embedded.token,
+      e2eePassphrase: "embedded-key", e2eeKeyIndex: 3, e2eeKeyEpoch: 3, e2eeKeyContext: "room-3",
+      isMuted: true, isDeafened: true, isServerMuted: true, isServerDeafened: true,
+    });
+    expect(state._joinCommit?.generation).toBe(state._joinGeneration);
+    expect(committedAtJoinFrame).toBe(embedded.token);
+    expect(ctx.sendVoiceJoin).toHaveBeenCalledExactlyOnceWith("ch2");
+    expect(playJoinSound).toHaveBeenCalledOnce();
+    expect(playLeaveSound).not.toHaveBeenCalled();
+    expect(openTab).toHaveBeenCalledExactlyOnceWith("ch2", "voice", "General", undefined);
+    expect(send).not.toHaveBeenCalledWith("voice_leave", {});
+  });
+
+  it.each([
+    ["another channel", { ...embedded, channel_id: "ch9" }],
+    ["another account", { ...embedded, token: tokenFor("someone-else") }],
+    ["an empty token", { ...embedded, token: "" }],
+    ["an empty url", { ...embedded, url: "" }],
+  ])("falls back to the token request when the embedded credentials are for %s", async (_label, voice) => {
+    await handleVoiceEvent({ op: "voice_force_move", d: { channel_id: "ch2", server_id: "srv1", voice } }, ctx);
+    await moved();
+    expect(tokens).toHaveBeenCalledExactlyOnceWith("srv1", "ch2", expect.anything());
+    expect(useVoiceStore.getState()).toMatchObject({
+      currentVoiceChannelId: "ch2", livekitToken: "http-token", livekitUrl: "wss://http.test", e2eePassphrase: null,
+    });
+    expect(ctx.sendVoiceJoin).toHaveBeenCalledExactlyOnceWith("ch2");
+  });
+
+  it("reconciles with voice_leave when the owning session cannot join the target", async () => {
+    tokens.mockResolvedValue({ success: false, status: 403, error: "forbidden" });
+    await handleVoiceEvent({ op: "voice_force_move", d: { channel_id: "ch2", server_id: "srv1" } }, ctx);
+    await vi.waitFor(() => expect(send).toHaveBeenCalledWith("voice_leave", {}));
+    expect(ctx.sendVoiceJoin).not.toHaveBeenCalled();
+    expect(playJoinSound).not.toHaveBeenCalled();
+    expect(openTab).not.toHaveBeenCalled();
+    expect(useVoiceStore.getState().currentVoiceChannelId).toBeNull();
+  });
+
+  it("lets a newer move supersede embedded credentials that were not committed yet", async () => {
+    const first = handleVoiceEvent({ op: "voice_force_move", d: { channel_id: "ch2", server_id: "srv1", voice: embedded } }, ctx);
+    const second = handleVoiceEvent({ op: "voice_force_move", d: {
+      channel_id: "ch3", server_id: "srv1", voice: { ...embedded, channel_id: "ch3", url: "wss://newer.test" },
+    } }, ctx);
+    await Promise.all([first, second]);
+    await moved();
+    await new Promise(done => setTimeout(done, 0));
+    expect(ctx.sendVoiceJoin).toHaveBeenCalledExactlyOnceWith("ch3");
+    expect(playJoinSound).toHaveBeenCalledOnce();
+    expect(useVoiceStore.getState()).toMatchObject({ currentVoiceChannelId: "ch3", livekitUrl: "wss://newer.test" });
+    expect(tokens).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalledWith("voice_leave", {});
   });
 });
 

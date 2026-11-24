@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-type VoiceMock = { soundsEnabled: boolean; masterVolume: number; outputDevice: string; isDeafened: boolean; isServerDeafened: boolean; currentVoiceChannelId: string | null; _joinGeneration: number };
+type VoiceMock = { soundsEnabled: boolean; masterVolume: number; outputDevice: string; isDeafened: boolean; isServerDeafened: boolean; currentVoiceChannelId: string | null; pendingVoiceChannelId?: string | null; _joinGeneration: number };
 type AuthMock = { manualStatus: string; user?: { id: string } | null };
 const h = vi.hoisted(() => ({
   voice: { soundsEnabled: true, masterVolume: 100, outputDevice: "", isDeafened: false, isServerDeafened: false, currentVoiceChannelId: null, _joinGeneration: 0 } as VoiceMock,
@@ -77,7 +77,7 @@ class FakeCtx {
   }
 }
 
-import { playNotificationSound, playJoinSound, previewIncomingCallSound, playWatchStartSound, playVoiceEventSound, VOICE_SOUND_EVENTS, VOICE_SOUND_PREFERENCES, VOICE_SOUND_ASSETS, playToneAt, closeAudioContext } from "./sounds";
+import { playNotificationSound, playJoinSound, previewIncomingCallSound, playWatchStartSound, playVoiceEventSound, VOICE_SOUND_EVENTS, VOICE_SOUND_PREFERENCES, VOICE_SOUND_ASSETS, playToneAt, closeAudioContext, prepareAudioContext, releaseAudioContextWhenIdle } from "./sounds";
 const subscriptionsAtModuleImport = h.voiceListeners.length;
 
 beforeEach(() => {
@@ -377,5 +377,181 @@ describe("channel notifications while deafened", () => {
     release();
     await vi.advanceTimersByTimeAsync(100);
     expect(h.oscillatorNodes).toHaveLength(0);
+  });
+});
+
+describe("voice session context lifecycle", () => {
+  const IDLE_MS = 60_000;
+  /** Ends the synthesized cue at `index` the way the browser does. */
+  const endCue = (index: number) => (h.oscillatorNodes[index] as unknown as { onended: () => void }).onended();
+
+  it("builds the context when a join starts, and the join cue reuses it", async () => {
+    prepareAudioContext();
+    expect(h.contexts).toHaveLength(1);
+    expect(h.oscillators).toBe(0);
+    playJoinSound();
+    await vi.waitFor(() => expect(h.oscillatorNodes).toHaveLength(1));
+    expect(h.contexts).toHaveLength(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each(["sounds-disabled", "mute-all"])("builds nothing at join start with %s", mode => {
+    if (mode === "sounds-disabled") h.voice.soundsEnabled = false;
+    else h.prefs.muteAllSounds = true;
+    prepareAudioContext();
+    expect(h.contexts).toHaveLength(0);
+  });
+
+  it("leaves cues silent when the browser has no AudioContext", () => {
+    vi.stubGlobal("AudioContext", undefined);
+    expect(() => prepareAudioContext()).not.toThrow();
+    expect(h.contexts).toHaveLength(0);
+  });
+
+  it("a leave silences the session's cues but closes the context only after a minute without voice", async () => {
+    playJoinSound();
+    await vi.waitFor(() => expect(h.oscillatorNodes).toHaveLength(1));
+    const context = h.contexts[0];
+    releaseAudioContextWhenIdle();
+    expect(h.oscillatorNodes[0].stop).toHaveBeenCalledTimes(2);
+    expect(context.close).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(IDLE_MS - 1);
+    expect(context.close).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(context.close).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(vi.getTimerCount()).toBe(0);
+    // The next cue starts from a fresh context, as after the old immediate close.
+    playJoinSound();
+    await vi.waitFor(() => expect(h.oscillatorNodes).toHaveLength(2));
+    expect(h.contexts).toHaveLength(2);
+  });
+
+  it("a switch or a move keeps one context: the next join start cancels the pending close", async () => {
+    playJoinSound();
+    await vi.waitFor(() => expect(h.oscillatorNodes).toHaveLength(1));
+    releaseAudioContextWhenIdle();
+    prepareAudioContext();
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(IDLE_MS * 2);
+    expect(h.contexts).toHaveLength(1);
+    expect(h.contexts[0].close).not.toHaveBeenCalled();
+    playJoinSound();
+    await vi.waitFor(() => expect(h.oscillatorNodes).toHaveLength(2));
+    expect(h.contexts).toHaveLength(1);
+  });
+
+  it("a cue restarts the countdown and is never closed under", async () => {
+    playJoinSound();
+    await vi.waitFor(() => expect(h.oscillatorNodes).toHaveLength(1));
+    const context = h.contexts[0];
+    releaseAudioContextWhenIdle();
+    await vi.advanceTimersByTimeAsync(IDLE_MS - 10_000);
+    playVoiceEventSound("mute");
+    await vi.waitFor(() => expect(h.oscillatorNodes).toHaveLength(2));
+    expect(h.contexts).toHaveLength(1);
+    // The original deadline passes: the cue pushed it back.
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(context.close).not.toHaveBeenCalled();
+    // The restarted deadline passes while the cue is still sounding.
+    await vi.advanceTimersByTimeAsync(IDLE_MS - 10_000);
+    expect(context.close).not.toHaveBeenCalled();
+    endCue(1);
+    // Only a full idle minute after that deadline closes it. (waitFor polls
+    // advance the fake clock a little, hence the margin.)
+    await vi.advanceTimersByTimeAsync(IDLE_MS - 5_000);
+    expect(context.close).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(context.close).toHaveBeenCalledOnce();
+  });
+
+  it.each(["current", "pending"])("does not close under a %s voice session at the deadline", async kind => {
+    playJoinSound();
+    await vi.waitFor(() => expect(h.oscillatorNodes).toHaveLength(1));
+    releaseAudioContextWhenIdle();
+    if (kind === "current") h.voice.currentVoiceChannelId = "ch";
+    else h.voice.pendingVoiceChannelId = "ch";
+    await vi.advanceTimersByTimeAsync(IDLE_MS);
+    expect(h.contexts[0].close).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  /** Publishes a voice store change to the module, the way zustand does. */
+  const voiceChanges = (next: Partial<VoiceMock>) => {
+    const previous = h.voice;
+    h.voice = { ...h.voice, ...next };
+    h.voiceListeners.forEach(listener => listener(h.voice, previous));
+  };
+
+  it("closes the context a minute after a join from idle that did not commit", async () => {
+    voiceChanges({ pendingVoiceChannelId: "ch", _joinGeneration: 1 });
+    prepareAudioContext();
+    expect(h.contexts).toHaveLength(1);
+    expect(vi.getTimerCount()).toBe(0);
+    // The token request is refused: only the pending channel is cleared.
+    voiceChanges({ pendingVoiceChannelId: null });
+    await vi.advanceTimersByTimeAsync(IDLE_MS - 1);
+    expect(h.contexts[0].close).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(h.contexts[0].close).toHaveBeenCalledOnce();
+  });
+
+  it("restores the idle close a failed switch or move had cancelled", async () => {
+    playJoinSound();
+    await vi.waitFor(() => expect(h.oscillatorNodes).toHaveLength(1));
+    voiceChanges({ currentVoiceChannelId: "old", _joinGeneration: 1 });
+    voiceChanges({ currentVoiceChannelId: null, _joinGeneration: 2 });
+    releaseAudioContextWhenIdle();
+    voiceChanges({ pendingVoiceChannelId: "new", _joinGeneration: 3 });
+    prepareAudioContext();
+    expect(vi.getTimerCount()).toBe(0);
+    voiceChanges({ pendingVoiceChannelId: null });
+    await vi.advanceTimersByTimeAsync(IDLE_MS);
+    expect(h.contexts[0].close).toHaveBeenCalledOnce();
+  });
+
+  it("closes the context a minute after the server ends the session", async () => {
+    voiceChanges({ currentVoiceChannelId: "ch", _joinGeneration: 1 });
+    playJoinSound();
+    await vi.waitFor(() => expect(h.oscillatorNodes).toHaveLength(1));
+    expect(vi.getTimerCount()).toBe(0);
+    // Forced disconnect, AFK kick and replacement clear the channel without a leave.
+    voiceChanges({ currentVoiceChannelId: null, _joinGeneration: 2 });
+    await vi.advanceTimersByTimeAsync(IDLE_MS - 1);
+    expect(h.contexts[0].close).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(h.contexts[0].close).toHaveBeenCalledOnce();
+  });
+
+  it("starts no idle close when the join commits or voice was already idle", async () => {
+    voiceChanges({ pendingVoiceChannelId: "ch", _joinGeneration: 1 });
+    prepareAudioContext();
+    voiceChanges({ currentVoiceChannelId: "ch" });
+    voiceChanges({ pendingVoiceChannelId: null });
+    expect(vi.getTimerCount()).toBe(0);
+    closeAudioContext();
+    // Outside voice a notification cue's context is left alone, as before.
+    voiceChanges({ currentVoiceChannelId: null, _joinGeneration: 2 });
+    playNotification();
+    await vi.waitFor(() => expect(h.contexts).toHaveLength(2));
+    voiceChanges({ masterVolume: 50 });
+    await vi.advanceTimersByTimeAsync(IDLE_MS * 2);
+    expect(h.contexts[1].close).not.toHaveBeenCalled();
+  });
+
+  it("leaves no timer behind without a context or after an explicit close", async () => {
+    releaseAudioContextWhenIdle();
+    expect(vi.getTimerCount()).toBe(0);
+    playJoinSound();
+    await vi.waitFor(() => expect(h.oscillatorNodes).toHaveLength(1));
+    releaseAudioContextWhenIdle();
+    releaseAudioContextWhenIdle();
+    expect(vi.getTimerCount()).toBe(1);
+    closeAudioContext();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(h.contexts[0].close).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(IDLE_MS);
+    expect(h.contexts[0].close).toHaveBeenCalledOnce();
   });
 });

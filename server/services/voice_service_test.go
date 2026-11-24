@@ -338,6 +338,28 @@ func drainCalls(calls chan string) {
 	}
 }
 
+// observeDepartureEvictions is the departure-path counterpart of
+// newEvictionObservingChannelRepo. removeDepartedParticipantFromLiveKit
+// (leave, channel switch, move, orphan sweep) takes the server id from the
+// caller's own state snapshot and makes NO channel lookup, so its first
+// observable step is the LiveKit instance lookup — once per identity, on the
+// eviction's own 10-second context. JoinChannel's quota-attribution lookup
+// runs on a context without a deadline and is not counted. The lookup still
+// errors, like mockLiveKitGetter, so the eviction stops before any network
+// call.
+func observeDepartureEvictions(svc VoiceService) chan string {
+	evictions := make(chan string, 8)
+	testVoiceState(svc).livekitGetter = &mockConfigurableLiveKitGetter{
+		GetByServerIDFn: func(ctx context.Context, serverID string) (*models.LiveKitInstance, error) {
+			if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) > 8*time.Second {
+				evictions <- serverID
+			}
+			return nil, fmt.Errorf("no livekit instance in test")
+		},
+	}
+	return evictions
+}
+
 // newTestVoiceServiceWithChannelRepo is newTestVoiceService with an
 // injectable ChannelGetter (instead of the fixed happy-path default) and a
 // real (non-nil) OnlineUserChecker defaulting to "nobody online" — needed
@@ -413,6 +435,7 @@ func TestAdminDisconnectUser_EvictsMainAndScreenShare(t *testing.T) {
 func TestMoveUser_EvictsSourceRoomMainAndScreenShare(t *testing.T) {
 	calls := make(chan string, 8)
 	svc, hub := newTestVoiceServiceWithChannelRepo(newEvictionObservingChannelRepo(calls))
+	evictions := observeDepartureEvictions(svc)
 	hub.BroadcastToServerFn = func(_ string, _ ws.Event) {}
 	hub.BroadcastToUserFn = func(_ string, _ ws.Event) {}
 
@@ -426,8 +449,8 @@ func TestMoveUser_EvictsSourceRoomMainAndScreenShare(t *testing.T) {
 	}
 
 	// MoveUser's own synchronous target-channel lookup (ch2, at the very top
-	// of MoveUser) lands before the async source-room eviction dispatches —
-	// discard it first so expectEvictionDispatches counts only ch1.
+	// of MoveUser) is the only channel lookup: the source-room eviction is a
+	// departure and gets its server id from the moved state.
 	select {
 	case got := <-calls:
 		if got != "ch2" {
@@ -436,7 +459,8 @@ func TestMoveUser_EvictsSourceRoomMainAndScreenShare(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("MoveUser's target-channel lookup never happened")
 	}
-	expectEvictionDispatches(t, calls, 2)
+	expectEvictionDispatches(t, evictions, 2)
+	expectNoEvictionDispatch(t, calls)
 }
 
 // TestJoinChannel_CrossChannelSwitch_EvictsOldRoomMainAndScreenShare pins
@@ -447,6 +471,7 @@ func TestMoveUser_EvictsSourceRoomMainAndScreenShare(t *testing.T) {
 func TestJoinChannel_CrossChannelSwitch_EvictsOldRoomMainAndScreenShare(t *testing.T) {
 	calls := make(chan string, 8)
 	svc, hub := newTestVoiceServiceWithChannelRepo(newEvictionObservingChannelRepo(calls))
+	evictions := observeDepartureEvictions(svc)
 	hub.BroadcastToServerFn = func(_ string, _ ws.Event) {}
 
 	if err := svc.JoinChannel("u1", "alice", "Alice", "", "ch1", false, false); err != nil {
@@ -459,7 +484,8 @@ func TestJoinChannel_CrossChannelSwitch_EvictsOldRoomMainAndScreenShare(t *testi
 	}
 
 	// The second JoinChannel's own synchronous lookup (ch2, the NEW channel)
-	// lands before the async old-room eviction dispatches — discard it first.
+	// is the only channel lookup: the old-room eviction is a departure and
+	// gets its server id from the replaced state.
 	select {
 	case got := <-calls:
 		if got != "ch2" {
@@ -468,7 +494,8 @@ func TestJoinChannel_CrossChannelSwitch_EvictsOldRoomMainAndScreenShare(t *testi
 	case <-time.After(2 * time.Second):
 		t.Fatal("the new join's channel lookup never happened")
 	}
-	expectEvictionDispatches(t, calls, 2)
+	expectEvictionDispatches(t, evictions, 2)
+	expectNoEvictionDispatch(t, calls)
 }
 
 // TestOrphanSweep_EvictsMainAndScreenShare pins that a swept-up abandoned
@@ -480,6 +507,7 @@ func TestJoinChannel_CrossChannelSwitch_EvictsOldRoomMainAndScreenShare(t *testi
 func TestOrphanSweep_EvictsMainAndScreenShare(t *testing.T) {
 	calls := make(chan string, 8)
 	svc, _ := newTestVoiceServiceWithChannelRepo(newEvictionObservingChannelRepo(calls))
+	evictions := observeDepartureEvictions(svc)
 	vs, ok := svc.(*voiceService)
 	if !ok {
 		t.Fatal("expected svc to be a *voiceService for white-box orphan-sweep access")
@@ -499,7 +527,9 @@ func TestOrphanSweep_EvictsMainAndScreenShare(t *testing.T) {
 
 	vs.sweepOrphanStates()
 
-	expectEvictionDispatches(t, calls, 2)
+	// A departure: two LiveKit instance lookups, no channel lookup.
+	expectEvictionDispatches(t, evictions, 2)
+	expectNoEvictionDispatch(t, calls)
 }
 
 // ─── A-37: screen-share close-out on MoveUser / cross-channel JoinChannel ───

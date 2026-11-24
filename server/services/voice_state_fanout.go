@@ -2,12 +2,14 @@ package services
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/argeinfina/hichat/models"
 	"github.com/argeinfina/hichat/pkg/logx"
+	"github.com/argeinfina/hichat/repository"
 	"github.com/argeinfina/hichat/ws"
 )
 
@@ -169,10 +171,10 @@ func (f *voiceStateFanout) run(workerID uint64) {
 			members := make(map[string][]string)
 			for len(batch) > 0 {
 				end := 1
-				for end < len(batch) && batch[end].serverID == batch[0].serverID && batch[end].channelID == batch[0].channelID {
+				for end < len(batch) && batch[end].serverID == batch[0].serverID {
 					end++
 				}
-				f.deliver(batch[:end], members)
+				f.deliverServer(batch[:end], members)
 				batch = batch[end:]
 			}
 			if !timer.Stop() {
@@ -195,7 +197,63 @@ func (f *voiceStateFanout) run(workerID uint64) {
 	}
 }
 
-func (f *voiceStateFanout) deliver(batch []voiceStateFanoutEvent, membersByServer map[string][]string) {
+// voiceFanoutServerRead is the snapshot visibility of every channel that one
+// consecutive same-server run of a batch touches. A move or a channel switch
+// queues a leave for the source channel directly followed by a join for the
+// target; resolving both audiences with one statement saves the second event
+// a database round trip.
+//
+// The read happens when the run's first group needs it and is reused only
+// within that run: between the read and the last publication that relies on
+// it there are hub publishes and no further database statement, so a later
+// channel's audience is at most those in-memory publishes older than a read
+// of its own would have been. A run of another server, and every later
+// batch, reads again.
+//
+// Only a successful read is shared. After a failed one the run's next channel
+// group reads again under its own deadline, so one failed statement costs one
+// group its events and not the whole run: a move whose leave is lost still
+// publishes its join.
+type voiceFanoutServerRead struct {
+	channelIDs []string
+	resolved   bool
+	visible    map[string][]string
+	err        error
+}
+
+func newVoiceFanoutServerRead(run []voiceStateFanoutEvent) *voiceFanoutServerRead {
+	read := &voiceFanoutServerRead{}
+	for _, item := range run {
+		if !slices.Contains(read.channelIDs, item.channelID) {
+			read.channelIDs = append(read.channelIDs, item.channelID)
+		}
+	}
+	return read
+}
+
+func (r *voiceFanoutServerRead) visibleIn(ctx context.Context, repo repository.VoiceAccessReader, serverID, channelID string, online []string) ([]string, error) {
+	if !r.resolved {
+		r.visible, r.err = repo.VoiceVisibleUsersByChannel(ctx, serverID, r.channelIDs, online)
+		r.resolved = r.err == nil
+	}
+	return r.visible[channelID], r.err
+}
+
+// deliverServer publishes one consecutive same-server run of a batch, one
+// (server, channel) group after the other in queue order.
+func (f *voiceStateFanout) deliverServer(run []voiceStateFanoutEvent, membersByServer map[string][]string) {
+	read := newVoiceFanoutServerRead(run)
+	for len(run) > 0 {
+		end := 1
+		for end < len(run) && run[end].channelID == run[0].channelID {
+			end++
+		}
+		f.deliver(run[:end], membersByServer, read)
+		run = run[end:]
+	}
+}
+
+func (f *voiceStateFanout) deliver(batch []voiceStateFanoutEvent, membersByServer map[string][]string, read *voiceFanoutServerRead) {
 	item := batch[0]
 	resolutionStart := time.Now()
 	s := f.service
@@ -228,7 +286,7 @@ func (f *voiceStateFanout) deliver(batch []voiceStateFanoutEvent, membersByServe
 		return
 	}
 	if repo := s.voiceAccess; repo != nil {
-		visible, err := repo.VoiceVisibleUsers(ctx, item.serverID, item.channelID, onlineIDs)
+		visible, err := read.visibleIn(ctx, repo, item.serverID, item.channelID, onlineIDs)
 		if err != nil {
 			f.dropCount.Add(uint64(len(batch)))
 			voiceLogger.Warn("voice visibility query failed", "err", err)

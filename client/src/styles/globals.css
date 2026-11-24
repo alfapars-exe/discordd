@@ -536,6 +536,8 @@ button.ch-tree-vu-stream.watching { box-shadow:0 0 0 1.5px #fff; }
 .ch-tree-voice-user[draggable="true"] { cursor:grab;user-select:none; }
 .ch-tree-voice-user[draggable="true"]:active { cursor:grabbing; }
 .ch-tree-voice-user.vu-dragging { opacity:0.35; }
+/* Row shown ahead of the server broadcast (pending move / own join in flight) */
+.ch-tree-voice-user.vu-pending,.ch-tree-voice-user.vu-pending:active { opacity:0.5;cursor:default; }
 /* Voice channel drop target highlight */
 .ch-tree-item.voice.voice-drop-target { background:color-mix(in srgb, var(--primary) 18%, transparent);box-shadow:inset 0 0 0 1.5px var(--primary);border-radius:5px; }
 

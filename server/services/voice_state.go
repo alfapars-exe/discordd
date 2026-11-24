@@ -155,6 +155,12 @@ func (s *voiceService) hasForceMoveGrant(userID, channelID string) bool {
 type pendingVoiceJoin struct {
 	userID          string
 	departedServers map[string]bool
+	// revoked is set by DisconnectUser: the user's access was revoked while
+	// this join was between its admission read and the write lock.
+	revoked bool
+	// revokedServers is the same for a sanction that belongs to one server
+	// (DisconnectSanctionedMember): only a join into that server is refused.
+	revokedServers map[string]bool
 }
 
 func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, channelID string, isMuted, isDeafened bool) error {
@@ -179,8 +185,14 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 	}()
 
 	// Resolve channel's parent server before locking — all voice broadcasts are server-scoped.
+	// Everything from here to the write lock is the database phase: the join
+	// is not broadcast until it is over, and each statement is a round trip
+	// to the database host. With a snapshot reader it is one statement
+	// (loadVoiceJoin, voice_token.go).
 	ctx := context.Background()
-	channel, admission, err := s.loadVoiceChannel(ctx, userID, channelID)
+	dbStart := time.Now()
+	access, err := s.loadVoiceJoin(ctx, userID, channelID)
+	channel, admission := access.channel, access.admission
 	if err != nil {
 		// F1 review HIGH fix (our own A-38 regression): the client no
 		// longer sends voice_leave on a channel switch — JoinChannel's own
@@ -220,9 +232,12 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 		// would satisfy errors.Is(..., pkg.ErrNotFound) unconditionally
 		// regardless of what err actually was.
 		if !s.alreadyInChannel(userID, channelID) || errors.Is(err, pkg.ErrNotFound) {
-			// s.LeaveChannel is idempotent (no-op if there's no stale
-			// state, e.g. this is a genuinely fresh join).
-			if leaveErr := s.LeaveChannel(userID); leaveErr != nil {
+			// s.leaveChannel is idempotent (no-op if there's no stale
+			// state, e.g. this is a genuinely fresh join). Unguarded
+			// eviction, as before: an authoritative rejection on the
+			// user's own channel is enforcement, not a plain departure
+			// (see leaveChannel).
+			if leaveErr := s.leaveChannel(userID, false); leaveErr != nil {
 				// Unreachable today — LeaveChannel has no error path (see
 				// its own signature/body) — kept defensively so a future
 				// non-nil return doesn't silently vanish; not an observed
@@ -268,7 +283,7 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 		// already correctly un-flattened, so checking err directly (not a
 		// separately-captured raw value) is correct here.
 		if !s.alreadyInChannel(userID, channelID) || errors.Is(err, pkg.ErrForbidden) {
-			if leaveErr := s.LeaveChannel(userID); leaveErr != nil {
+			if leaveErr := s.leaveChannel(userID, false); leaveErr != nil {
 				// Unreachable today — see the identical note on the lookup
 				// branch above.
 				voiceLogger.Error("JoinChannel: stale-state cleanup after early failure also failed", "user_id", userID, "err", pkg.ErrText(leaveErr))
@@ -279,10 +294,16 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 
 	// Resolve LiveKit instance for quota tracking. Failure here is non-fatal —
 	// the join still happens, we just won't be able to attribute the session
-	// duration to an instance. Logged for visibility.
+	// duration to an instance. Logged for visibility. On the snapshot path
+	// the access read above already carried the instance (or the fact that
+	// the server has none), so there is no second lookup.
 	var lkInstanceID string
 	var lkIsCloud bool
-	if lkInst, lkErr := s.livekitGetter.GetByServerID(ctx, serverID); lkErr == nil && lkInst != nil {
+	lkInst, lkErr := access.instance, access.instanceErr
+	if !access.instanceResolved {
+		lkInst, lkErr = s.livekitGetter.GetByServerID(ctx, serverID)
+	}
+	if lkErr == nil && lkInst != nil {
 		lkInstanceID = lkInst.ID
 		lkIsCloud = lkInst.IsPlatformManaged
 	} else if lkErr != nil {
@@ -319,10 +340,24 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 	var wasServerMuted, wasServerDeafened bool
 	channelGeneration := uint64(1)
 
+	lockStart := time.Now()
+	dbPhase := lockStart.Sub(dbStart)
 	s.mu.Lock()
+	lockAcquired := time.Now()
+	// Registered before the unlock below, so it runs after it: the timing
+	// lines are written with the lock released, on every exit from here on.
+	defer func() {
+		voiceLogger.Debug("voice join lock timing", "lock_wait", lockAcquired.Sub(lockStart), "lock_held", time.Since(lockAcquired), "db_phase", dbPhase)
+		if dbPhase > voiceJoinSlowDBPhase {
+			voiceLogger.Info("voice join database phase slow", "db_phase", dbPhase)
+		}
+	}()
 	defer s.mu.Unlock()
 	if pending.departedServers[serverID] {
 		return fmt.Errorf("%w: membership changed during voice join", pkg.ErrForbidden)
+	}
+	if pending.revoked || pending.revokedServers[serverID] {
+		return fmt.Errorf("%w: voice access revoked during voice join", pkg.ErrForbidden)
 	}
 	if s.channelDeleteEpoch != deleteEpoch {
 		return fmt.Errorf("%w: channel changed during voice join", pkg.ErrNotFound)
@@ -523,9 +558,12 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 	// is a separate connection that this JoinChannel call never touches, so
 	// it's left connected to oldChannelID's room until the client
 	// independently reconnects/tears it down. Same orphaned-stream risk as
-	// MoveUser and AdminDisconnectUser, so it gets the same cleanup.
+	// MoveUser and AdminDisconnectUser, so it gets the same cleanup. This is a
+	// departure, so the eviction is the guarded one: it is skipped if the
+	// user has switched back to oldChannelID by the time it runs (see
+	// removeDepartedParticipantFromLiveKit, voice_lifecycle.go).
 	if oldChannelID != "" && oldChannelID != channelID {
-		s.operations.child(func() { s.removeParticipantAndScreenShareFromLiveKit(oldChannelID, userID) })
+		s.operations.child(func() { s.removeDepartedParticipantFromLiveKit(oldServerID, oldChannelID, userID) })
 		// Cross-channel switch — credit the old session's duration to the
 		// instance it ran on. Self-hosted instances are skipped.
 		s.dispatchUsageCredit(oldUsageSessionID, oldInstanceID, oldIsCloud, oldJoinedAt, time.Now())
@@ -552,6 +590,11 @@ func (s *voiceService) JoinChannel(userID, username, displayName, avatarURL, cha
 	voiceLogger.Info("user joined voice channel", "user_id", userID, "channel_id", channelID)
 	return nil
 }
+
+// voiceJoinSlowDBPhase is the pre-lock database time above which JoinChannel
+// reports the join at Info instead of only in its debug timing line. A
+// variable only so a test can take wall-clock time out of its fast half.
+var voiceJoinSlowDBPhase = 250 * time.Millisecond
 
 // creditUsage writes a completed voice session's duration to its instance's
 // monthly bucket. Skips self-hosted (we don't track those) and zero-duration
@@ -590,7 +633,26 @@ func (s *voiceService) creditUsageSession(sessionID, instanceID string, isCloud 
 	}
 }
 
+// LeaveChannel ends userID's voice session at the user's own request (the
+// client's voice_leave). The LiveKit eviction it dispatches is the guarded
+// departure one — see leaveChannel.
 func (s *voiceService) LeaveChannel(userID string) error {
+	return s.leaveChannel(userID, true)
+}
+
+// leaveChannel removes userID's voice session. departure says who ended it,
+// which decides how the old room's LiveKit participant is evicted afterwards:
+//   - true: the user left on their own. They may rejoin the same channel
+//     before the asynchronous eviction runs, so it is skipped if they have
+//     (removeDepartedParticipantFromLiveKit, voice_lifecycle.go).
+//   - false: the session is being ended FOR the user — DisconnectUser and
+//     DisconnectSanctionedMember (kick, ban, timeout, platform ban,
+//     account/credential revocation), the AFK sweep and JoinChannel's
+//     cleanup after a rejected join. That eviction is
+//     enforcement and stays unconditional: a voice_join whose admission was
+//     read just before the sanction landed can still write a state for this
+//     same channel afterwards, and that must not cancel the eviction.
+func (s *voiceService) leaveChannel(userID string, departure bool) error {
 	finishOperation, admitted := s.operations.begin()
 	if !admitted {
 		return context.Canceled
@@ -657,8 +719,12 @@ func (s *voiceService) LeaveChannel(userID string) error {
 	// or re-enters s.mu). Dual-identity: also evicts the "_ss" screen-share
 	// sub-participant, if any, so a departing user's screen share doesn't
 	// keep streaming after their voice connection is gone (DisconnectUser
-	// routes through this same LeaveChannel, so it's covered too).
-	s.operations.child(func() { s.removeParticipantAndScreenShareFromLiveKit(channelID, userID) })
+	// routes through this same leaveChannel, so it's covered too).
+	if departure {
+		s.operations.child(func() { s.removeDepartedParticipantFromLiveKit(serverID, channelID, userID) })
+	} else {
+		s.operations.child(func() { s.removeParticipantAndScreenShareFromLiveKit(channelID, userID) })
+	}
 	// Credit the completed session's duration to the cloud instance bucket.
 	// Self-hosted, zero-duration, and unset cases are no-ops inside creditUsage.
 	s.dispatchUsageCredit(leaveUsageSessionID, leaveInstanceID, leaveIsCloud, leaveJoinedAt, time.Now())
@@ -848,8 +914,60 @@ func (s *voiceService) DisconnectServerMember(serverID, userID string) {
 	s.disconnectVoiceLocked(userID, state)
 }
 
+// DisconnectUser ends userID's voice session because their access was just
+// revoked for the whole account: platform ban, account or credential
+// revocation. The sanction is committed before this is called. A sanction
+// that belongs to one server (kick, ban, timeout) goes through
+// DisconnectSanctionedMember below instead.
+//
+// A voice_join that read its admission before that commit is still on its
+// way to the write lock, and nothing below would stop it: with no state yet
+// there is nothing for leaveChannel to remove or evict. It would then write
+// a state from the pre-sanction snapshot — and a state in the channel the
+// user just left is exactly what makes a pending departure eviction stand
+// down (departedUserReturned, voice_lifecycle.go), leaving the sanctioned
+// user's old LiveKit connection alive. So every join in flight for this user
+// is revoked first, the way DisconnectServerMember marks departedServers:
+// one that reaches the lock afterwards is refused, and one that already
+// wrote its state is found by leaveChannel and evicted unconditionally.
+//
+// Not for ending a session that is merely idle: the AFK sweep calls
+// leaveChannel directly, so a channel switch in flight survives an AFK kick.
 func (s *voiceService) DisconnectUser(userID string) {
-	if err := s.LeaveChannel(userID); err != nil {
+	s.mu.Lock()
+	for join := range s.pendingJoins {
+		if join.userID == userID {
+			join.revoked = true
+		}
+	}
+	s.mu.Unlock()
+	if err := s.leaveChannel(userID, false); err != nil {
+		voiceLogger.Error("disconnect cleanup failed", "user_id", userID, "err", pkg.ErrText(err))
+	}
+}
+
+// DisconnectSanctionedMember is DisconnectUser for a sanction that belongs to
+// one server: a kick, ban or timeout in serverID, committed before the call.
+// The user's voice session is ended wherever it is, as it always was for
+// these sanctions, with the same unconditional eviction. The revocation of
+// joins in flight is limited to serverID, though: a join into another server
+// was admitted by that server, where the user is still a member in good
+// standing. Refusing it would leave the client connected to that server's
+// room with no voice state — no eviction is dispatched for a refused join,
+// and the participant_joined check (EnforceModerationOnJoin) finds nothing
+// to enforce there.
+func (s *voiceService) DisconnectSanctionedMember(serverID, userID string) {
+	s.mu.Lock()
+	for join := range s.pendingJoins {
+		if join.userID == userID {
+			if join.revokedServers == nil {
+				join.revokedServers = make(map[string]bool)
+			}
+			join.revokedServers[serverID] = true
+		}
+	}
+	s.mu.Unlock()
+	if err := s.leaveChannel(userID, false); err != nil {
 		voiceLogger.Error("disconnect cleanup failed", "user_id", userID, "err", pkg.ErrText(err))
 	}
 }

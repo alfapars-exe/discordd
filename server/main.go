@@ -165,6 +165,12 @@ func main() {
 		UploadDir: cfg.Upload.Dir, ArchiveDir: cfg.DataExport.Dir, MaxArchiveBytes: cfg.DataExport.MaxArchiveBytes, MaxTotalArchiveBytes: cfg.DataExport.MaxTotalBytes,
 	})
 
+	// 5b. Session activity writer — every authenticated request validates its
+	// session, so the last-active write is queued instead of run inline.
+	// Installed here, before initServices captures the session store.
+	stopSessionTouches := installAuthSessionTouchWriter(db.Conn, repos)
+	defer stopSessionTouches()
+
 	// 6. Encryption key
 	encryptionKey, err := crypto.DeriveKey(cfg.EncryptionKey)
 	if err != nil {
@@ -528,6 +534,9 @@ func main() {
 	stopChannelDelivery()
 	stopDMDelivery()
 	stopDMUploadCleanup()
+	// Drained HTTP requests were the only source of session touches; flush
+	// what they queued while the database is still open.
+	stopSessionTouches()
 
 	stopVoiceUsageProducers()
 	stopVoiceSessions()

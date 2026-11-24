@@ -1,5 +1,13 @@
 # CHANGELOG — SECURE-CODING.md
 
+## 2.11.132 - 2026-11-24
+
+- Speed up voice channel joins and moderator moves on a remote database: fewer serial queries per join and move, session activity written in the background, and one visibility query for both channels of a move.
+- Deliver the moved member's voice credentials inside the move event so the client skips its own token request.
+- Move dragged members in the sidebar immediately and show your own row as connecting while a join completes.
+- Fix forced moves being applied by idle tabs or devices, and moves failing while another server is being viewed.
+- Retry the first voice reconnect after 200 ms instead of 1 s and keep the notification sound context between joins.
+
 ## 2.11.131 - 2026-11-22
 
 - Speed up the first Windows voice connection by preparing media capabilities asynchronously at startup and removing the voice module's delayed mount.

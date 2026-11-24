@@ -1342,7 +1342,7 @@
     "clipVoiceConsent": "Allow my voice in locally recorded clips",
     "clipVoiceConsentHint": "Off by default. Recorders receive a consent roster; your microphone track is excluded while this is off and ongoing recorders refresh consent during recording.",
     "telemetry": "Share optional improvement telemetry",
-    "telemetryHint": "Allows aggregated screen-share performance events. Off by default; security and failure diagnostics remain active."
+    "telemetryHint": "Allows aggregated screen-share performance events. Off by default; security, failure and connection-timing diagnostics remain active."
   },
   "deletion": {
     "title": "Delete account permanently",

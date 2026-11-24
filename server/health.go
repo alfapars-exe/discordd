@@ -349,6 +349,7 @@ func startRuntimeStatsLogger(hub *ws.Hub, db *database.DB, interval time.Duratio
 					"db_wait_count_delta", max(int64(0), s.WaitCount-previousDB.WaitCount),
 					"db_wait_duration_ms_delta", max(int64(0), (s.WaitDuration-previousDB.WaitDuration).Milliseconds()),
 					"db_max_idle_closed_delta", max(int64(0), s.MaxIdleClosed-previousDB.MaxIdleClosed),
+					"db_max_idle_time_closed_delta", max(int64(0), s.MaxIdleTimeClosed-previousDB.MaxIdleTimeClosed),
 					"db_max_lifetime_closed_delta", max(int64(0), s.MaxLifetimeClosed-previousDB.MaxLifetimeClosed),
 					"http_routes", routes,
 					"app_log_error_queue", logHealth.ErrorQueue, "app_log_normal_queue", logHealth.NormalQueue,

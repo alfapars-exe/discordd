@@ -5,7 +5,9 @@
  *   1. Channel reorder (within a category and across categories)
  *   2. Category reorder
  *   3. Voice user move (admin/moderator drags a member between voice
- *      channels — emits voice_move_user via the WebSocket)
+ *      channels — emits voice_move_user via the WebSocket; dragging
+ *      yourself while this session is in voice is an ordinary channel
+ *      switch through the join action)
  *
  * These three are coupled because they share the same drop targets:
  *   - Channel rows accept either a channel reorder OR a voice user move.
@@ -31,6 +33,9 @@
  * The hook reads `categories` from the channel store and uses
  * `reorderChannels` / `reorderCategories` actions plus the voice
  * `_wsSend` to commit moves. Errors raise a toast via `useToastStore`.
+ * A moderator's move is also recorded in `voicePendingMoveStore` so the
+ * sidebar can show the member under the target channel before the server
+ * broadcast arrives.
  *
  * Was previously ~350 lines spread across ChannelTree.tsx.
  */
@@ -41,6 +46,7 @@ import { useTranslation } from "react-i18next";
 import { useChannelStore } from "../stores/channelStore";
 import { useToastStore } from "../stores/toastStore";
 import { useVoiceStore } from "../stores/voiceStore";
+import { useVoicePendingMoveStore } from "../stores/voicePendingMoveStore";
 
 type DropPosition = "above" | "below";
 type ChannelDropIndicator = { channelId: string; position: DropPosition } | null;
@@ -53,14 +59,27 @@ type Options = {
    * accepting a voice-user drop.
    */
   canConnectVoice: (channelId: string) => boolean;
+  /**
+   * Whether the current user has MoveMembers in that voice channel. The
+   * server requires it in both the source and the target of a move and
+   * reports a refusal only by not broadcasting, so the optimistic sidebar
+   * row is recorded only when this holds for both.
+   */
+  canMoveMembers: (channelId: string) => boolean;
+  /** The signed-in user — dragging your own row is a channel switch, not a moderator move. */
+  currentUserId: string | null | undefined;
+  /** The join action a click on a voice channel uses. */
+  onJoinVoice: (channelId: string) => void;
 };
 
-export function useChannelTreeDragDrop({ canConnectVoice }: Options) {
+export function useChannelTreeDragDrop({ canConnectVoice, canMoveMembers, currentUserId, onJoinVoice }: Options) {
   const { t: tCh } = useTranslation("channels");
+  const { t: tVoice } = useTranslation("voice");
   const categories = useChannelStore((s) => s.categories);
   const reorderChannels = useChannelStore((s) => s.reorderChannels);
   const reorderCategories = useChannelStore((s) => s.reorderCategories);
   const wsSend = useVoiceStore((s) => s._wsSend);
+  const recordPendingMove = useVoicePendingMoveStore((s) => s.recordMove);
   const addToast = useToastStore((s) => s.addToast);
 
   // ─── Channel reorder state ───
@@ -408,14 +427,50 @@ export function useChannelTreeDragDrop({ canConnectVoice }: Options) {
       if (dragVoiceUserIdRef.current) {
         e.preventDefault();
         const targetUserId = dragVoiceUserIdRef.current;
+        const sourceChannelId = dragVoiceSourceChannelRef.current;
         dragVoiceUserIdRef.current = null;
         dragVoiceSourceChannelRef.current = null;
         setDraggingVoiceUserId(null);
         setVoiceDropTargetId(null);
-        wsSend?.("voice_move_user", {
+        // Moving yourself is the same switch as clicking the channel. The
+        // moderator path would add a server-side move, a key rotation for
+        // the channel being left and a forced move back to this client.
+        // That only holds for the session that is in voice: from another
+        // tab or device the row belongs to that other session, and joining
+        // here would take voice over instead of moving it.
+        const voice = useVoiceStore.getState();
+        const ownsVoiceSession = !!(voice.currentVoiceChannelId || voice.pendingVoiceChannelId);
+        if (targetUserId === currentUserId && ownsVoiceSession) {
+          if (!canConnectVoice(targetChannelId)) return;
+          // The join leaves the current channel before the server answers,
+          // so a refusal would drop the user out of voice. A full channel is
+          // known here (same rule as the server: at the limit and not
+          // already in it): refuse it while the current session is intact.
+          const target = categories.flatMap((cg) => cg.channels).find((ch) => ch.id === targetChannelId);
+          const occupants = voice.voiceStates[targetChannelId] ?? [];
+          if (target && target.user_limit > 0 && occupants.length >= target.user_limit
+            && !occupants.some((state) => state.user_id === targetUserId)) {
+            addToast("error", tVoice("voiceChannelFull"));
+            return;
+          }
+          onJoinVoice(targetChannelId);
+          return;
+        }
+        if (!wsSend) return;
+        wsSend("voice_move_user", {
           target_user_id: targetUserId,
           target_channel_id: targetChannelId,
         });
+        // Presentation only: the row moves now, the broadcast confirms it.
+        // The server never reports a refused move, so the row is moved only
+        // for a move it will accept as far as this client can tell: your own
+        // other session needs no MoveMembers, anyone else needs it in both
+        // channels.
+        const mayMove = targetUserId === currentUserId
+          || (!!sourceChannelId && canMoveMembers(sourceChannelId) && canMoveMembers(targetChannelId));
+        if (mayMove && sourceChannelId && sourceChannelId !== targetChannelId) {
+          recordPendingMove(targetUserId, sourceChannelId, targetChannelId);
+        }
         return;
       }
       applyChannelReorderDrop(e, targetChannelId, categoryId);
@@ -424,7 +479,7 @@ export function useChannelTreeDragDrop({ canConnectVoice }: Options) {
     // — stable identities aren't required for drop handlers, but we still
     // recompute on those changes so the latest state is captured.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [categories, reorderChannels, wsSend],
+    [categories, reorderChannels, wsSend, canConnectVoice, canMoveMembers, currentUserId, onJoinVoice, recordPendingMove, addToast, tVoice],
   );
 
   const isChannelDragging = useCallback(

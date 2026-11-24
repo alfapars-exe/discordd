@@ -39,7 +39,7 @@ func TestVoiceFanoutUsesExplicitAudienceAndMissingDependenciesDrop(t *testing.T)
 			}}
 			service := NewVoiceService(fanoutTestChannels{channel: &models.Channel{ID: "channel", ServerID: "server", Type: models.ChannelTypeVoice}}, nil, resolver, output, nil, fanoutTestMembers{ids: []string{"implicit"}}, nil, nil, nil, nil, VoiceRuntimeDependencies{Fanout: dependencies}).(*voiceService)
 			t.Cleanup(service.ShutdownVoiceStateFanout)
-			service.voiceFanout.deliver([]voiceStateFanoutEvent{{queuedAt: time.Now(), serverID: "server", channelID: "channel", event: ws.Event{}}}, map[string][]string{})
+			service.voiceFanout.deliverServer([]voiceStateFanoutEvent{{queuedAt: time.Now(), serverID: "server", channelID: "channel", event: ws.Event{}}}, map[string][]string{})
 			if mode == "selected" {
 				if pushes != 1 || queries != 1 || service.voiceFanout.dropped() != 0 {
 					t.Fatal("explicit audience was not delivered")

@@ -10,6 +10,7 @@ import type { StateCreator } from "zustand";
 import type { VoiceState, VoiceStateUpdateData } from "../../types";
 import type { VoiceStore } from "../voiceStore";
 import { clearVoiceRecoveryMark } from "../shared/voiceRecovery";
+import { useVoicePendingMoveStore } from "../voicePendingMoveStore";
 
 export type VoiceWsSlice = {
   afkKickInfo: { channelName: string; serverName: string } | null;
@@ -153,6 +154,9 @@ export const createVoiceWsSlice: StateCreator<
       applied = true;
       return { voiceStates: newStates };
     });
+    // The server has spoken for this user: the sidebar's optimistic
+    // placement of them (a moderator's pending move) is obsolete.
+    if (applied) useVoicePendingMoveStore.getState().clearMove(data.user_id);
     return applied;
   },
 
@@ -227,6 +231,7 @@ export const createVoiceWsSlice: StateCreator<
 
     if (revision !== undefined) snapshotRevision = watermark;
     set({ voiceStates: grouped, screenShareViewers: viewerSeed });
+    useVoicePendingMoveStore.getState().clearAll();
     return true;
   },
 

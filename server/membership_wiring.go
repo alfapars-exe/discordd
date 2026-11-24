@@ -9,6 +9,7 @@ import (
 
 type membershipVoice interface {
 	services.VoiceDisconnecter
+	services.MemberVoiceDisconnecter
 	DisconnectServerMember(string, string)
 }
 type membershipDependencies struct {

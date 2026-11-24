@@ -44,6 +44,11 @@ REQUIRED_SERVICE_POSTGRES_TESTS = (
     "TestDeliveryStopCancelsPoolWait",
     "TestDeliveryClaimCancellationLogging",
     "TestPostgresMetricsCollectorCancellation",
+    # Voice join and move on the snapshot reader's real statements.
+    "TestPostgresVoiceJoin_SnapshotPathNeedsNoSeparateInstanceLookup",
+    "TestPostgresVoiceMove_ModeratorMoveEmbedsCredentials",
+    "TestPostgresVoiceMove_ServerWithoutInstanceAppliesWithoutCredentials",
+    "TestPostgresVoiceMove_RepeatedReadSeesASanctionCommittedMeanwhile",
 )
 
 

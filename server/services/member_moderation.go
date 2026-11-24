@@ -141,7 +141,7 @@ func buildModerationMetadata(reason string, expiresAt *time.Time) string {
 // Order matters: broadcast before removing subscription so the kicked user receives the events.
 func (s *memberService) removeFromServer(serverID, targetID string) {
 	if s.voiceKick != nil {
-		s.voiceKick.DisconnectUser(targetID)
+		s.voiceKick.DisconnectSanctionedMember(serverID, targetID)
 	}
 
 	s.hub.BroadcastToServer(serverID, ws.Event{
@@ -220,7 +220,7 @@ func (s *memberService) Timeout(
 	// (removeFromServer above). Nil-safe: existing tests/bootstrap paths
 	// that haven't wired voiceKick keep working.
 	if s.voiceKick != nil {
-		s.voiceKick.DisconnectUser(targetID)
+		s.voiceKick.DisconnectSanctionedMember(serverID, targetID)
 	}
 
 	// Broadcast so every connected client refreshes its muted-member

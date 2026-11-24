@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { useVoiceStore } from "./voiceStore";
+import { useAuthStore } from "./authStore";
 import { DEFAULT_SETTINGS } from "./slices/voiceSettingsSlice";
 import * as nativePlugins from "../utils/nativePlugins";
 import { ensureFreshToken } from "../api/client";
@@ -12,7 +13,8 @@ vi.mock("../api/client", () => ({ ensureFreshToken: vi.fn(), getAuthGeneration: 
 vi.mock("../utils/sounds", () => ({
   playJoinSound: vi.fn(),
   playLeaveSound: vi.fn(),
-  closeAudioContext: vi.fn(),
+  prepareAudioContext: vi.fn(),
+  releaseAudioContextWhenIdle: vi.fn(),
 }));
 vi.mock("./preferencesStore", () => ({
   usePreferencesStore: { getState: () => ({ set: vi.fn() }) },
@@ -679,6 +681,33 @@ describe("voiceStore", () => {
       });
     });
 
+    // Recovery retries a removal right after a join only for a channel this
+    // client left itself; a session the server ended must not qualify.
+    it("records the channel it left as an own departure, and nothing for a session the server ended", () => {
+      vi.spyOn(Date, "now").mockReturnValue(5000);
+      try {
+        useVoiceStore.setState({ _departures: { old: 100 } });
+        useVoiceStore.getState().leaveVoiceChannel();
+        expect(useVoiceStore.getState()._departures).toEqual({ old: 100 });
+
+        useVoiceStore.setState({ currentVoiceChannelId: "ch1" });
+        useVoiceStore.getState().leaveVoiceChannel();
+        expect(useVoiceStore.getState()._departures).toEqual({ old: 100, ch1: 5000 });
+
+        for (const end of ["disconnect", "afk", "replaced"]) {
+          useVoiceStore.setState({ currentVoiceChannelId: "ch2", wasReplaced: false });
+          if (end === "disconnect") useVoiceStore.getState().handleForceDisconnect();
+          if (end === "afk") useVoiceStore.getState().handleAFKKick("voice", "server");
+          if (end === "replaced") useVoiceStore.getState().handleVoiceReplaced();
+          expect(useVoiceStore.getState().currentVoiceChannelId).toBeNull();
+          expect(useVoiceStore.getState()._departures).toEqual({ old: 100, ch1: 5000 });
+        }
+      } finally {
+        vi.mocked(Date.now).mockRestore();
+        useVoiceStore.setState({ _departures: {}, wasReplaced: false, afkKickInfo: null });
+      }
+    });
+
     // Cross-channel switch consistency (server-side JoinChannel now carries
     // IsServerMuted/IsServerDeafened forward to the new channel, Discord-
     // like — a moderator's server-mute survives the muted user changing
@@ -963,6 +992,113 @@ describe("voiceStore", () => {
       start.mockRestore();
       stop.mockRestore();
     }
+  });
+
+  // ─── Join Options (moderator move) ───
+  //
+  // A moderator move joins on behalf of the voice session's server (not the
+  // one being viewed) and may carry ready-to-use credentials. Both go through
+  // the ordinary join path, so its guards and commit apply unchanged.
+
+  describe("joinVoiceChannel — options", () => {
+    const tokenFor = (sub: string) => `h.${btoa(JSON.stringify({ sub }))}.s`;
+    const embedded = {
+      token: tokenFor("me"), url: "wss://embedded.test", channel_id: "voice",
+      e2ee_passphrase: "embedded-key", e2ee_key_index: 2, e2ee_key_epoch: 2, e2ee_key_context: "room-2",
+    };
+    const http = { token: "http-token", url: "wss://http.test", channel_id: "voice" };
+    const tokens = vi.mocked(voiceApi.getVoiceToken);
+
+    beforeEach(() => {
+      addToast.mockClear();
+      tokens.mockReset().mockResolvedValue({ success: true, data: http });
+      useAuthStore.setState({ user: { id: "me" } as never });
+      useVoiceStore.setState({ currentVoiceServerId: null, inputMode: "voice_activity" });
+    });
+    afterEach(() => {
+      useVoiceStore.getState().leaveVoiceChannel();
+      useAuthStore.setState({ user: null });
+    });
+
+    it("requests the token from the given server instead of the one being viewed", async () => {
+      await useVoiceStore.getState().joinVoiceChannel("voice", { serverId: "srv-voice" });
+      expect(tokens).toHaveBeenCalledExactlyOnceWith("srv-voice", "voice", expect.anything());
+      expect(useVoiceStore.getState()).toMatchObject({ currentVoiceChannelId: "voice", currentVoiceServerId: "srv-voice" });
+    });
+
+    it.each([undefined, {}, { serverId: null }, { serverId: "" }])("keeps using the viewed server with options %j", async (options) => {
+      await useVoiceStore.getState().joinVoiceChannel("voice", options);
+      expect(tokens).toHaveBeenCalledExactlyOnceWith("srv1", "voice", expect.anything());
+      expect(useVoiceStore.getState().currentVoiceServerId).toBe("srv1");
+    });
+
+    it("commits usable embedded credentials without a token request", async () => {
+      const start = vi.spyOn(nativePlugins, "startVoiceCallService").mockResolvedValue();
+      try {
+        const result = await useVoiceStore.getState().joinVoiceChannel("voice", { serverId: "srv-voice", credentials: embedded });
+        expect(result).toEqual(embedded);
+        expect(tokens).not.toHaveBeenCalled();
+        const state = useVoiceStore.getState();
+        expect(state).toMatchObject({
+          currentVoiceChannelId: "voice", currentVoiceServerId: "srv-voice", pendingVoiceChannelId: null,
+          livekitUrl: "wss://embedded.test", livekitToken: embedded.token,
+          e2eePassphrase: "embedded-key", e2eeKeyIndex: 2, e2eeKeyEpoch: 2, e2eeKeyContext: "room-2",
+          isStreaming: false,
+        });
+        expect(state._joinCommit).toEqual({ generation: state._joinGeneration, at: expect.any(Number) });
+        expect(isVoiceRecoveryAllowed("voice")).toBe(true);
+        expect(start).toHaveBeenCalledOnce();
+        expect(addToast).not.toHaveBeenCalled();
+      } finally {
+        start.mockRestore();
+      }
+    });
+
+    it("applies the push-to-talk initial mute to embedded credentials", async () => {
+      useVoiceStore.setState({ inputMode: "push_to_talk", isMuted: false });
+      await useVoiceStore.getState().joinVoiceChannel("voice", { credentials: embedded });
+      expect(tokens).not.toHaveBeenCalled();
+      expect(useVoiceStore.getState()).toMatchObject({ currentVoiceChannelId: "voice", isMuted: true });
+    });
+
+    it.each([
+      ["another channel", { ...embedded, channel_id: "other" }],
+      ["an empty token", { ...embedded, token: "" }],
+      ["an empty url", { ...embedded, url: "" }],
+      ["another account's token", { ...embedded, token: tokenFor("someone-else") }],
+      ["a token without a readable subject", { ...embedded, token: "not-a-jwt" }],
+      ["a non-string token", { ...embedded, token: 42 as unknown as string }],
+    ])("falls back to the token request for credentials with %s", async (_label, credentials) => {
+      const result = await useVoiceStore.getState().joinVoiceChannel("voice", { credentials });
+      expect(tokens).toHaveBeenCalledExactlyOnceWith("srv1", "voice", expect.anything());
+      expect(result).toEqual(http);
+      expect(useVoiceStore.getState()).toMatchObject({ livekitToken: "http-token", livekitUrl: "wss://http.test", e2eePassphrase: null });
+    });
+
+    it("falls back to the token request when no account is signed in", async () => {
+      useAuthStore.setState({ user: null });
+      await useVoiceStore.getState().joinVoiceChannel("voice", { credentials: embedded });
+      expect(tokens).toHaveBeenCalledOnce();
+      expect(useVoiceStore.getState().livekitToken).toBe("http-token");
+    });
+
+    it("does not commit embedded credentials for a join that was superseded", async () => {
+      const pending = useVoiceStore.getState().joinVoiceChannel("voice", { credentials: embedded });
+      useVoiceStore.getState().leaveVoiceChannel();
+      await expect(pending).resolves.toBeNull();
+      expect(useVoiceStore.getState()).toMatchObject({ currentVoiceChannelId: null, livekitToken: null, pendingVoiceChannelId: null });
+      expect(tokens).not.toHaveBeenCalled();
+    });
+
+    it("records the commit of an ordinary join under its own generation", async () => {
+      const before = Date.now();
+      await useVoiceStore.getState().joinVoiceChannel("voice");
+      const state = useVoiceStore.getState();
+      expect(state._joinCommit?.generation).toBe(state._joinGeneration);
+      expect(state._joinCommit!.at).toBeGreaterThanOrEqual(before);
+      useVoiceStore.getState().leaveVoiceChannel();
+      expect(useVoiceStore.getState()._joinCommit?.generation).not.toBe(useVoiceStore.getState()._joinGeneration);
+    });
   });
 
   describe("joinVoiceChannel — failure toasts", () => {

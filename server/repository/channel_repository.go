@@ -33,6 +33,10 @@ type VoiceAccessReader interface {
 	VoiceAdmission(context.Context, string, string) (*models.VoiceAdmission, error)
 	VoiceTokenAccess(context.Context, string, string, time.Time) (*models.VoiceAdmission, *models.LiveKitInstance, int64, error)
 	VoiceVisibleUsers(context.Context, string, string, []string) ([]string, error)
+	// VoiceVisibleUsersByChannel is VoiceVisibleUsers for several channels of
+	// one server (serverID, channelIDs, online) at a single snapshot, keyed by
+	// channel id. Channels nobody may see are absent from the result.
+	VoiceVisibleUsersByChannel(context.Context, string, []string, []string) (map[string][]string, error)
 }
 
 // ChannelStore declares optional backend-specific voice access at composition.

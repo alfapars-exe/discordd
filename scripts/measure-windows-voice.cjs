@@ -9,6 +9,14 @@
  * capture and PCM milestones. Optional --prepare video-capability is a causal
  * fixture experiment, not product acceptance: report its work separately.
  * Final product measurements must use --prepare none (the default).
+ * Additive scenarios, all off by default and not combinable with --cold-only
+ * or --sound-only unless noted: --self-switch yes adds member-initiated
+ * switches (already connected, clicks the other channel); --recovery
+ * full-reconnect|server-leave forces the member's LiveKit connection down
+ * through the SDK test hook and measures recovery (server-leave includes the
+ * product's first rejoin backoff step and spaces rounds 31 s apart so that
+ * backoff never escalates); --self-row yes (any run) adds the acting member's
+ * own sidebar row to joins, moves and switches.
  * Profiles and synthetic credentials stay inside the disposable run directory.
  * No traces, tokens, passwords or real user data are written to the report.
  */
@@ -33,23 +41,46 @@ const coldOnly = options['cold-only'] === 'yes';
 const soundOnly = options['sound-only'] === 'yes';
 const phasesEnabled = options.phases === 'yes';
 const preparation = options.prepare || 'none';
+const selfSwitch = options['self-switch'] === 'yes';
+const selfRow = options['self-row'] === 'yes';
+const recoveryMode = options.recovery || 'none';
 if (!['none', 'enumerate', 'peer-connection', 'video-capability', 'video-and-module'].includes(preparation)) throw Error('Invalid preparation experiment');
 if (preparation !== 'none' && !phasesEnabled) throw Error('Preparation experiments require --phases yes');
 if (preparation === 'video-and-module' && !/^VoiceProvider-[a-zA-Z0-9_-]+\.js$/.test(options['preload-asset'] || '')) throw Error('Use an observed packaged VoiceProvider asset basename');
 if (!/^[a-z0-9-]+$/.test(label || '') || !Number.isInteger(rounds) || rounds < 1 || rounds > 50) throw Error('Invalid benchmark label or round count');
 if (!runDir.startsWith(path.join(root, 'e2e', '.tmp') + path.sep) || !/^run-\d+-\d+-[a-f0-9]{16}$/.test(path.basename(runDir))) throw Error('Use a disposable e2e run directory');
 if (!fs.existsSync(options.exe || '') || !fs.existsSync(path.join(certDir, 'server.crt'))) throw Error('Executable or fixture certificate missing');
+if (!['none', 'full-reconnect', 'server-leave'].includes(recoveryMode)) throw Error('Invalid recovery scenario');
+if ((coldOnly || soundOnly) && (selfSwitch || recoveryMode !== 'none')) throw Error('Self-switch and recovery scenarios require the full warm run');
 const apiOrigin = 'http://127.0.0.1:9090';
 const tlsOrigin = 'https://127.0.0.1:9443';
 const fixtureFile = path.join(runDir, 'voice-synthetic-fixture.json');
 const reportFile = path.join(runDir, `voice-${label}.json`);
 const report = { label, rounds, coldOnly, soundOnly, executable: path.resolve(options.exe), fixture: 'loopback Go9090 / LiveKit17880 / TLS9443',
-  measurement: 'real UI actions; token fetch wall time; remote participant list; decoded remote-track WebAudio PCM RMS plus RTP counters; rendered event cue PCM downstream of actual gain before OS output',
+  measurement: 'real UI actions; token fetch wall time; remote participant list (server-confirmed row, an optimistic pending row is ignored); decoded remote-track WebAudio PCM RMS plus RTP counters; rendered event cue PCM downstream of actual gain before OS output',
   pcmProbe: { pollIntervalMs: 40, analyserFFTSize: 2048, positiveRmsThreshold: 0.0001 },
   limitations: ['Chromium fake microphone with bundled licensed FLEURS speech fixture; --mute-audio suppresses physical speaker output', 'Hidden test windows; local network only; no claim about WAN or physical audio-device latency', 'Non-loopback STUN/TURN endpoints filtered in the fixture; restricted-network/TURN paths are untested'],
   joins: [], moves: [], deafenedMove: null, failures: [] };
 report.phaseInstrumentation = { enabled: phasesEnabled, clock: 'Unix milliseconds, rebased to actual DOM action', payloads: 'only event kinds, booleans, durations and ordinal IDs; no keys, SDP, JWTs or participant identities' };
 report.preparationExperiment = { mode: preparation, measurements: [], note: 'Optional fixture-only preparation before first channel click, after authenticated UI ready; no capture or offer. Preparation work is reported separately, not hidden in click latency.' };
+// Additive scenarios never touch the default report: every key below exists
+// only when its option was requested.
+const recoveryMetrics = ['connectionMs', 'decodedAudioMs', 'decodedSamplesMs', 'roomLostMs', 'roomRestoredMs', 'ownerResubscribedMs', 'ownerDecodedAudioMs'];
+if (selfSwitch || selfRow || recoveryMode !== 'none') report.additionalScenarios = {
+  selfSwitch: selfSwitch ? 'member already connected to one channel clicks the other while the owner publishes there; origin and milestones as for joins (member DOM click, owner sidebar, decoded PCM on the new transport)' : null,
+  selfRow: selfRow ? 'selfListMs: first 40 ms poll in which the acting member\'s own renderer shows its own row under the destination channel, same origin as listMs; awaited for at most 10 s after decoded audio and null when not seen; a row already visible before the action is reported as invalidated instead of failing the run' : null,
+  recovery: recoveryMode === 'none' ? null : { mode: recoveryMode,
+    origin: 'member renderer call to the LiveKit SDK test hook room.simulateScenario(mode); no network fault is injected, so ICE or signaling timeout detection is not part of the sample',
+    path: recoveryMode === 'full-reconnect' ? 'SDK closes signaling and its transports and rejoins on the current token; the product re-admits encryption on the same Room'
+      : 'SFU-initiated leave; the product auto-rejoin owns recovery, so every sample includes its fixed first backoff step, a token refresh and a new Room; rounds are spaced 31 s apart to stay on that first step',
+    milestones: { 'connectionMs, decodedAudioMs, decodedSamplesMs': 'as for joins, on transports created after the forced call',
+      'roomLostMs, roomRestoredMs': 'member renderer: admitted Room withdrawn, then exposed again after encrypted re-admission (40 ms poll)',
+      ownerResubscribedMs: 'owner Room re-subscribed to the member microphone',
+      ownerDecodedAudioMs: 'first positive decoded PCM in the owner renderer after that re-subscription (40 ms poll)',
+      waits: 'only the member decoded PCM is required; the other milestones are bounded waits and null when not observed' } },
+};
+if (selfSwitch) report.selfSwitches = [];
+if (recoveryMode !== 'none') report.recoveries = [];
 const apps = [];
 const servers = [];
 const delayedTokens = [];
@@ -176,27 +207,56 @@ function microphoneFile() {
   report.microphoneFixture = { source: 'client/public/audio-test-fixtures/turkish-fleurs-original.wav', license: 'CC BY 4.0; attribution in adjacent README.md', conversion: 'active segment 10.3–11.3s; float32 mono to PCM16 mono, original sample rate; Chromium loops this 1s segment', sha256: crypto.createHash('sha256').update(data).digest('hex') };
   fs.writeFileSync(filename, data); return filename;
 }
-function instrument({ origin, ownId, otherId, channels, phasesEnabled }) {
+function instrument({ origin, ownId, otherId, channels, phasesEnabled, ownName, selfRowEnabled, recoveryEnabled }) {
   localStorage.setItem('mqvi_server_url', origin);
   localStorage.setItem('i18nextLng', 'en');
   localStorage.setItem('language', 'en');
   const state = { start: 0, actionAt: null, minPC: 0, action: '', token: [], ws: [], pcs: [], pcm: [], cues: [], phases: [], longTasks: [], captures: 0, capabilityQueries: [], preActionActivity: null, listAt: null, decodedAt: null, decodedSamplesAt: null, lastEnergy: new Map(), lastStats: [], connectionAt: null, delayNextToken: false, filteredIce: [] };
   const phase = (name, data = {}) => { if (phasesEnabled && state.start) state.phases.push({ name, at: Date.now(), sincePreparationMs: Date.now() - state.start, ...data }); };
+  // Milestones of the optional self-row and recovery scenarios; reported only on request.
+  const resetAdditions = () => Object.assign(state, { selfListAt: null, roomLostAt: null, roomRestoredAt: null, resubscribedAt: null, remoteHeardAt: null });
+  resetAdditions();
   let probeContextConstruction = false;
   const bufferUrls = new WeakMap(), decodedUrls = new WeakMap();
   window.__voiceBench = { state, mark(action, start, target) {
     state.start = start; state.actionAt = null; state.preActionActivity = null; state.minPC = state.pcs.length; state.lastEnergy.clear(); state.action = action; state.target = target; state.token = []; state.ws = []; state.cues = []; state.phases = []; state.longTasks = []; state.listAt = null; state.decodedAt = null; state.decodedSamplesAt = null; state.connectionAt = null;
+    resetAdditions();
   }, result() {
     const room = window.__hichatRoom, mic = room?.localParticipant.getTrackPublication('microphone');
     return { preparedAt: state.start, actionAt: state.actionAt, preActionActivity: state.preActionActivity, capabilityQueries: state.capabilityQueries, listAt: state.listAt, decodedAt: state.decodedAt, decodedSamplesAt: state.decodedSamplesAt, connectionAt: state.connectionAt, token: state.token, ws: state.ws, cues: state.cues, phases: state.phases, longTasks: state.longTasks, lastStats: state.lastStats, filteredIce: state.filteredIce, pcm: state.pcm.filter(probe => probe.pc >= state.minPC).map(probe => ({ pc: probe.pc, maxRms: probe.maxRms, state: probe.context.state })),
       room: room ? { state: room.state, canPlaybackAudio: room.canPlaybackAudio, microphone: mic ? { muted: mic.isMuted, enabled: mic.track?.mediaStreamTrack?.enabled, pipeline: mic.track?.processor?.pipeline?.getStatus() } : null,
         remotes: Array.from(room.remoteParticipants.values()).map(peer => ({ microphone: Array.from(peer.trackPublications.values()).filter(pub => pub.source === 'microphone').map(pub => ({ subscribed: pub.isSubscribed, muted: pub.isMuted, trackPresent: !!pub.track })) })) } : null,
-      peerConnections: state.pcs.slice(state.minPC).map(pc => ({ state: pc.connectionState, senders: pc.getSenders().map(s => ({ kind: s.track?.kind, enabled: s.track?.enabled, ready: s.track?.readyState })) })) };
+      peerConnections: state.pcs.slice(state.minPC).map(pc => ({ state: pc.connectionState, senders: pc.getSenders().map(s => ({ kind: s.track?.kind, enabled: s.track?.enabled, ready: s.track?.readyState })) })),
+      ...(selfRowEnabled ? { selfListAt: state.selfListAt } : {}) };
   } };
+  if (recoveryEnabled) Object.assign(window.__voiceBench, {
+    // There is no DOM action to anchor a recovery, so its origin is the call
+    // that makes the SDK drop the admitted Room's signaling and transports.
+    async forceDisconnect(scenario) {
+      const room = window.__hichatRoom;
+      if (room?.state !== 'connected' || typeof room.simulateScenario !== 'function') throw Error('No connected room to disconnect');
+      state.actionAt = Date.now();
+      state.preActionActivity = { captureRequests: state.captures, peerConnectionsCreated: state.pcs.length, roomExposed: true };
+      phase('forced_disconnect', { scenario });
+      await room.simulateScenario(scenario);
+    },
+    observeResubscription() {
+      const room = window.__hichatRoom;
+      if (!room?.on) throw Error('No admitted room to observe');
+      state.stopResubscription?.();
+      const subscribed = (_track, publication) => { if (publication.source === 'microphone') state.resubscribedAt ||= Date.now(); };
+      room.on('trackSubscribed', subscribed);
+      state.stopResubscription = () => room.off('trackSubscribed', subscribed);
+    },
+    recovery() {
+      state.stopResubscription?.(); state.stopResubscription = null;
+      return { roomLostAt: state.roomLostAt, roomRestoredAt: state.roomRestoredAt, resubscribedAt: state.resubscribedAt, remoteHeardAt: state.remoteHeardAt };
+    },
+  });
   const actionStart = event => {
     if (!state.start || state.actionAt) return;
     const target = event.target.closest?.(`[data-keyboard-reorder-id="${state.target}"]`);
-    if (target && ((event.type === 'click' && state.action === 'join') || (event.type === 'drop' && state.action.includes('move')))) {
+    if (target && ((event.type === 'click' && ['join', 'switch'].includes(state.action)) || (event.type === 'drop' && state.action.includes('move')))) {
       state.actionAt = Date.now();
       state.preActionActivity = { captureRequests: state.captures, peerConnectionsCreated: state.pcs.length, roomExposed: !!window.__hichatRoom };
       phase('dom_action', { event: event.type });
@@ -411,7 +471,7 @@ function instrument({ origin, ownId, otherId, channels, phasesEnabled }) {
         this.addEventListener('error', () => phase('livekit_websocket_error'));
       }
       if (new URL(args[0], location.href).pathname === '/ws') this.addEventListener('message', event => {
-        try { const message = JSON.parse(event.data); if (message.op.startsWith('voice_')) state.ws.push({ op: message.op, action: message.d?.action || null, sincePreparationMs: Date.now() - state.start, self: message.d?.user_id === ownId, channel: channels.find(c => c.id === message.d?.channel_id)?.name || null }); } catch {}
+        try { const message = JSON.parse(event.data); if (message.op.startsWith('voice_')) state.ws.push({ op: message.op, action: message.d?.action || null, sincePreparationMs: Date.now() - state.start, self: message.d?.user_id === ownId, channel: channels.find(c => c.id === message.d?.channel_id)?.name || null, ...(message.d?.voice ? { embeddedCredentials: true } : {}) }); } catch {}
       });
     }
   };
@@ -450,7 +510,23 @@ function instrument({ origin, ownId, otherId, channels, phasesEnabled }) {
       if (rms > 0.0001 && !state.decodedAt) { state.decodedAt = now; phase('decoded_pcm_ready', { pc: probe.pc }); }
     }
     const target = document.querySelector(`[data-keyboard-reorder-id="${state.target}"]`)?.closest('.ch-tree-drag-wrap');
-    if (!state.listAt && target && Array.from(target.querySelectorAll('.ch-tree-vu-name')).some(node => node.textContent === 'Voice Bench Member')) state.listAt = now;
+    // A moderator's drop draws the member under the target at once as a pending
+    // row (class vu-pending); listAt is the row the server broadcast confirmed.
+    if (!state.listAt && target && Array.from(target.querySelectorAll('.ch-tree-voice-user:not(.vu-pending) .ch-tree-vu-name')).some(node => node.textContent === 'Voice Bench Member')) state.listAt = now;
+    if (selfRowEnabled && !state.selfListAt && target && Array.from(target.querySelectorAll('.ch-tree-vu-name')).some(node => node.textContent === ownName)) state.selfListAt = now;
+    if (recoveryEnabled && state.action === 'recovery') {
+      // Only the disconnected member has an action origin, and only the owner
+      // observes a re-subscription, so each renderer latches its own side.
+      if (state.actionAt && !window.__hichatRoom) state.roomLostAt ||= now;
+      else if (state.roomLostAt) state.roomRestoredAt ||= now;
+      // The owner keeps its transport, so the new-transport filter above cannot
+      // apply; once re-subscribed, any running probe carries the member again.
+      if (state.resubscribedAt && !state.remoteHeardAt) for (const probe of state.pcm) {
+        if (probe.context.state !== 'running') continue;
+        probe.analyser.getFloatTimeDomainData(probe.samples);
+        if (Math.sqrt(probe.samples.reduce((sum, sample) => sum + sample * sample, 0) / probe.samples.length) > 0.0001) { state.remoteHeardAt = now; break; }
+      }
+    }
     const lastStats = [];
     for (const pc of state.pcs) {
       if (pc.connectionState !== 'connected') continue;
@@ -481,7 +557,8 @@ async function launch(account, fixture, spki, wav) {
     for (const window of BrowserWindow.getAllWindows()) { window.setSkipTaskbar(true); window.hide(); window.webContents.setBackgroundThrottling(false); }
     app.on('browser-window-created', (_event, window) => { window.setSkipTaskbar(true); window.webContents.setBackgroundThrottling(false); });
   });
-  await app.context().addInitScript(instrument, { origin: tlsOrigin, ownId: account.id, otherId: account === fixture.owner ? fixture.member.id : fixture.owner.id, channels: fixture.channels, phasesEnabled });
+  await app.context().addInitScript(instrument, { origin: tlsOrigin, ownId: account.id, otherId: account === fixture.owner ? fixture.member.id : fixture.owner.id, channels: fixture.channels, phasesEnabled,
+    ownName: account.displayName, selfRowEnabled: selfRow, recoveryEnabled: recoveryMode !== 'none' });
   let page = (await app.firstWindow());
   for (let i = 0; i < 100; i++) { const main = app.windows().find(win => win.url().startsWith('app://')); if (main) { page = main; break; } await new Promise(resolve => setTimeout(resolve, 50)); }
   await page.waitForURL('app://**', { timeout: 30_000 });
@@ -545,6 +622,12 @@ async function snapshot(page) {
   return { ...value, assetRequests: (page.__benchResources || []).filter(resource => resource.startAt >= value.preparedAt) };
 }
 async function ready(page) { await page.waitForFunction(() => window.__voiceBench.state.decodedAt !== null, null, { timeout: 25_000 }); }
+// Supporting milestones must not turn a valid audio sample into a failed run:
+// the wait is bounded and an unobserved milestone is reported as null.
+const observed = (page, field, timeout) => page.waitForFunction(field => window.__voiceBench.state[field] !== null, field, { timeout }).catch(() => {});
+// Without this wait a row slower than the first decoded audio would be
+// censored, which is exactly the case the milestone exists to expose.
+async function selfRowReady(page) { if (selfRow) await observed(page, 'selfListAt', 10_000); }
 async function ownerJoin(owner, destination) {
   const count = await owner.evaluate(() => window.__voiceBench.state.pcs.length);
   await channel(owner, destination).click();
@@ -570,7 +653,14 @@ function measured(member, owner, move = false) {
     listMs: owner.listAt === null ? null : owner.listAt - start,
     decodedAudioMs: member.decodedAt === null ? null : member.decodedAt - start,
     decodedSamplesMs: member.decodedSamplesAt === null ? null : member.decodedSamplesAt - start,
-    connectionMs: member.connectionAt === null ? null : member.connectionAt - start };
+    connectionMs: member.connectionAt === null ? null : member.connectionAt - start,
+    ...(selfRow ? selfRowTiming(member, start) : {}) };
+}
+function selfRowTiming(member, start) {
+  const stale = member.selfListAt !== null && member.selfListAt < start;
+  return { selfListObservedAt: member.selfListAt, selfListObserver: 'member sidebar',
+    selfListMs: member.selfListAt === null || stale ? null : member.selfListAt - start,
+    ...(stale ? { selfListInvalidated: 'own row was already visible before the action' } : {}) };
 }
 async function move(owner, member, fixture, destination, deafened = false) {
   await ownerJoin(owner, destination);
@@ -578,13 +668,51 @@ async function move(owner, member, fixture, destination, deafened = false) {
   await owner.locator('.ch-tree-voice-user').filter({ hasText: fixture.member.displayName }).first().dragTo(channel(owner, destination));
   await owner.waitForFunction(() => window.__voiceBench.state.listAt !== null, null, { timeout: 20_000 });
   if (deafened) {
-    await member.waitForFunction(() => window.__voiceBench.state.token.some(x => x.status === 200), null, { timeout: 20_000 });
+    // The join has its credentials either from the token response or, when the
+    // forced move embedded them, from that event: no token request follows it.
+    await member.waitForFunction(() => { const s = window.__voiceBench.state; return s.token.some(x => x.status === 200) || s.ws.some(x => x.op === 'voice_force_move' && x.embeddedCredentials); }, null, { timeout: 20_000 });
     await new Promise(resolve => setTimeout(resolve, 1500));
   } else await ready(member);
+  await selfRowReady(member);
   const memberResult = await snapshot(member);
   const ownerResult = await snapshot(owner);
   const forcedAt = memberResult.ws.find(event => event.op === 'voice_force_move')?.sincePreparationMs ?? Infinity;
   return { ...measured(memberResult, ownerResult, true), ...(deafened ? { deafenStillOn: await member.getByRole('button', { name: 'Undeafen', exact: true }).getAttribute('aria-pressed'), audibleCueCount: memberResult.cues.filter(x => x.sincePreparationMs >= forcedAt && /^join[.-]/.test(x.asset || '') && x.contextState === 'running' && x.renderedPeakRms > 0.0001).length } : {}) };
+}
+async function switchChannel(owner, member, destination) {
+  // Same preconditions as move(): the owner already publishes in the
+  // destination, so the member's first decoded remote PCM is measurable.
+  await ownerJoin(owner, destination);
+  await mark(owner, member, 'switch', destination);
+  await channel(member, destination).click();
+  await owner.waitForFunction(() => window.__voiceBench.state.listAt !== null, null, { timeout: 20_000 });
+  await ready(member);
+  await selfRowReady(member);
+  return { ...measured(await snapshot(member), await snapshot(owner)), kind: 'self-initiated voice channel switch' };
+}
+async function recover(owner, member, occupied) {
+  await mark(owner, member, 'recovery', occupied);
+  await owner.evaluate(() => window.__voiceBench.observeResubscription());
+  await member.evaluate(scenario => window.__voiceBench.forceDisconnect(scenario), recoveryMode);
+  await ready(member);
+  await observed(member, 'roomRestoredAt', 1_000);
+  await observed(owner, 'remoteHeardAt', 20_000);
+  // The member never left the occupied channel, so the sidebar-row latches
+  // fire on the first poll after mark and say nothing about the recovery.
+  const { listAt, selfListAt, ...telemetry } = await snapshot(member);
+  const memberSide = await member.evaluate(() => window.__voiceBench.recovery()), ownerSide = await owner.evaluate(() => window.__voiceBench.recovery());
+  const start = telemetry.actionAt, shift = start - telemetry.preparedAt;
+  const relativeToAction = row => ({ ...row, sinceActionMs: row.sincePreparationMs - shift });
+  const since = at => at === null || at < start ? null : at - start;
+  return { ...telemetry, kind: `forced ${recoveryMode} recovery`, timingOrigin: 'renderer call that forces the disconnect',
+    resolvedActionAt: start, actionObserver: `member room.simulateScenario('${recoveryMode}')`,
+    token: telemetry.token.map(relativeToAction), ws: telemetry.ws.map(relativeToAction), cues: telemetry.cues.map(relativeToAction), phases: telemetry.phases.map(relativeToAction),
+    assetRequests: telemetry.assetRequests.map(row => ({ ...row, sinceActionMs: row.startAt - start })),
+    longTasks: telemetry.longTasks.map(row => ({ ...row, sinceActionMs: row.at - start })),
+    roomLostAt: memberSide.roomLostAt, roomRestoredAt: memberSide.roomRestoredAt, ownerResubscribedAt: ownerSide.resubscribedAt, ownerDecodedAudioAt: ownerSide.remoteHeardAt,
+    decodedAudioMs: since(telemetry.decodedAt), decodedSamplesMs: since(telemetry.decodedSamplesAt), connectionMs: since(telemetry.connectionAt),
+    roomLostMs: since(memberSide.roomLostAt), roomRestoredMs: since(memberSide.roomRestoredAt),
+    ownerResubscribedMs: since(ownerSide.resubscribedAt), ownerDecodedAudioMs: since(ownerSide.remoteHeardAt) };
 }
 async function positiveCueControl(owner, member, destination) {
   // A real product preview in an unchanged room validates the downstream PCM
@@ -613,12 +741,12 @@ async function cancellation(owner, member, data) {
   const telemetry = await member.evaluate(() => window.__voiceBench.result());
   return { durationMs: Date.now() - start, upstream: delayedTokens[previous], token: telemetry.token, selfJoinChannels: telemetry.ws.filter(row => row.op === 'voice_state_update' && row.self && row.action === 'join').map(row => row.channel), latestTargetVisible: await member.locator('.ub-voice-row').innerText().catch(() => null) };
 }
-function summarize(rows) {
+function summarize(rows, names = ['listMs', 'decodedAudioMs', 'decodedSamplesMs', 'connectionMs', ...(selfRow ? ['selfListMs'] : [])]) {
   const metrics = {};
   const median = values => values.length === 0 ? null : values.length % 2
     ? values[Math.floor(values.length / 2)]
     : (values[values.length / 2 - 1] + values[values.length / 2]) / 2;
-  for (const name of ['listMs', 'decodedAudioMs', 'decodedSamplesMs', 'connectionMs']) { const values = rows.map(row => row[name]).filter(Number.isFinite).sort((a,b) => a-b); metrics[name] = { n: values.length, median: median(values), p95: values[Math.max(0, Math.ceil(values.length * 0.95) - 1)] ?? null }; }
+  for (const name of names) { const values = rows.map(row => row[name]).filter(Number.isFinite).sort((a,b) => a-b); metrics[name] = { n: values.length, median: median(values), p95: values[Math.max(0, Math.ceil(values.length * 0.95) - 1)] ?? null }; }
   const token = rows.flatMap(row => row.token).filter(token => token.status === 200).map(token => token.durationMs).sort((a,b) => a-b);
   metrics.tokenMs = { n: token.length, median: median(token), p95: token[Math.max(0, Math.ceil(token.length * 0.95) - 1)] ?? null };
   return metrics;
@@ -648,6 +776,7 @@ function summarize(rows) {
       await mark(owner, member, 'join', alpha);
       await channel(member, alpha).click();
       await ready(member);
+      await selfRowReady(member);
       const result = measured(await snapshot(member), await snapshot(owner));
       result.kind = coldOnly || i === 0 ? 'cold application voice join' : 'warm voice rejoin';
       report.joins.push(result); saveReport();
@@ -675,12 +804,31 @@ function summarize(rows) {
       console.log(`${label}: move ${i + 1}/${rounds}, decoded ${result.decodedAudioMs} ms`);
       destination = destination.id === alpha.id ? beta : alpha;
     }
+    // The additive scenarios run here, where both clients share the channel
+    // opposite to destination and the member is neither muted nor deafened,
+    // and they leave that state as the sound controls below expect it.
+    for (let i = 0; i < (selfSwitch ? rounds : 0); i++) {
+      const result = await switchChannel(owner, member, destination);
+      report.selfSwitches.push(result); saveReport();
+      console.log(`${label}: self-switch ${i + 1}/${rounds}, decoded ${result.decodedAudioMs} ms`);
+      destination = destination.id === alpha.id ? beta : alpha;
+    }
+    for (let i = 0; i < (recoveryMode === 'none' ? 0 : rounds); i++) {
+      const result = await recover(owner, member, destination.id === alpha.id ? beta : alpha);
+      report.recoveries.push(result); saveReport();
+      console.log(`${label}: ${recoveryMode} recovery ${i + 1}/${rounds}, decoded ${result.decodedAudioMs} ms`);
+      // The product resets its rejoin backoff only after 30 s of stable voice;
+      // a sooner round would measure its later, longer steps and then give up.
+      if (recoveryMode === 'server-leave' && i < rounds - 1) await new Promise(resolve => setTimeout(resolve, 31_000));
+    }
     report.positiveCueControl = await positiveCueControl(owner, member, destination);
     await member.getByRole('button', { name: 'Mute', exact: true }).click();
     await member.getByRole('button', { name: 'Deafen', exact: true }).click();
     report.deafenedMove = await move(owner, member, data, destination, true);
     if (!soundOnly) report.cancellation = await cancellation(owner, member, data);
-    report.summary = { joins: summarize(report.joins), warmJoins: summarize(report.joins.slice(1)), moves: summarize(report.moves) };
+    report.summary = { joins: summarize(report.joins), warmJoins: summarize(report.joins.slice(1)), moves: summarize(report.moves),
+      ...(selfSwitch ? { selfSwitches: summarize(report.selfSwitches) } : {}),
+      ...(recoveryMode === 'none' ? {} : { recoveries: summarize(report.recoveries, recoveryMetrics) }) };
   } catch (error) {
     report.failures.push({ message: error.message.split('\n')[0] });
     for (let index = 0; index < apps.length; index++) {
