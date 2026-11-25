@@ -1,5 +1,11 @@
 # CHANGELOG — SECURE-CODING.md
 
+## 2.11.133 - 2026-11-25
+
+- Keep a screen share running through a voice reconnect and an encryption key rotation instead of stopping it; the share stays paused until encryption is re-admitted, then resumes on the same capture.
+- Stop the share and clear its live status for viewers if encryption cannot be re-admitted within 45 seconds, the room is closed, or the shared window ends while paused.
+- Restart Windows screen-share audio on the same stream after a reconnect.
+
 ## 2.11.132 - 2026-11-24
 
 - Speed up voice channel joins and moderator moves on a remote database: fewer serial queries per join and move, session activity written in the background, and one visibility query for both channels of a move.

@@ -1,4 +1,4 @@
-import {captureAdmissionCurrent,subscribeCaptureAdmission}from "../audio/microphoneAdmission";
+import {captureAdmissionCurrent,captureAdmissionSuspended,subscribeCaptureAdmission}from "../audio/microphoneAdmission";
 import { StrictMode } from "react";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -249,6 +249,27 @@ describe("encrypted room admission", () => {
     view.rerender({...initial,keyScope:"new-key",keyReady:false});expect(closed).toHaveBeenCalledOnce();expect(captureAdmissionCurrent(participant)).toBe(false);
     view.rerender({...initial,keyScope:"new-key"});await connectAndAdmit(view);expect(captureAdmissionCurrent(participant)).toBe(true);
     act(()=>publishAuthGenerationChange(22));expect(captureAdmissionCurrent(participant)).toBe(false);expect(closed.mock.calls.length).toBeGreaterThanOrEqual(2);unsubscribe();view.unmount();
+  });
+
+  it.each(["reconnecting","signal-reconnecting"])("suspends (never retires) capture admission across %s and a rekey, and retires it on fatal loss",async(event)=>{
+    const initial={...options(),keyReady:true};const view=renderHook((props:Options)=>useEncryptedRoomAdmission(props),{initialProps:initial});await connectAndAdmit(view);
+    const room=view.result.current.room as unknown as TestRoom,participant=view.result.current.room!.localParticipant,closed=vi.fn();const unsubscribe=subscribeCaptureAdmission(participant,closed);
+    const share=publication(Track.Source.ScreenShare);room.localParticipant.trackPublications.set("share",share);
+    act(()=>{room.state="reconnecting";room.emit(event);});
+    expect(closed).toHaveBeenLastCalledWith("suspend");expect(captureAdmissionSuspended(participant)).toBe(true);expect(share.track.mediaStreamTrack.enabled).toBe(false);expect(view.result.current.publishReady).toBe(false);
+    act(()=>{room.state="connected";room.emit("reconnected");});await connectAndAdmit(view);
+    expect(captureAdmissionCurrent(participant)).toBe(true);expect(share.track.mediaStreamTrack.enabled).toBe(true);
+    view.rerender({...initial,keyScope:"rotated",keyReady:false});expect(closed).toHaveBeenLastCalledWith("suspend");expect(share.track.mediaStreamTrack.enabled).toBe(false);
+    view.rerender({...initial,keyScope:"rotated"});await connectAndAdmit(view);expect(share.track.mediaStreamTrack.enabled).toBe(true);
+    expect(closed.mock.calls.every(([reason])=>reason==="suspend")).toBe(true);
+    act(()=>room.emit("encryption-error",new Error("worker cryptor failed")));expect(closed).toHaveBeenLastCalledWith("retire");expect(captureAdmissionSuspended(participant)).toBe(false);
+    unsubscribe();view.unmount();
+  });
+
+  it("retires capture admission when the room owner unmounts",async()=>{
+    const initial={...options(),keyReady:true};const view=renderHook(()=>useEncryptedRoomAdmission(initial));await connectAndAdmit(view);
+    const participant=view.result.current.room!.localParticipant,closed=vi.fn();subscribeCaptureAdmission(participant,closed);
+    view.unmount();expect(closed).toHaveBeenLastCalledWith("retire");expect(captureAdmissionSuspended(participant)).toBe(false);expect(captureAdmissionCurrent(participant)).toBe(false);
   });
 
 });

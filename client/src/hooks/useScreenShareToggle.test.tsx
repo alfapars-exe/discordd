@@ -459,3 +459,158 @@ describe("guild screen-share profile lifecycle", () => {
     expect(f.raw.enabled).toBe(false);
   });
 });
+
+describe("guild screen share across reconnect and rekey", () => {
+  const streamingSends = () => voice.getState()._wsSend.mock.calls.filter(([, payload]) => payload?.is_streaming !== undefined).map(([, payload]) => payload.is_streaming);
+  // Admission suspension (LiveKit Reconnecting/SignalReconnecting or an E2EE
+  // rekey) pauses every published track and unmounts VoiceStateManager until
+  // encryption is re-admitted; the remount must adopt the same capture.
+  function suspend(f: ReturnType<typeof fixture>) {
+    act(() => {
+      f.raw.enabled = false; f.audioRaw.enabled = false;
+      f.admission.close("suspend");
+    });
+    f.view.unmount();
+  }
+  function resume(f: ReturnType<typeof fixture>) {
+    act(() => { f.admission.open(); f.raw.enabled = true; f.audioRaw.enabled = true; });
+    const syncRef = { current: false };
+    const view = renderHook(() => useScreenShareToggle(f.room as unknown as Room, f.participant as unknown as LocalParticipant, syncRef));
+    syncRef.current = true;
+    return view;
+  }
+
+  it("keeps the captured browser source through a suspend and adopts it after re-admission", async () => {
+    const f = fixture();
+    await tick();
+    expect(streamingSends()).toEqual([true]);
+    suspend(f);
+    await tick(10_000);
+    expect(f.raw.stop).not.toHaveBeenCalled();
+    expect(f.audioRaw.stop).not.toHaveBeenCalled();
+    expect(f.publications.get(Track.Source.ScreenShare)?.track).toBe(f.video);
+    expect(f.publications.get(Track.Source.ScreenShareAudio)?.track).toBe(f.browserAudio);
+    resume(f);
+    await tick(500);
+    expect(f.raw.readyState).toBe("live");
+    expect(f.raw.enabled).toBe(true);
+    expect(f.participant.setScreenShareEnabled.mock.calls.filter(([enabled]) => enabled)).toHaveLength(1);
+    expect(voice.getState().isStreaming).toBe(true);
+    expect(streamingSends()).toEqual([true, true]);
+    // The adopted owner is live: profile changes still apply to the same source.
+    change({ screenShareQuality: "1440p", screenShareFps: 120 });
+    await tick(200);
+    expect(f.raw.applyConstraints).toHaveBeenLastCalledWith(expect.objectContaining({ width: { ideal: 2560 } }));
+    expect(f.participant.setScreenShareEnabled.mock.calls.filter(([enabled]) => enabled)).toHaveLength(1);
+    // And a user stop still retires it.
+    change({ isStreaming: false });
+    await tick();
+    expect(f.raw.readyState).toBe("ended");
+    expect(f.publications.has(Track.Source.ScreenShare)).toBe(false);
+  });
+
+  it("survives repeated suspensions of an adopted share", async () => {
+    const f = fixture();
+    await tick();
+    suspend(f);
+    f.view = resume(f);
+    await tick(500);
+    suspend(f);
+    await tick();
+    expect(f.audioRaw.stop).not.toHaveBeenCalled();
+    expect(f.publications.get(Track.Source.ScreenShareAudio)?.track).toBe(f.browserAudio);
+    resume(f);
+    await tick(500);
+    expect(f.raw.readyState).toBe("live");
+    expect(f.audioRaw.readyState).toBe("live");
+    expect(f.publications.get(Track.Source.ScreenShare)?.track).toBe(f.video);
+    expect(f.participant.setScreenShareEnabled.mock.calls.filter(([enabled]) => enabled)).toHaveLength(1);
+    expect(voice.getState().isStreaming).toBe(true);
+    expect(streamingSends()).toEqual([true, true, true]);
+  });
+
+  it("restarts Electron native screen audio on the adopted video stream", async () => {
+    h.electron = true;
+    const f = fixture();
+    await tick();
+    const stream = f.participant.setScreenShareEnabled.mock.calls[0][2]?.stream;
+    expect(h.startAudio).toHaveBeenCalledOnce();
+    suspend(f);
+    await tick();
+    // Native audio retires with admission; its publication is released.
+    expect(f.publications.has(Track.Source.ScreenShareAudio)).toBe(false);
+    expect(f.raw.stop).not.toHaveBeenCalled();
+    const nextAudio = rawTrack("audio");
+    h.startAudio.mockResolvedValue(nextAudio);
+    resume(f);
+    await tick(500);
+    expect(h.startAudio).toHaveBeenCalledTimes(2);
+    const audio = f.publications.get(Track.Source.ScreenShareAudio);
+    expect(audio?.track?.mediaStreamTrack).toBe(nextAudio);
+    expect(audio?.options).toEqual(expect.objectContaining({ stream, forceStereo: true }));
+    expect(f.publications.get(Track.Source.ScreenShare)?.track).toBe(f.video);
+    expect(f.participant.setScreenShareEnabled.mock.calls.filter(([enabled]) => enabled)).toHaveLength(1);
+    expect(voice.getState().isStreaming).toBe(true);
+  });
+
+  it("stops the parked source and reports is_streaming=false when admission is retired instead of resumed", async () => {
+    const f = fixture();
+    await tick();
+    suspend(f);
+    act(() => f.admission.retire());
+    await tick();
+    expect(f.raw.readyState).toBe("ended");
+    expect(f.audioRaw.readyState).toBe("ended");
+    expect(f.publications.has(Track.Source.ScreenShare)).toBe(false);
+    expect(f.publications.has(Track.Source.ScreenShareAudio)).toBe(false);
+    expect(voice.getState().isStreaming).toBe(false);
+    expect(streamingSends()).toEqual([true, false]);
+  });
+
+  it("gives up a parked source that is never re-admitted", async () => {
+    const f = fixture();
+    await tick();
+    suspend(f);
+    await tick(60_000);
+    expect(f.raw.readyState).toBe("ended");
+    expect(f.publications.has(Track.Source.ScreenShare)).toBe(false);
+    expect(voice.getState().isStreaming).toBe(false);
+    expect(streamingSends()).toEqual([true, false]);
+  });
+
+  it("does not adopt a parked source the user stopped while it was suspended", async () => {
+    const f = fixture();
+    await tick();
+    suspend(f);
+    change({ isStreaming: false });
+    await tick();
+    expect(f.raw.readyState).toBe("ended");
+    expect(f.publications.has(Track.Source.ScreenShare)).toBe(false);
+    resume(f);
+    await tick(500);
+    expect(f.participant.setScreenShareEnabled.mock.calls.filter(([enabled]) => enabled)).toHaveLength(1);
+    expect(voice.getState().isStreaming).toBe(false);
+  });
+
+  it("reports a share whose source ended during the suspension as stopped", async () => {
+    const f = fixture();
+    await tick();
+    suspend(f);
+    act(() => { f.raw.readyState = "ended"; f.raw.dispatchEvent(new Event("ended")); });
+    await tick();
+    resume(f);
+    await tick(500);
+    expect(f.publications.has(Track.Source.ScreenShare)).toBe(false);
+    expect(voice.getState().isStreaming).toBe(false);
+    expect(streamingSends()).toEqual([true, false]);
+  });
+
+  it("still retires the capture when VoiceStateManager unmounts without a suspension", async () => {
+    const f = fixture();
+    await tick();
+    f.view.unmount();
+    await tick();
+    expect(f.raw.readyState).toBe("ended");
+    expect(f.publications.has(Track.Source.ScreenShare)).toBe(false);
+  });
+});

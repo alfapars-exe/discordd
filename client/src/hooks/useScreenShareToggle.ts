@@ -63,6 +63,8 @@ import { useSystemAudioCapture } from "./useSystemAudioCapture";
 import { useDisplayInfo } from "./useDisplayInfo";
 import { resolveScreenSharePublishDefaults, type ScreenSharePublishDefaults } from "../utils/screenShareProfile";
 import { isScreenShareReconfiguring, LiveKitScreenShareUpdater } from "../webrtc/livekitScreenShareUpdate";
+import { parkedScreenShareAudio, parkScreenShare, takeParkedScreenShare } from "../webrtc/parkedScreenShare";
+import { captureAdmissionSuspended } from "../audio/microphoneAdmission";
 import {
   isElectron,
   isCapacitor,
@@ -503,6 +505,78 @@ export function useScreenShareToggle(
     notifyServerStopped();
   }
 
+  /** Owner teardown. A share interrupted only by an admission suspension
+   * (SDK reconnect, E2EE key rotation) keeps its captured source for the
+   * remounted owner; every other teardown stops it. */
+  function releaseOrParkShare() {
+    const updater = screenUpdaterRef.current;
+    screenUpdaterRef.current = null;
+    const state = useVoiceStore.getState();
+    const channelId = state.currentVoiceChannelId;
+    const park = !!updater && updater.isSuspended && state.isStreaming && captureAdmissionSuspended(localParticipant)
+      && localParticipant.getTrackPublication(Track.Source.ScreenShare)?.track === updater.track;
+    // Electron native audio retires with admission and is republished on adoption.
+    const nativeAudio = customAudioPubRef.current;
+    const audio = nativeAudio ?? localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
+    customAudioPubRef.current = null;
+    systemAudioCaptureRef.current.stop();
+    const keepAudio = park && !nativeAudio && audio?.track ? audio : null;
+    if (park) {
+      parkScreenShare(localParticipant, updater, keepAudio, {
+        wanted: () => { const current = useVoiceStore.getState(); return current.isStreaming && current.currentVoiceChannelId === channelId; },
+        subscribe: changed => useVoiceStore.subscribe(changed),
+        lost: () => {
+          const current = useVoiceStore.getState();
+          if (current.isStreaming && current.currentVoiceChannelId === channelId) notifyServerStopped();
+        },
+      });
+    } else {
+      updater?.dispose();
+    }
+    // Video may already be temporarily unpublished. Stop its audio explicitly;
+    // the SDK's setScreenShareEnabled(false) only finds audio via a video pub.
+    // A second cleanup of the same unmount must not retire audio it just parked.
+    if (audio?.track && audio !== keepAudio && audio !== parkedScreenShareAudio(localParticipant)) {
+      audio.track.mediaStreamTrack.enabled = false;
+      audio.track.stop();
+      void localParticipant.unpublishTrack(audio.track).catch(() => {});
+    }
+  }
+
+  // Effect 0: adopt a share parked by the previous owner. Runs before the
+  // forward sync so a still-requested share is never re-picked.
+  useEffect(() => {
+    const parked = takeParkedScreenShare(localParticipant);
+    if (!parked) return;
+    const { updater } = parked;
+    const state = useVoiceStore.getState();
+    const channelId = state.currentVoiceChannelId;
+    const adopted = state.isStreaming
+      && localParticipant.getTrackPublication(Track.Source.ScreenShare)?.track === updater.track
+      && updater.resume(() => screenUpdaterRef.current === updater && useVoiceStore.getState().isStreaming
+        && useVoiceStore.getState().currentVoiceChannelId === channelId);
+    if (!adopted) {
+      updater.dispose();
+      if (state.isStreaming) notifyServerStopped();
+      return;
+    }
+    screenUpdaterRef.current = updater;
+    updater.track.mediaStreamTrack.addEventListener("ended", () => {
+      if (screenUpdaterRef.current === updater && useVoiceStore.getState().isStreaming) notifyServerStopped();
+    }, { once: true });
+    // The server may have cleared is_streaming while this client reconnected.
+    notifyServerStarted();
+    logToServer("info", "screen_share_resumed", { branch: computeShareBranch() });
+    void updatePublishedShare(updater).catch(error => reportUpdateFailure(updater, error));
+    const stream = updater.track.publishOptions?.stream;
+    if (computeShareBranch() === "electron-audio" && stream) {
+      void desktopController().resumeAudio(stream, () => screenUpdaterRef.current !== updater || !updater.active)
+        .catch(error => logToServer("warn", "screen_share_audio_resume_failed", { error: error instanceof Error ? error.message : String(error) }));
+    }
+    return releaseOrParkShare;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localParticipant]);
+
   // Effect 1: forward sync — drive LiveKit from store.isStreaming.
   useEffect(() => {
     if (!initialSyncDoneRef.current) return;
@@ -522,19 +596,7 @@ export function useScreenShareToggle(
 
     return () => {
       transition.cancel();
-      const updater = screenUpdaterRef.current;
-      screenUpdaterRef.current = null;
-      updater?.dispose();
-      // Video may already be temporarily unpublished. Stop its audio explicitly;
-      // the SDK's setScreenShareEnabled(false) only finds audio via a video pub.
-      const audio = customAudioPubRef.current ?? localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
-      customAudioPubRef.current = null;
-      systemAudioCaptureRef.current.stop();
-      if (audio?.track) {
-        audio.track.mediaStreamTrack.enabled = false;
-        audio.track.stop();
-        void localParticipant.unpublishTrack(audio.track).catch(() => {});
-      }
+      releaseOrParkShare();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isStreaming, localParticipant, initialSyncDoneRef]);

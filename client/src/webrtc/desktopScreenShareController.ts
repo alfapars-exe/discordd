@@ -71,6 +71,13 @@ export function createDesktopScreenShareController(operations: DesktopOperations
       void operations.log("info", "screen_share_success", { branch, audio: false, durationMs: Date.now() - attemptStart });
       return;
     }
+    await publishElectronAudio(streamName, attemptStart, shouldCancel);
+  }
+  /** Native WASAPI audio joined to the video's MediaStream. Reused when an
+   * adopted video source outlives its audio across an admission suspension. */
+  async function publishElectronAudio(streamName: string, attemptStart: number, shouldCancel: () => boolean): Promise<void> {
+    const branch = "electron-audio";
+    const opts = resolveScreenSharePublishDefaults(operations.getSettings(), operations.getDisplay());
     const audioTrack = await operations.startAudio(()=>!shouldCancel());
     if (shouldCancel() || !audioTrack) {
       // Video already published; audio track failed (Mac/Linux no
@@ -163,6 +170,10 @@ export function createDesktopScreenShareController(operations: DesktopOperations
       streamName: string, attemptStart: number, initialAudio: boolean, shouldCancel: () => boolean): Promise<void> {
       if (branch === "electron-audio") await startElectron(ssq, ssFps, streamName, attemptStart, shouldCancel);
       else await startBrowser(ssq, ssFps, streamName, attemptStart, initialAudio, shouldCancel);
+    },
+    async resumeAudio(streamName: string, shouldCancel: () => boolean): Promise<void> {
+      if (!operations.getSettings().screenShareAudio) return;
+      await publishElectronAudio(streamName, Date.now(), shouldCancel);
     },
     async stop(): Promise<void> {
       const audio = operations.releaseOwnedShare();

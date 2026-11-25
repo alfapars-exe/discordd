@@ -1,5 +1,5 @@
 import { VoiceFailure } from "../audio/voiceFailure";
-import {registerCaptureAdmission}from "../audio/microphoneAdmission";
+import {registerCaptureAdmission,type CaptureAdmissionClose}from "../audio/microphoneAdmission";
 import { useLayoutEffect, useRef, useState } from "react";
 import { Room, RoomEvent, ConnectionState, type LocalTrack, type LocalTrackPublication, type Participant, type RoomOptions, Track } from "livekit-client";
 import type { IndexedVoiceKeyProvider } from "../audio/voiceEncryptionKeys";
@@ -66,7 +66,9 @@ export function useEncryptedRoomAdmission(options: Options) {
       if (!record.paused.has(track)) record.paused.set(track, { media, enabled: media.enabled, source: publication.source });
       media.enabled = false;
     };
-    const pauseAll = () => { record.captureLease.close();record.room.localParticipant.trackPublications.forEach(pause); record.pending.forEach(stopOwnedTrack); };
+    // "suspend" keeps published sources paused in place for re-admission on this
+    // exact Room; "retire" tells capture owners the Room can never be re-admitted.
+    const pauseAll = (reason: CaptureAdmissionClose = "retire") => { record.captureLease.close(reason);record.room.localParticipant.trackPublications.forEach(pause); record.pending.forEach(stopOwnedTrack); };
     // Unmount cannot cancel SDK getUserMedia. Fence capture completion and
     // publication on this exact Room, including work started before rekey.
     const participant = room.localParticipant;
@@ -121,7 +123,7 @@ export function useEncryptedRoomAdmission(options: Options) {
     const published = (publication: LocalTrackPublication) => { if (!record.ready) pause(publication); };
     record.room.on(RoomEvent.LocalTrackPublished, published);
     record.room.on(RoomEvent.EncryptionError, fatal);
-    const reconnecting = () => { record.ready = false; record.revision++; pauseAll(); changed((value) => value + 1); };
+    const reconnecting = () => { record.ready = false; record.revision++; pauseAll("suspend"); changed((value) => value + 1); };
     const reconnected = () => { if (record.active) reconnect((value) => value + 1); };
     record.room.on(RoomEvent.Reconnecting, reconnecting);
     record.room.on(RoomEvent.SignalReconnecting, reconnecting);
@@ -149,7 +151,7 @@ export function useEncryptedRoomAdmission(options: Options) {
     if (!record || record !== binding || !record.active || record.scope !== scope || !enabled) return;
     const revision = ++record.revision;
     const authScope = JSON.stringify(getAuthSessionSnapshot());
-    record.ready = false;record.captureLease.close();
+    record.ready = false;record.captureLease.close("suspend");
     record.pending.forEach(stopOwnedTrack);
     record.room.localParticipant.trackPublications.forEach((publication) => {
       const track = publication.track;
@@ -159,7 +161,7 @@ export function useEncryptedRoomAdmission(options: Options) {
       media.enabled = false;
     });
     if (keyError) {
-      record.error = keyError; void record.room.disconnect();
+      record.error = keyError; record.captureLease.close("retire"); void record.room.disconnect();
       return;
     }
     if (!keyReady || record.error) return;
@@ -225,7 +227,7 @@ export function useEncryptedRoomAdmission(options: Options) {
       record.paused.clear(); changed((value) => value + 1);
     }).catch((error: unknown) => {
       if (!current()) return;
-      record.error = error; record.ready = false; void record.room.disconnect();
+      record.error = error; record.ready = false; record.captureLease.close("retire"); void record.room.disconnect();
       latest.current.onError(error); changed((value) => value + 1);
     }).finally(() => { clearTimeout(timer); removeAcknowledgement(); removeConnectionWait(); });
     return () => { active = false; clearTimeout(timer); removeAcknowledgement(); removeConnectionWait(); };
