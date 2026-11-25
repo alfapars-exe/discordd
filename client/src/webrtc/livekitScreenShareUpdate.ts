@@ -32,6 +32,8 @@ export class LiveKitScreenShareUpdater {
   private participant: LocalParticipant;
   readonly track: LocalVideoTrack;
   private scope: () => boolean;
+  private suspended = false;
+  private disposeListeners = new Set<() => void>();
 
   constructor(
     participant: LocalParticipant,
@@ -43,7 +45,13 @@ export class LiveKitScreenShareUpdater {
     this.track = track;
     this.scope = scope;
     this.config = initial;
-    this.unsubscribe = subscribeCaptureAdmission(participant, () => this.dispose());
+    // A suspend (SDK reconnect / key rotation on the same Room) keeps the
+    // captured source: admission has already paused it in place and restores
+    // it only after encryption is re-admitted. Retirement stops it.
+    this.unsubscribe = subscribeCaptureAdmission(participant, reason => {
+      if (reason === "suspend" && !this.disposed) { this.suspended = true; ++this.revision; }
+      else this.dispose();
+    });
     track.mediaStreamTrack.addEventListener("ended", this.ended);
   }
 
@@ -52,6 +60,22 @@ export class LiveKitScreenShareUpdater {
     && this.track.mediaStreamTrack.readyState !== "ended";
 
   get active() { return this.current(); }
+  /** Source is alive but its Room is re-admitting encryption. */
+  get isSuspended() { return this.suspended && !this.disposed && this.track.mediaStreamTrack.readyState !== "ended"; }
+
+  /** Rebinds a suspended source to its next owner once admission reopened. */
+  resume(scope: () => boolean): boolean {
+    if (this.disposed || this.track.mediaStreamTrack.readyState === "ended" || !captureAdmissionCurrent(this.participant)) return false;
+    this.scope = scope;
+    this.suspended = false;
+    return true;
+  }
+
+  onDispose(listener: () => void): () => void {
+    if (this.disposed) { listener(); return () => {}; }
+    this.disposeListeners.add(listener);
+    return () => { this.disposeListeners.delete(listener); };
+  }
 
   update(next: ScreenShareUpdate): Promise<boolean> {
     const revision = ++this.revision;
@@ -82,44 +106,44 @@ export class LiveKitScreenShareUpdater {
     try {
       if (republish) {
         await raw.applyConstraints(privateScreenConstraints(next.settings, next.display));
-        if (!this.current()) { this.dispose(); return false; }
+        if (!this.current()) return this.abandon(unpublished);
         // Protect only this video's intentional unpublish event. Real ended
         // events are still observed on the retained raw source during the gap.
         intentionalUnpublishes.add(this.track);
         raw.enabled = false;
         unpublished = true;
         await this.participant.unpublishTrack(this.track, false);
-        if (!this.current()) { this.dispose(); return false; }
+        if (!this.current()) return this.abandon(unpublished);
         raw.contentHint = next.contentHint;
         await this.participant.publishTrack(this.track, options);
-        if (!this.current()) { this.dispose(); return false; }
+        if (!this.current()) return this.abandon(unpublished);
       } else {
         // LiveKit 2.23 uses motion for VP9 screen SVC as a Chromium workaround.
         // Do not undo it when the user changes only the detail profile.
         raw.contentHint = (this.track.publishOptions?.videoCodec ?? options.videoCodec) === "vp9" ? "motion" : next.contentHint;
         if (options.degradationPreference) await this.track.setDegradationPreference(options.degradationPreference);
-        if (!this.current()) { this.dispose(); return false; }
+        if (!this.current()) return this.abandon(unpublished);
       }
       if (!republish) this.track.publishOptions = { ...this.track.publishOptions, degradationPreference: options.degradationPreference };
       this.config = next;
       raw.enabled = wasEnabled;
       return true;
     } catch (error) {
-      if (!this.current()) { this.dispose(); return false; }
+      if (!this.current()) return this.abandon(unpublished);
       // Recover the old publication without reacquiring the screen. If recovery
       // itself fails, stop the owned source rather than leave an orphan capture.
       try {
         await raw.applyConstraints(previousConstraints);
-        if (!this.current()) { this.dispose(); return false; }
+        if (!this.current()) return this.abandon(unpublished);
         raw.contentHint = previousHint;
         if (unpublished) {
           await this.participant.unpublishTrack(this.track, false);
-          if (!this.current()) { this.dispose(); return false; }
+          if (!this.current()) return this.abandon(unpublished);
           await this.participant.publishTrack(this.track, oldOptions);
         } else if (oldOptions.degradationPreference) {
           await this.track.setDegradationPreference(oldOptions.degradationPreference);
         }
-        if (!this.current()) { this.dispose(); return false; }
+        if (!this.current()) return this.abandon(unpublished);
         if (!unpublished) this.track.publishOptions = { ...this.track.publishOptions, degradationPreference: oldOptions.degradationPreference };
         raw.enabled = wasEnabled;
       } catch {
@@ -131,6 +155,13 @@ export class LiveKitScreenShareUpdater {
     }
   }
 
+  // A suspension interrupts only work that has not yet unpublished the source;
+  // a source already absent from the SDK cannot be republished until re-admission.
+  private abandon(unpublished: boolean) {
+    if (!this.isSuspended || unpublished) this.dispose();
+    return false;
+  }
+
   dispose() {
     // Repeat unpublish after a late publish resolves, even if already disposed.
     if (!this.disposed) {
@@ -140,6 +171,9 @@ export class LiveKitScreenShareUpdater {
       this.track.mediaStreamTrack.removeEventListener("ended", this.ended);
       this.track.mediaStreamTrack.enabled = false;
       this.track.stop();
+      const listeners = [...this.disposeListeners];
+      this.disposeListeners.clear();
+      listeners.forEach(listener => listener());
     }
     void this.participant.unpublishTrack(this.track).catch(() => {});
   }
