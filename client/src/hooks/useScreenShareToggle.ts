@@ -566,7 +566,7 @@ export function useScreenShareToggle(
     }, { once: true });
     // The server may have cleared is_streaming while this client reconnected.
     notifyServerStarted();
-    logToServer("info", "screen_share_resumed", { branch: computeShareBranch() });
+    void logToServer("info", "screen_share_resumed", { branch: computeShareBranch() });
     void updatePublishedShare(updater).catch(error => reportUpdateFailure(updater, error));
     const stream = updater.track.publishOptions?.stream;
     if (computeShareBranch() === "electron-audio" && stream) {
